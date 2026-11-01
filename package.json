@@ -1,0 +1,27 @@
+{
+  "name": "studiomythos-licitacoes",
+  "version": "1.0.0",
+  "description": "Painel de Licitações — Studio Mythos (CRM de captação e inscrição em licitações públicas)",
+  "private": true,
+  "main": "backend/server.js",
+  "scripts": {
+    "api": "node backend/server.js",
+    "worker": "node worker/index.js",
+    "dev:api": "node --watch backend/server.js",
+    "dev:front": "npm --prefix frontend run dev",
+    "migrar": "node backend/config/migrar.js",
+    "semear": "node backend/config/semear.js",
+    "coletar": "node backend/jobs/executar-coleta.js",
+    "build": "npm --prefix frontend ci && npm --prefix frontend run build",
+    "postinstall": "echo \"Rode: npm run migrar && npm run semear\""
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.11.3"
+  }
+}

@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-obsidiana text-texto font-sans antialiased;
+}
+
+/* Densidade alta: a tabela do Radar mostra 15 linhas sem rolar em 1080p. */
+.tabela-densa th {
+  @apply bg-navy text-texto-suave text-[11px] uppercase tracking-wide font-medium px-3 py-2 text-left sticky top-0 z-10;
+}
+.tabela-densa td {
+  @apply px-3 py-[7px] border-t border-borda align-middle;
+}
+.tabela-densa tbody tr:hover {
+  @apply bg-white/[0.03];
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #0A0E1A; }
+::-webkit-scrollbar-thumb { background: #1F2937; border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: #334155; }
