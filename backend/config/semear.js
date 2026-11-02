@@ -5,6 +5,7 @@
 //   npm run semear
 const pool = require('../config/db');
 const perfilPadrao = require('./dados/perfil-padrao');
+const kitsPadrao = require('./dados/kits-padrao');
 
 const FONTES = [
   {
@@ -216,11 +217,41 @@ async function semearPerfil() {
   return true;
 }
 
+// Kits da seção 17.3. Só cria o que falta: kit que o usuário editou fica como está.
+async function semearKits() {
+  const [perfis] = await pool.query('SELECT id FROM empresa_perfis ORDER BY padrao DESC, id ASC LIMIT 1');
+  if (!perfis.length) return 0;
+  const perfilId = perfis[0].id;
+
+  let criados = 0;
+  for (const kit of kitsPadrao) {
+    const [r] = await pool.query(
+      `INSERT INTO documento_kits (perfil_id, nome, descricao, padrao)
+       VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE id = id`,
+      [perfilId, kit.nome, kit.descricao, kit.padrao || 0]
+    );
+    if (!r.insertId) continue; // já existia — não mexe nos itens
+    criados += 1;
+
+    let ordem = 1;
+    for (const item of kit.itens) {
+      await pool.query(
+        `INSERT INTO documento_kit_itens (kit_id, codigo, ordem, obrigatorio, so_se_exigido)
+         VALUES (?, ?, ?, ?, ?)`,
+        [r.insertId, item.codigo, ordem, item.obrigatorio ?? 1, item.so_se_exigido ?? 0]
+      );
+      ordem += 1;
+    }
+  }
+  return criados;
+}
+
 async function principal() {
   const fontes = await semearFontes();
   const palavras = await semearPalavras();
   const excluidas = await semearExcluidas();
   const perfil = await semearPerfil();
+  const kits = await semearKits();
 
   console.log(`Fontes inseridas: ${fontes} (de ${FONTES.length}).`);
   console.log(`Palavras-chave inseridas: ${palavras} (de ${PALAVRAS.length}).`);
@@ -230,6 +261,7 @@ async function principal() {
       ? `Perfil da empresa criado: ${perfilPadrao.nome} (${perfilPadrao.cnaes.length} CNAEs).`
       : 'Perfil da empresa já existia — preservado como está.'
   );
+  console.log(`Kits de documentos criados: ${kits} (de ${kitsPadrao.length}).`);
   console.log('Seed concluído. O que já existia foi preservado.');
   await pool.end();
 }

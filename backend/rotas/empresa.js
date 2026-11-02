@@ -1,6 +1,6 @@
 // /api/empresa — perfis da empresa (seção 4.7). Os CNAEs e sua cobertura são o
 // que alimenta a checagem de objeto social da seção 6.2.
-// Os documentos do cofre (seção 9) entram na Fase 5.
+// Os documentos do cofre (seções 9 e 17) ficam em rotas/cofre.js.
 const express = require('express');
 const pool = require('../config/db');
 
@@ -99,5 +99,7 @@ rotas.patch('/perfis/:id', async (req, res) => {
     res.status(400).json({ erro: erro.message });
   }
 });
+
+rotas.use('/documentos', require('./cofre'));
 
 module.exports = rotas;

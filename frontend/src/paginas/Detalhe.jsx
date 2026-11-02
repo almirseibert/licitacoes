@@ -5,6 +5,7 @@ import { moeda, moedaExata, dataHora } from '../servicos/formato';
 import Anel from '../componentes/Anel';
 import Contagem from '../componentes/Contagem';
 import Exigencias from './Exigencias';
+import Envio from './Envio';
 
 const ETAPAS = [
   'Triagem', 'Analisando', 'Vou disputar', 'Documentação',
@@ -139,6 +140,7 @@ export default function Detalhe({ id, onFechar }) {
                   ['pontuacao', 'Pontuação'],
                   ['arquivos', 'Arquivos'],
                   ['exigencias', 'Exigências'],
+                  ['envio', 'Montar envio'],
                 ].map(([chave, rotulo]) => (
                   <button
                     key={chave}
@@ -167,6 +169,7 @@ export default function Detalhe({ id, onFechar }) {
               {aba === 'pontuacao' && <Pontuacao detalhe={licitacao.pontuacao_detalhe} />}
               {aba === 'arquivos' && <Arquivos id={id} />}
               {aba === 'exigencias' && <Exigencias id={id} />}
+              {aba === 'envio' && <Envio id={id} />}
             </div>
           </>
         )}

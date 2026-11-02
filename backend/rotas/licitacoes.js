@@ -363,6 +363,9 @@ rotas.get('/:id/zip', async (req, res) => {
 // Checklist de exigências do edital (seção 8.4), em arquivo próprio.
 rotas.use('/:id/exigencias', require('./exigencias'));
 
+// Montagem do envio e anexos específicos da licitação (seção 17).
+rotas.use('/:id/envio', require('./envio'));
+
 // POST /api/licitacoes/:id/ler — relê o edital já baixado e refaz o checklist.
 rotas.post('/:id/ler', async (req, res) => {
   try {

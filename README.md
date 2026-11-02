@@ -3,7 +3,7 @@
 CRM de captação e inscrição em licitações de órgãos públicos. A especificação completa
 está em [PAINEL_LICITACOES_INSTRUCOES.md](PAINEL_LICITACOES_INSTRUCOES.md) — 32 seções, 14 fases.
 
-**Estado: Fases 1 a 4 implementadas e validadas em 02/11/2026.**
+**Estado: Fases 1 a 5 implementadas e validadas em 02/11/2026.**
 
 A primeira coleta real no PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas
 com link que abre o edital no portal. Depois, pela tela, a palavra "videomonitoramento" foi
@@ -16,6 +16,10 @@ Em seguida, a documentação de **20 licitações seguidas foi baixada sem erro 
 Por fim, esses **10 editais foram lidos e conferidos um a um** contra o trecho que o painel
 recortou: **152 exigências e 11 dispensas**, com **1 marcação discutível** (uma cláusula
 condicional de amostra) — o aceite da Fase 4 admite no máximo uma errada.
+
+Com cinco documentos no cofre, o envio de uma licitação real saiu em **segundos**: kit escolhido
+sozinho, quatro peças marcadas pelo cruzamento com o edital, **a certidão vencida bloqueada** e
+o **PDF único de 42 folhas** com capa, índice e numeração contínua — o aceite da Fase 5.
 
 O que existe hoje:
 
@@ -51,6 +55,15 @@ O que existe hoje:
 | Catálogo de 34 exigências + detecção com negação | [backend/regras/exigencias.js](backend/regras/exigencias.js) |
 | Job `ler_edital` | [backend/jobs/ler-edital.js](backend/jobs/ler-edital.js) |
 | Tela de checklist com o trecho do edital | [frontend/src/paginas/Exigencias.jsx](frontend/src/paginas/Exigencias.jsx) |
+
+| Item da Fase 5 | Onde |
+|---|---|
+| Cofre com validade, semáforo e versionamento | [backend/rotas/cofre.js](backend/rotas/cofre.js), [frontend/src/paginas/Cofre.jsx](frontend/src/paginas/Cofre.jsx) |
+| Validades padrão e alerta de vencimento | [backend/regras/validades.js](backend/regras/validades.js), [backend/jobs/validades.js](backend/jobs/validades.js) |
+| Os quatro kits do seed | [backend/config/dados/kits-padrao.js](backend/config/dados/kits-padrao.js), [backend/rotas/kits.js](backend/rotas/kits.js) |
+| Cruzamento kit × exigências × cofre | [backend/servicos/envio.js](backend/servicos/envio.js) |
+| ZIP numerado e PDF único com capa e índice | [backend/servicos/pacote.js](backend/servicos/pacote.js) |
+| Tela "Montar envio" e "Repetir envio" | [frontend/src/paginas/Envio.jsx](frontend/src/paginas/Envio.jsx) |
 
 Tudo em português: código, comentários, tabelas, interface.
 
@@ -144,6 +157,20 @@ npm run repontuar
 
 Recalcula a pontuação, o objeto social e o "pode participar" de tudo que já está gravado, sem
 ir aos portais. Pela tela, o botão **Repontuar o Radar** em Configurações faz o mesmo pela fila.
+
+### 8. Cofre e envio
+
+Não há comando de terminal: o cofre e a montagem do envio vivem na tela.
+
+- **Documentos** (menu lateral) — sobe contrato social, certidões e atestados, com data de
+  emissão. Deixe a validade em branco e o painel calcula pela regra do documento. Subir o mesmo
+  tipo de novo vira versão nova; a anterior fica no histórico.
+- **Montar envio** (aba na licitação) — escolhe o kit, marca sozinho o que o edital pede,
+  bloqueia documento vencido e gera **PDF único** (capa, índice, numeração contínua) ou **ZIP
+  numerado** com `00_CHECKLIST.pdf` e `00_FALTANDO.txt`.
+- **Repetir envio** — traz a seleção de um envio anterior já com as versões atuais do cofre.
+
+O worker confere as validades todo dia e cria alerta em 30, 15 e 3 dias antes do vencimento.
 
 ### 7. Leitura do edital e checklist
 
@@ -240,6 +267,15 @@ GET    /api/configuracoes          PATCH /api/configuracoes/pesos
 POST   /api/configuracoes/pesos/:chave/restaurar
 POST   /api/configuracoes/repontuar
 GET    /api/empresa/perfis         POST /api/empresa/perfis      PATCH /api/empresa/perfis/:id
+GET    /api/empresa/documentos     POST /api/empresa/documentos   (multipart, 25 MB)
+PATCH  /api/empresa/documentos/:id DELETE /api/empresa/documentos/:id
+GET    /api/empresa/documentos/:id/arquivo
+GET    /api/kits                   POST /api/kits                 PATCH /api/kits/:id
+PUT    /api/kits/:id/itens         DELETE /api/kits/:id
+GET    /api/licitacoes/:id/envio   POST /api/licitacoes/:id/envio
+POST   /api/licitacoes/:id/envio/repetir/:pacoteId
+GET    /api/licitacoes/:id/envio/pacotes/:pacoteId/arquivo
+POST   /api/licitacoes/:id/envio/anexos
 POST   /api/licitacoes/:id/ler     GET /api/licitacoes/:id/exigencias
 POST   /api/licitacoes/:id/exigencias/:codigo          correção manual
 POST   /api/licitacoes/:id/exigencias/:codigo/soltar   volta ao automático
@@ -253,12 +289,16 @@ Erro sempre no formato `{ "erro": "mensagem em português", "detalhe": "técnico
 
 ---
 
-## Próximo passo — Fase 5
+## Próximo passo — Fase 5.1
 
-Cofre de documentos da empresa e montagem do envio (seções 9 e 17): upload com validade e
-versionamento, kits por tipo de licitação e o botão "Gerar pacote de documentos" que fecha o
-checklist. É o que falta para a coluna **Você tem?** parar de responder "—": hoje ela só sabe
-o que dá para deduzir do perfil (objeto social por CNAE, Simples, natureza ME, capital social).
+Gerador de declarações (seção 18): tabela de modelos com os 11 do seed, substituição de
+variáveis e geração em PDF, editor com pré-visualização e aviso quando o edital trouxer anexo
+próprio de declaração. O aceite é gerar as declarações de uma licitação com número, órgão e
+objeto corretos, sem digitar nada.
+
+Hoje o bloco 2 da tela "Montar envio" está vazio de propósito: até o gerador existir, uma
+declaração assinada entra pelo cofre, com o código dela, e vai no pacote como qualquer outra
+peça.
 
 ### O que o PNCP nos ensinou até aqui
 

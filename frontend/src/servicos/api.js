@@ -81,6 +81,30 @@ async function obterBlob(caminho) {
   return resposta.blob();
 }
 
+/**
+ * Envia multipart. Sem Content-Type na mão: o navegador precisa montar o
+ * boundary, e defini-lo aqui quebraria o upload.
+ */
+async function enviarFormulario(caminho, forma) {
+  const token = obterToken();
+  const resposta = await fetch(`${BASE}${caminho}`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: forma,
+  });
+
+  if (resposta.status === 401) {
+    encerrarSessao();
+    window.location.reload();
+    throw new Error('Sessão expirada.');
+  }
+
+  const texto = await resposta.text();
+  const dados = texto ? JSON.parse(texto) : null;
+  if (!resposta.ok) throw new Error((dados && dados.erro) || 'Não foi possível enviar o arquivo.');
+  return dados;
+}
+
 /** Entrega o blob ao navegador com o nome certo, sem abrir aba nova. */
 async function salvarComo(caminho, nome) {
   const blob = await obterBlob(caminho);
@@ -191,4 +215,49 @@ export const api = {
 
   salvarPerfil: (id, campos) =>
     requisitar(`/empresa/perfis/${id}`, { method: 'PATCH', body: JSON.stringify(campos) }),
+
+  // ------------------------------------------------- cofre de documentos
+  cofre: (historico = false) => requisitar(`/empresa/documentos${historico ? '?historico=1' : ''}`),
+
+  guardarDocumento: (campos, arquivo) => {
+    const forma = new FormData();
+    Object.entries(campos).forEach(([chave, valor]) => {
+      if (valor !== null && valor !== undefined && valor !== '') forma.set(chave, valor);
+    });
+    forma.set('arquivo', arquivo);
+    return enviarFormulario('/empresa/documentos', forma);
+  },
+
+  salvarDocumento: (id, campos) =>
+    requisitar(`/empresa/documentos/${id}`, { method: 'PATCH', body: JSON.stringify(campos) }),
+
+  removerDocumento: (id) => requisitar(`/empresa/documentos/${id}`, { method: 'DELETE' }),
+
+  verDocumento: (id) => obterBlob(`/empresa/documentos/${id}/arquivo`),
+
+  baixarDocumento: (id, nome) => salvarComo(`/empresa/documentos/${id}/arquivo?baixar=1`, nome),
+
+  kits: () => requisitar('/kits'),
+
+  // ---------------------------------------------------------- montar envio
+  envio: (id, kitId) => requisitar(`/licitacoes/${id}/envio${kitId ? `?kit_id=${kitId}` : ''}`),
+
+  gerarEnvio: (id, corpo) =>
+    requisitar(`/licitacoes/${id}/envio`, { method: 'POST', body: JSON.stringify(corpo) }),
+
+  repetirEnvio: (id, pacoteId) =>
+    requisitar(`/licitacoes/${id}/envio/repetir/${pacoteId}`, { method: 'POST' }),
+
+  baixarPacote: (id, pacoteId, nome) =>
+    salvarComo(`/licitacoes/${id}/envio/pacotes/${pacoteId}/arquivo`, nome),
+
+  anexar: (id, titulo, arquivo) => {
+    const forma = new FormData();
+    forma.set('titulo', titulo);
+    forma.set('arquivo', arquivo);
+    return enviarFormulario(`/licitacoes/${id}/envio/anexos`, forma);
+  },
+
+  removerAnexo: (id, anexoId) =>
+    requisitar(`/licitacoes/${id}/envio/anexos/${anexoId}`, { method: 'DELETE' }),
 };

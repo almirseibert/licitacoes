@@ -5,6 +5,7 @@ const fila = require('../backend/servicos/fila');
 const coletar = require('../backend/jobs/coletar');
 const baixar = require('../backend/jobs/baixar');
 const lerEdital = require('../backend/jobs/ler-edital');
+const validades = require('../backend/jobs/validades');
 
 const sinal = { parar: false };
 
@@ -16,6 +17,7 @@ async function principal() {
   coletar.registrarNaFila();
   baixar.registrarNaFila();
   lerEdital.registrarNaFila();
+  validades.registrarNaFila();
 
   console.log(`Worker de licitações iniciado. Driver da fila: ${cfgFila.driver}.`);
 
@@ -41,6 +43,12 @@ async function principal() {
       const leituras = await lerEdital.lerEditais({ limite: 20 });
       if (leituras.enfileiradas) {
         console.log(`Leitura de edital enfileirada para ${leituras.enfileiradas} licitações.`);
+      }
+
+      // Validade dos documentos do cofre (seção 9.2).
+      const validade = await validades.verificarValidades();
+      if (validade.alertas) {
+        console.log(`${validade.alertas} alerta(s) de validade criados (${validade.vencidos} documento(s) vencidos).`);
       }
     } catch (erro) {
       console.error('Falha ao agendar a varredura:', erro.message);
