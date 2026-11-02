@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, LogOut } from 'lucide-react';
+import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, LogOut } from 'lucide-react';
 import { obterToken, obterUsuario, encerrarSessao } from './servicos/api';
 import Login from './paginas/Login';
 import Radar from './paginas/Radar';
@@ -8,9 +8,12 @@ import Palavras from './paginas/Palavras';
 import Configuracoes from './paginas/Configuracoes';
 import Cofre from './paginas/Cofre';
 import Modelos from './paginas/Modelos';
+import Funil from './paginas/Funil';
+import Alertas from './componentes/Alertas';
 
 const TELAS = [
   { chave: 'radar', rotulo: 'Radar', icone: IconeRadar },
+  { chave: 'funil', rotulo: 'Funil', icone: KanbanSquare },
   { chave: 'fontes', rotulo: 'Fontes', icone: Database },
   { chave: 'palavras', rotulo: 'Palavras-chave', icone: Tags },
   { chave: 'cofre', rotulo: 'Documentos', icone: FolderLock },
@@ -21,6 +24,8 @@ const TELAS = [
 export default function App() {
   const [usuario, setUsuario] = useState(() => (obterToken() ? obterUsuario() : null));
   const [tela, setTela] = useState('radar');
+  // O sino e o funil abrem a gaveta de uma licitação pelo Radar.
+  const [licitacaoAberta, setLicitacaoAberta] = useState(null);
 
   if (!usuario) return <Login onEntrar={setUsuario} />;
 
@@ -56,6 +61,10 @@ export default function App() {
           ))}
         </div>
 
+        <div className="border-t border-borda">
+          <Alertas aoAbrirLicitacao={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />
+        </div>
+
         <div className="border-t border-borda p-3">
           <p className="text-[11px] text-texto-suave truncate hidden md:block mb-2">{usuario.nome || usuario.email}</p>
           <button onClick={sair} className="flex items-center gap-2 text-xs text-texto-suave hover:text-texto">
@@ -66,11 +75,12 @@ export default function App() {
       </nav>
 
       <main className="flex-1 min-w-0 overflow-hidden">
-        {tela === 'radar' && <Radar />}
+        {tela === 'radar' && <Radar abrir={licitacaoAberta} aoAbrir={setLicitacaoAberta} />}
         {tela === 'fontes' && <Fontes />}
         {tela === 'palavras' && <Palavras />}
         {tela === 'cofre' && <Cofre />}
         {tela === 'modelos' && <Modelos />}
+        {tela === 'funil' && <Funil aoAbrir={setLicitacaoAberta} />}
         {tela === 'configuracoes' && <Configuracoes />}
       </main>
     </div>

@@ -20,6 +20,16 @@ module.exports = {
     path.join(__dirname, '..', '..'),
     process.env.DIR_DADOS || 'dados'
   ),
+  // E-mail de alerta (Fase 6). Sem SMTP_HOST o envio fica desligado e o aviso
+  // vive só no painel — nenhuma credencial no código, como manda a seção 2.1.
+  smtp: {
+    host: process.env.SMTP_HOST || '',
+    porta: Number(process.env.SMTP_PORTA || 587),
+    usuario: process.env.SMTP_USUARIO || '',
+    senha: process.env.SMTP_SENHA || '',
+    de: process.env.SMTP_DE || '',
+    para: process.env.ALERTA_PARA || '',
+  },
   jwt: {
     get segredo() { return obrigatorio('JWT_SECRET'); },
     expira: process.env.JWT_EXPIRA || '8h',

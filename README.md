@@ -3,7 +3,7 @@
 CRM de captação e inscrição em licitações de órgãos públicos. A especificação completa
 está em [PAINEL_LICITACOES_INSTRUCOES.md](PAINEL_LICITACOES_INSTRUCOES.md) — 32 seções, 14 fases.
 
-**Estado: Fases 1 a 5.1 implementadas e validadas em 02/11/2026.**
+**Estado: Fases 1 a 6 implementadas e validadas em 02/11/2026.**
 
 A primeira coleta real no PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas
 com link que abre o edital no portal. Depois, pela tela, a palavra "videomonitoramento" foi
@@ -23,6 +23,9 @@ o **PDF único de 42 folhas** com capa, índice e numeração contínua — o ac
 
 As declarações entraram em seguida: **9 geradas sozinhas** com o número, o órgão e o objeto da
 licitação, e o pacote passou a 13 peças em 51 folhas — o aceite da Fase 5.1, sem digitar nada.
+
+Por fim, mover um card para **"Vou disputar"** criou na hora o aviso de 48 h, que apareceu no
+sino do painel — o aceite da Fase 6.
 
 O que existe hoje:
 
@@ -74,6 +77,15 @@ O que existe hoje:
 | Substituição de variáveis e geração em PDF | [backend/servicos/declaracao.js](backend/servicos/declaracao.js) |
 | CRUD dos modelos e pré-visualização | [backend/rotas/modelos.js](backend/rotas/modelos.js), [frontend/src/paginas/Modelos.jsx](frontend/src/paginas/Modelos.jsx) |
 | Declarações da licitação | [backend/rotas/declaracoes.js](backend/rotas/declaracoes.js) |
+
+| Item da Fase 6 | Onde |
+|---|---|
+| As 8 etapas, com o que cada uma pede e dispara | [backend/regras/funil.js](backend/regras/funil.js) |
+| Kanban com arrastar e soltar | [frontend/src/paginas/Funil.jsx](frontend/src/paginas/Funil.jsx) |
+| Anotações e histórico do card | [frontend/src/paginas/Historico.jsx](frontend/src/paginas/Historico.jsx) |
+| Alerta de 48 h e 2 h | [backend/jobs/prazos.js](backend/jobs/prazos.js) |
+| Sino de alertas | [frontend/src/componentes/Alertas.jsx](frontend/src/componentes/Alertas.jsx) |
+| Alerta por e-mail (opcional) | [backend/servicos/email.js](backend/servicos/email.js) |
 
 Tudo em português: código, comentários, tabelas, interface.
 
@@ -185,6 +197,23 @@ Não há comando de terminal: o cofre e a montagem do envio vivem na tela.
 
 O worker confere as validades todo dia e cria alerta em 30, 15 e 3 dias antes do vencimento.
 
+### 9. Funil e alertas
+
+O **Funil** (menu lateral) é o Kanban das oito etapas da seção 10. Arraste o card ou use o
+seletor dentro dele. Cada etapa cobra o que precisa: data e valor na proposta enviada, vencedor
+na derrota, motivo em lista fechada no descarte — e, quando o motivo é exigência, qual código
+barrou. É isso que alimenta o diagnóstico da Fase 9.
+
+Duas automações, como manda a seção 10:
+
+- entrar em **Analisando** enfileira o download da documentação;
+- entrar em **Vou disputar** passa a vigiar o prazo e cria o aviso de **48 h** e de **2 h** antes
+  do fim das propostas.
+
+Os avisos aparecem no sino da navegação. Para receber também por e-mail, preencha `SMTP_HOST`,
+`SMTP_DE` e `ALERTA_PARA` no `.env` — sem isso o envio fica desligado e o painel segue avisando
+na tela.
+
 ### 7. Leitura do edital e checklist
 
 ```bash
@@ -285,6 +314,8 @@ PATCH  /api/empresa/documentos/:id DELETE /api/empresa/documentos/:id
 GET    /api/empresa/documentos/:id/arquivo
 GET    /api/kits                   POST /api/kits                 PATCH /api/kits/:id
 PUT    /api/kits/:id/itens         DELETE /api/kits/:id
+GET    /api/alertas                PATCH /api/alertas/:id/lido    POST /api/alertas/lidos
+GET    /api/licitacoes/:id/anotacoes   POST /api/licitacoes/:id/anotacoes
 GET    /api/modelos-declaracao     POST /api/modelos-declaracao
 POST   /api/modelos-declaracao/:id/duplicar    POST /api/modelos-declaracao/previa
 GET    /api/modelos-declaracao/:id/previa.pdf
@@ -313,12 +344,12 @@ O perfil da empresa está com os valores do seed. Complete em **Configurações*
 social, o endereço e o representante legal com CPF: sem eles, a capa do pacote e as declarações
 saem com lacuna (`____________`), de propósito — o painel nunca inventa dado.
 
-## Próximo passo — Fase 6
+## Próximo passo — Fase 7
 
-Funil e alertas (seção 10): Kanban com as oito etapas e arrastar e soltar, automação por etapa
-(entrar em "Analisando" dispara o download; "Vou disputar" cria alerta de 48 h e 2 h antes do
-fim das propostas) e o motivo de descarte em lista fechada, que é o que alimenta o diagnóstico
-da Fase 9.
+Preço e concorrência (seções 12 e 26): adaptador `comprasgov` para puxar as propostas dos
+concorrentes, tabela `propostas_concorrentes`, histórico de preços por grupo e modalidade, e a
+ficha do concorrente. O aceite é, ao abrir uma licitação parecida com outra já disputada, o
+painel sugerir a faixa de preço praticada.
 
 ### O que o PNCP nos ensinou até aqui
 

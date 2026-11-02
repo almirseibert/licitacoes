@@ -37,7 +37,7 @@ function lerFiltrosSalvos() {
   }
 }
 
-export default function Radar() {
+export default function Radar({ abrir = null, aoAbrir = null }) {
   const [filtros, setFiltros] = useState(lerFiltrosSalvos);
   const [opcoes, setOpcoes] = useState({});
   const [resumo, setResumo] = useState(null);
@@ -47,6 +47,11 @@ export default function Radar() {
   const [erro, setErro] = useState(null);
   const [visao, setVisao] = useState(() => localStorage.getItem('licitacoes.visao') || 'tabela');
   const [aberta, setAberta] = useState(null);
+
+  // O sino de alertas e o funil pedem para abrir uma licitação específica.
+  useEffect(() => {
+    if (abrir) setAberta(abrir);
+  }, [abrir]);
   const [coletando, setColetando] = useState(false);
   const [aviso, setAviso] = useState(null);
 
@@ -221,7 +226,15 @@ export default function Radar() {
         </div>
       </div>
 
-      {aberta && <Detalhe id={aberta} onFechar={() => setAberta(null)} />}
+      {aberta && (
+        <Detalhe
+          id={aberta}
+          onFechar={() => {
+            setAberta(null);
+            if (aoAbrir) aoAbrir(null);
+          }}
+        />
+      )}
     </div>
   );
 }

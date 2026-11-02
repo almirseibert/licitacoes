@@ -287,4 +287,17 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ modelos }),
     }),
+
+  // ------------------------------------------------- funil e alertas
+  alertas: (lido) => requisitar(`/alertas${lido === undefined ? '' : `?lido=${lido ? 1 : 0}`}`),
+
+  marcarAlerta: (id, lido = true) =>
+    requisitar(`/alertas/${id}/lido`, { method: 'PATCH', body: JSON.stringify({ lido }) }),
+
+  marcarAlertasLidos: () => requisitar('/alertas/lidos', { method: 'POST' }),
+
+  anotacoes: (id) => requisitar(`/licitacoes/${id}/anotacoes`),
+
+  anotar: (id, texto) =>
+    requisitar(`/licitacoes/${id}/anotacoes`, { method: 'POST', body: JSON.stringify({ texto }) }),
 };

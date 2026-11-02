@@ -26,6 +26,7 @@ app.use('/api/configuracoes', autenticar, require('./rotas/configuracoes'));
 app.use('/api/empresa', autenticar, require('./rotas/empresa'));
 app.use('/api/kits', autenticar, require('./rotas/kits'));
 app.use('/api/modelos-declaracao', autenticar, require('./rotas/modelos'));
+app.use('/api/alertas', autenticar, require('./rotas/alertas'));
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ erro: 'Rota não encontrada.' });

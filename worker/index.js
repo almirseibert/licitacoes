@@ -6,6 +6,7 @@ const coletar = require('../backend/jobs/coletar');
 const baixar = require('../backend/jobs/baixar');
 const lerEdital = require('../backend/jobs/ler-edital');
 const validades = require('../backend/jobs/validades');
+const prazos = require('../backend/jobs/prazos');
 
 const sinal = { parar: false };
 
@@ -18,6 +19,7 @@ async function principal() {
   baixar.registrarNaFila();
   lerEdital.registrarNaFila();
   validades.registrarNaFila();
+  prazos.registrarNaFila();
 
   console.log(`Worker de licitações iniciado. Driver da fila: ${cfgFila.driver}.`);
 
@@ -44,6 +46,13 @@ async function principal() {
       if (leituras.enfileiradas) {
         console.log(`Leitura de edital enfileirada para ${leituras.enfileiradas} licitações.`);
       }
+
+      // Prazos do que decidi disputar: o aviso de 48 h e 2 h (seção 10).
+      const prazo = await prazos.verificarPrazos();
+      if (prazo.criados) {
+        console.log(`${prazo.criados} alerta(s) de prazo criados${prazo.email && prazo.email.enviado ? ' e enviados por e-mail' : ''}.`);
+      }
+      await prazos.avisarPrioridadeAlta({});
 
       // Validade dos documentos do cofre (seção 9.2).
       const validade = await validades.verificarValidades();

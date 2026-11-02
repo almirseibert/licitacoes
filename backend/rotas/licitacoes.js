@@ -4,6 +4,8 @@ const express = require('express');
 const pool = require('../config/db');
 const fila = require('../servicos/fila');
 const servicoArquivos = require('../servicos/arquivos');
+const funil = require('../regras/funil');
+const prazos = require('../jobs/prazos');
 
 const rotas = express.Router();
 
@@ -15,16 +17,8 @@ const ORDENACOES = {
   recentes: 'l.criado_em DESC',
 };
 
-const ETAPAS = [
-  'Triagem',
-  'Analisando',
-  'Vou disputar',
-  'Documentação',
-  'Proposta enviada',
-  'Em disputa',
-  'Resultado',
-  'Descartada',
-];
+// As etapas vivem em regras/funil.js, com o que cada uma pede e dispara.
+const ETAPAS = funil.CHAVES;
 
 function montarFiltros(q) {
   const onde = [];
@@ -154,6 +148,8 @@ rotas.get('/filtros', async (_req, res) => {
       modalidades: modalidades.map((m) => m.modalidade),
       fontes,
       etapas: ETAPAS,
+      funil: funil.ETAPAS,
+      motivos_descarte: funil.MOTIVOS_DESCARTE,
     });
   } catch (erro) {
     res.status(500).json({ erro: 'Não foi possível carregar os filtros.', detalhe: erro.message });
@@ -198,29 +194,137 @@ rotas.get('/:id/itens', async (req, res) => {
   }
 });
 
-// PATCH /api/licitacoes/:id — etapa do funil, favorito e descarte
+// PATCH /api/licitacoes/:id — etapa do funil, favorito, descarte e os campos
+// que cada etapa pede (seção 10).
+const CAMPOS_DO_FUNIL = {
+  etapa: 'etapa',
+  favorito: 'favorito',
+  descartada: 'descartada',
+  motivo_descarte: 'motivo_descarte',
+  codigo_barrou: 'codigo_barrou',
+  proposta_em: 'proposta_em',
+  valor_proposto: 'valor_proposto',
+  valor_final: 'valor_final',
+  vencedor: 'vencedor',
+  cnpj_vencedor: 'cnpj_vencedor',
+};
+
 rotas.patch('/:id', async (req, res) => {
-  const permitidos = { etapa: 'etapa', favorito: 'favorito', descartada: 'descartada', motivo_descarte: 'motivo_descarte' };
+  const corpo = req.body || {};
   const partes = [];
   const valores = [];
 
-  for (const [campo, coluna] of Object.entries(permitidos)) {
-    if (req.body[campo] === undefined) continue;
-    if (campo === 'etapa' && !ETAPAS.includes(req.body.etapa)) {
-      return res.status(400).json({ erro: `Etapa inválida. Use uma de: ${ETAPAS.join(', ')}.` });
-    }
-    partes.push(`${coluna} = ?`);
-    valores.push(campo === 'favorito' || campo === 'descartada' ? (req.body[campo] ? 1 : 0) : req.body[campo]);
-  }
-
-  if (!partes.length) return res.status(400).json({ erro: 'Nada para atualizar.' });
-
   try {
-    const [r] = await pool.query(`UPDATE licitacoes SET ${partes.join(', ')} WHERE id = ?`, [...valores, req.params.id]);
-    if (!r.affectedRows) return res.status(404).json({ erro: 'Licitação não encontrada.' });
-    res.json({ ok: true });
+    const [[antes]] = await pool.query('SELECT * FROM licitacoes WHERE id = ?', [req.params.id]);
+    if (!antes) return res.status(404).json({ erro: 'Licitação não encontrada.' });
+
+    if (corpo.etapa !== undefined) {
+      if (!funil.existe(corpo.etapa)) {
+        return res.status(400).json({ erro: `Etapa inválida. Use uma de: ${funil.CHAVES.join(', ')}.` });
+      }
+      // A etapa só avança com o que ela pede preenchido — é isso que faz o
+      // histórico valer alguma coisa depois (preço, vencedor, motivo).
+      const faltando = funil.faltandoPara(corpo.etapa, { ...antes, ...corpo });
+      if (faltando.length) {
+        return res.status(400).json({
+          erro: `Para mover para "${corpo.etapa}", informe: ${faltando.join(', ')}.`,
+          faltando,
+        });
+      }
+      if (corpo.motivo_descarte !== undefined && !funil.MOTIVOS_POR_CHAVE.has(corpo.motivo_descarte)) {
+        return res.status(400).json({
+          erro: `Motivo de descarte inválido. Use um de: ${funil.MOTIVOS_DESCARTE.map((m) => m.chave).join(', ')}.`,
+        });
+      }
+    }
+
+    for (const [campo, coluna] of Object.entries(CAMPOS_DO_FUNIL)) {
+      if (corpo[campo] === undefined) continue;
+      partes.push(`${coluna} = ?`);
+      valores.push(
+        campo === 'favorito' || campo === 'descartada'
+          ? (corpo[campo] ? 1 : 0)
+          : corpo[campo] === '' ? null : corpo[campo]
+      );
+    }
+
+    if (!partes.length) return res.status(400).json({ erro: 'Nada para atualizar.' });
+
+    const mudouEtapa = corpo.etapa !== undefined && corpo.etapa !== antes.etapa;
+    if (mudouEtapa) {
+      partes.push('etapa_em = NOW()');
+      // "Descartada" e o sinalizador de descarte andam juntos.
+      if (corpo.etapa === 'Descartada' && corpo.descartada === undefined) {
+        partes.push('descartada = 1');
+      }
+    }
+
+    await pool.query(`UPDATE licitacoes SET ${partes.join(', ')} WHERE id = ?`, [...valores, req.params.id]);
+
+    const avisos = [];
+    if (mudouEtapa) {
+      await pool.query(
+        "INSERT INTO anotacoes (licitacao_id, texto, autor, tipo) VALUES (?, ?, ?, 'etapa')",
+        [req.params.id, `${antes.etapa} → ${corpo.etapa}`, (req.usuario && req.usuario.nome) || null]
+      );
+
+      const definicao = funil.POR_CHAVE.get(corpo.etapa);
+
+      // Entrar em "Analisando" dispara o download da documentação.
+      if (definicao.aoEntrar === 'baixar_edital' && antes.arquivos_status === 'nao_baixado') {
+        await fila.enfileirar(
+          'baixar_edital',
+          { licitacaoId: Number(req.params.id) },
+          { prioridade: 1, chaveUnica: `baixar:${req.params.id}` }
+        );
+        await pool.query("UPDATE licitacoes SET arquivos_status = 'na_fila' WHERE id = ?", [req.params.id]);
+        avisos.push('Download da documentação entrou na fila.');
+      }
+
+      // Entrar em "Vou disputar" cria os alertas de 48 h e 2 h.
+      if (definicao.aoEntrar === 'alertar_prazo') {
+        const r = await prazos.alertarAoDecidir(Number(req.params.id));
+        avisos.push(
+          r.criados
+            ? `${r.criados} alerta(s) de prazo criados agora.`
+            : r.horas
+              ? `Prazo acompanhado: o aviso sai 48 h antes do fim (faltam ${r.horas} h).`
+              : 'Sem data de fim das propostas: não dá para alertar.'
+        );
+      }
+    }
+
+    res.json({ ok: true, avisos, mensagem: avisos.join(' ') || null });
   } catch (erro) {
     res.status(500).json({ erro: 'Não foi possível salvar a alteração.', detalhe: erro.message });
+  }
+});
+
+// Histórico do card (seção 4.9): anotações e mudanças de etapa, na mesma linha do tempo.
+rotas.get('/:id/anotacoes', async (req, res) => {
+  try {
+    const [dados] = await pool.query(
+      'SELECT * FROM anotacoes WHERE licitacao_id = ? ORDER BY criado_em DESC, id DESC LIMIT 200',
+      [req.params.id]
+    );
+    res.json({ dados });
+  } catch (erro) {
+    res.status(500).json({ erro: 'Não foi possível carregar o histórico.', detalhe: erro.message });
+  }
+});
+
+rotas.post('/:id/anotacoes', async (req, res) => {
+  try {
+    const texto = String((req.body && req.body.texto) || '').trim();
+    if (!texto) return res.status(400).json({ erro: 'Escreva a anotação.' });
+
+    const [r] = await pool.query(
+      "INSERT INTO anotacoes (licitacao_id, texto, autor, tipo) VALUES (?, ?, ?, 'nota')",
+      [req.params.id, texto.slice(0, 4000), (req.usuario && req.usuario.nome) || null]
+    );
+    res.status(201).json({ ok: true, id: r.insertId });
+  } catch (erro) {
+    res.status(400).json({ erro: erro.message });
   }
 });
 
