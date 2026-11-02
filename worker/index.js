@@ -4,6 +4,7 @@ const { fila: cfgFila } = require('../backend/config/ambiente');
 const fila = require('../backend/servicos/fila');
 const coletar = require('../backend/jobs/coletar');
 const baixar = require('../backend/jobs/baixar');
+const lerEdital = require('../backend/jobs/ler-edital');
 
 const sinal = { parar: false };
 
@@ -14,6 +15,7 @@ const UMA_HORA = 60 * 60 * 1000;
 async function principal() {
   coletar.registrarNaFila();
   baixar.registrarNaFila();
+  lerEdital.registrarNaFila();
 
   console.log(`Worker de licitações iniciado. Driver da fila: ${cfgFila.driver}.`);
 
@@ -33,6 +35,12 @@ async function principal() {
       const documentos = await baixar.baixarEditais({ limite: 20 });
       if (documentos.enfileiradas) {
         console.log(`Download de documentação enfileirado para ${documentos.enfileiradas} licitações.`);
+      }
+
+      // Leitura do edital: só mexe em arquivo já baixado, nunca vai à internet.
+      const leituras = await lerEdital.lerEditais({ limite: 20 });
+      if (leituras.enfileiradas) {
+        console.log(`Leitura de edital enfileirada para ${leituras.enfileiradas} licitações.`);
       }
     } catch (erro) {
       console.error('Falha ao agendar a varredura:', erro.message);

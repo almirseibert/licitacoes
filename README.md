@@ -3,7 +3,7 @@
 CRM de captação e inscrição em licitações de órgãos públicos. A especificação completa
 está em [PAINEL_LICITACOES_INSTRUCOES.md](PAINEL_LICITACOES_INSTRUCOES.md) — 32 seções, 14 fases.
 
-**Estado: Fases 1, 2 e 3 implementadas e validadas em 02/11/2026.**
+**Estado: Fases 1 a 4 implementadas e validadas em 02/11/2026.**
 
 A primeira coleta real no PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas
 com link que abre o edital no portal. Depois, pela tela, a palavra "videomonitoramento" foi
@@ -12,6 +12,10 @@ em código**, que é o aceite da Fase 2.
 
 Em seguida, a documentação de **20 licitações seguidas foi baixada sem erro (57 arquivos,
 38 MB)** e, rodando de novo, **nada foi rebaixado** — o aceite da Fase 3.
+
+Por fim, esses **10 editais foram lidos e conferidos um a um** contra o trecho que o painel
+recortou: **152 exigências e 11 dispensas**, com **1 marcação discutível** (uma cláusula
+condicional de amostra) — o aceite da Fase 4 admite no máximo uma errada.
 
 O que existe hoje:
 
@@ -40,6 +44,13 @@ O que existe hoje:
 | Pastas no volume e nomes de arquivo (seção 7.1) | [backend/servicos/arquivos.js](backend/servicos/arquivos.js) |
 | Aba Arquivos com visualizador de PDF e download | [frontend/src/paginas/Detalhe.jsx](frontend/src/paginas/Detalhe.jsx) |
 | "Baixar tudo (.zip)" | [backend/rotas/licitacoes.js](backend/rotas/licitacoes.js) |
+
+| Item da Fase 4 | Onde |
+|---|---|
+| Extração de texto (PDF, DOCX, TXT, conteúdo de ZIP) | [backend/servicos/texto-documento.js](backend/servicos/texto-documento.js) |
+| Catálogo de 34 exigências + detecção com negação | [backend/regras/exigencias.js](backend/regras/exigencias.js) |
+| Job `ler_edital` | [backend/jobs/ler-edital.js](backend/jobs/ler-edital.js) |
+| Tela de checklist com o trecho do edital | [frontend/src/paginas/Exigencias.jsx](frontend/src/paginas/Exigencias.jsx) |
 
 Tudo em português: código, comentários, tabelas, interface.
 
@@ -134,6 +145,17 @@ npm run repontuar
 Recalcula a pontuação, o objeto social e o "pode participar" de tudo que já está gravado, sem
 ir aos portais. Pela tela, o botão **Repontuar o Radar** em Configurações faz o mesmo pela fila.
 
+### 7. Leitura do edital e checklist
+
+```bash
+npm run ler
+```
+
+Lê os editais já baixados (não vai à internet) e monta o checklist das 34 exigências da seção
+8.2. `--licitacao=582` lê só uma; `--refazer` relê o que já tinha sido lido, que é o que fazer
+depois de mexer no catálogo. O que você corrigir à mão na tela fica marcado como confirmado e a
+leitura seguinte não encosta nele.
+
 ### 6. Documentação dos editais
 
 ```bash
@@ -218,6 +240,9 @@ GET    /api/configuracoes          PATCH /api/configuracoes/pesos
 POST   /api/configuracoes/pesos/:chave/restaurar
 POST   /api/configuracoes/repontuar
 GET    /api/empresa/perfis         POST /api/empresa/perfis      PATCH /api/empresa/perfis/:id
+POST   /api/licitacoes/:id/ler     GET /api/licitacoes/:id/exigencias
+POST   /api/licitacoes/:id/exigencias/:codigo          correção manual
+POST   /api/licitacoes/:id/exigencias/:codigo/soltar   volta ao automático
 POST   /api/licitacoes/:id/baixar  GET /api/licitacoes/:id/arquivos
 GET    /api/licitacoes/:id/arquivos/:arqId     ?baixar=1 força download
 GET    /api/licitacoes/:id/zip     a pasta inteira
@@ -228,12 +253,12 @@ Erro sempre no formato `{ "erro": "mensagem em português", "detalhe": "técnico
 
 ---
 
-## Próximo passo — Fase 4
+## Próximo passo — Fase 5
 
-Leitura do edital e checklist de exigências: extração do texto dos PDFs (a coluna
-`licitacao_arquivos.texto_extraido` já existe), catálogo de exigências, detecção sensível a
-negação e a tela de checklist. O critério de aceite é ler 10 editais e a checagem de exigências
-acertar em pelo menos 8.
+Cofre de documentos da empresa e montagem do envio (seções 9 e 17): upload com validade e
+versionamento, kits por tipo de licitação e o botão "Gerar pacote de documentos" que fecha o
+checklist. É o que falta para a coluna **Você tem?** parar de responder "—": hoje ela só sabe
+o que dá para deduzir do perfil (objeto social por CNAE, Simples, natureza ME, capital social).
 
 ### O que o PNCP nos ensinou até aqui
 

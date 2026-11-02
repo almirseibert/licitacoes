@@ -4,6 +4,7 @@ import { api } from '../servicos/api';
 import { moeda, moedaExata, dataHora } from '../servicos/formato';
 import Anel from '../componentes/Anel';
 import Contagem from '../componentes/Contagem';
+import Exigencias from './Exigencias';
 
 const ETAPAS = [
   'Triagem', 'Analisando', 'Vou disputar', 'Documentação',
@@ -137,6 +138,7 @@ export default function Detalhe({ id, onFechar }) {
                   ['itens', `Itens${licitacao.itens ? ` (${licitacao.itens.length})` : ''}`],
                   ['pontuacao', 'Pontuação'],
                   ['arquivos', 'Arquivos'],
+                  ['exigencias', 'Exigências'],
                 ].map(([chave, rotulo]) => (
                   <button
                     key={chave}
@@ -164,6 +166,7 @@ export default function Detalhe({ id, onFechar }) {
               {aba === 'itens' && <Itens itens={licitacao.itens || []} />}
               {aba === 'pontuacao' && <Pontuacao detalhe={licitacao.pontuacao_detalhe} />}
               {aba === 'arquivos' && <Arquivos id={id} />}
+              {aba === 'exigencias' && <Exigencias id={id} />}
             </div>
           </>
         )}

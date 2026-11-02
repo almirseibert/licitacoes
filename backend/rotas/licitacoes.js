@@ -360,5 +360,35 @@ rotas.get('/:id/zip', async (req, res) => {
   }
 });
 
+// Checklist de exigências do edital (seção 8.4), em arquivo próprio.
+rotas.use('/:id/exigencias', require('./exigencias'));
+
+// POST /api/licitacoes/:id/ler — relê o edital já baixado e refaz o checklist.
+rotas.post('/:id/ler', async (req, res) => {
+  try {
+    const [[licitacao]] = await pool.query(
+      'SELECT id, arquivos_status FROM licitacoes WHERE id = ?',
+      [req.params.id]
+    );
+    if (!licitacao) return res.status(404).json({ erro: 'Licitação não encontrada.' });
+    if (!['ok', 'parcial'].includes(licitacao.arquivos_status)) {
+      return res.status(409).json({ erro: 'Baixe a documentação antes de ler o edital.' });
+    }
+
+    await fila.enfileirar(
+      'ler_edital',
+      { licitacaoId: Number(req.params.id) },
+      { prioridade: 1, chaveUnica: `ler:${req.params.id}` }
+    );
+    await pool.query(
+      "UPDATE licitacoes SET exigencias_status = 'na_fila' WHERE id = ? AND exigencias_status = 'nao_lido'",
+      [req.params.id]
+    );
+    res.status(202).json({ ok: true, mensagem: 'Leitura do edital na fila.' });
+  } catch (erro) {
+    res.status(500).json({ erro: 'Não foi possível enfileirar a leitura.', detalhe: erro.message });
+  }
+});
+
 module.exports = rotas;
 module.exports.ETAPAS = ETAPAS;

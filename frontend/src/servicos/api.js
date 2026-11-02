@@ -129,6 +129,19 @@ export const api = {
 
   salvarZip: (id, nome) => salvarComo(`/licitacoes/${id}/zip`, `${nome || 'documentacao'}.zip`),
 
+  exigencias: (id) => requisitar(`/licitacoes/${id}/exigencias`),
+
+  lerEdital: (id) => requisitar(`/licitacoes/${id}/ler`, { method: 'POST' }),
+
+  corrigirExigencia: (id, codigo, detectado) =>
+    requisitar(`/licitacoes/${id}/exigencias/${codigo}`, {
+      method: 'POST',
+      body: JSON.stringify({ detectado }),
+    }),
+
+  soltarExigencia: (id, codigo) =>
+    requisitar(`/licitacoes/${id}/exigencias/${codigo}/soltar`, { method: 'POST' }),
+
   fontes: () => requisitar('/fontes'),
 
   coletarTudo: (forcar = true) =>
