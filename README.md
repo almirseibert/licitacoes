@@ -3,7 +3,9 @@
 CRM de captação e inscrição em licitações de órgãos públicos. A especificação completa
 está em [PAINEL_LICITACOES_INSTRUCOES.md](PAINEL_LICITACOES_INSTRUCOES.md) — 32 seções, 14 fases.
 
-**Estado: Fase 1 (Fundação) implementada.** O que existe hoje:
+**Estado: Fase 1 (Fundação) implementada e validada em 02/11/2026** — primeira coleta real no
+PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas com link que abre o edital
+no portal (5 na faixa alta, 201 em "analisar", 527 "talvez"). O que existe hoje:
 
 | Item da Fase 1 | Onde |
 |---|---|
@@ -53,6 +55,19 @@ npm run semear
 
 O seed cadastra as 7 fontes da seção 5.5 (só o PNCP ativo), as 36 palavras-chave validadas
 e as palavras de corte. Rodar de novo não duplica nem desfaz o que você editou na tela.
+
+> **MySQL gerenciado (EasyPanel, aaPanel):** o usuário da aplicação costuma ter privilégio
+> apenas no próprio banco e não pode criar bancos. Nesse caso, rode uma vez no console do
+> serviço MySQL, como root:
+>
+> ```sql
+> CREATE DATABASE IF NOT EXISTS `licitacoes` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+> GRANT ALL PRIVILEGES ON `licitacoes`.* TO 'mysql'@'%';
+> ```
+>
+> O `npm run migrar` segue em frente sozinho quando o banco já existe. Para rodar de fora do
+> servidor, use o **host e a porta externos** do serviço MySQL (em Credenciais → Host Externo),
+> não o host interno nem a porta da rede privada.
 
 ### 3. API, worker e tela
 
