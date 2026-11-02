@@ -1,7 +1,9 @@
 // GET/PATCH /api/licitacoes — alimenta a tela Radar (seções 11.1 e 13).
+const fs = require('fs');
 const express = require('express');
 const pool = require('../config/db');
 const fila = require('../servicos/fila');
+const servicoArquivos = require('../servicos/arquivos');
 
 const rotas = express.Router();
 
@@ -109,7 +111,7 @@ rotas.get('/', async (req, res) => {
               l.abertura_propostas, l.fim_propostas, l.situacao, l.plataforma_disputa,
               l.link_portal, l.link_disputa, l.grupo, l.palavra_casada, l.pontuacao,
               l.pode_participar, l.motivo_participacao, l.objeto_social, l.beneficio_me,
-              l.etapa, l.favorito, l.criado_em,
+              l.etapa, l.favorito, l.criado_em, l.arquivos_status,
               f.nome AS fonte_nome,
               (SELECT COUNT(*) FROM licitacao_itens i WHERE i.licitacao_id = l.id) AS total_itens
          FROM licitacoes l
@@ -233,6 +235,128 @@ rotas.post('/:id/detalhar', async (req, res) => {
     res.status(202).json({ ok: true, mensagem: 'Detalhamento na fila.' });
   } catch (erro) {
     res.status(500).json({ erro: 'Não foi possível enfileirar o detalhamento.', detalhe: erro.message });
+  }
+});
+
+// ------------------------------------------------- documentação (seção 7.3)
+
+// POST /api/licitacoes/:id/baixar — enfileira o download dos documentos.
+rotas.post('/:id/baixar', async (req, res) => {
+  try {
+    const [linhas] = await pool.query('SELECT id FROM licitacoes WHERE id = ?', [req.params.id]);
+    if (!linhas.length) return res.status(404).json({ erro: 'Licitação não encontrada.' });
+
+    const confirmado = Boolean(req.body && req.body.confirmado);
+    await fila.enfileirar(
+      'baixar_edital',
+      { licitacaoId: Number(req.params.id), confirmado },
+      { prioridade: 1, chaveUnica: `baixar:${req.params.id}` }
+    );
+    await pool.query(
+      "UPDATE licitacoes SET arquivos_status = 'na_fila' WHERE id = ? AND arquivos_status IN ('nao_baixado','grande_demais')",
+      [req.params.id]
+    );
+    res.status(202).json({
+      ok: true,
+      mensagem: confirmado
+        ? 'Download na fila, sem o limite de 300 MB.'
+        : 'Download dos documentos na fila.',
+    });
+  } catch (erro) {
+    res.status(500).json({ erro: 'Não foi possível enfileirar o download.', detalhe: erro.message });
+  }
+});
+
+rotas.get('/:id/arquivos', async (req, res) => {
+  try {
+    const [[licitacao]] = await pool.query(
+      'SELECT id, pasta, arquivos_status, arquivos_em FROM licitacoes WHERE id = ?',
+      [req.params.id]
+    );
+    if (!licitacao) return res.status(404).json({ erro: 'Licitação não encontrada.' });
+
+    const [dados] = await pool.query(
+      `SELECT id, sequencial, titulo, nome_arquivo, extensao, tamanho_bytes, status, erro, url_origem
+         FROM licitacao_arquivos WHERE licitacao_id = ? ORDER BY sequencial ASC`,
+      [req.params.id]
+    );
+
+    res.json({
+      pasta: licitacao.pasta,
+      status: licitacao.arquivos_status,
+      baixado_em: licitacao.arquivos_em,
+      prontos: dados.filter((a) => a.status === 'ok').length,
+      dados,
+    });
+  } catch (erro) {
+    res.status(500).json({ erro: 'Não foi possível carregar os arquivos.', detalhe: erro.message });
+  }
+});
+
+// GET /api/licitacoes/:id/arquivos/:arqId — entrega o arquivo do volume.
+rotas.get('/:id/arquivos/:arqId', async (req, res) => {
+  try {
+    const [[arquivo]] = await pool.query(
+      'SELECT * FROM licitacao_arquivos WHERE id = ? AND licitacao_id = ?',
+      [req.params.arqId, req.params.id]
+    );
+    if (!arquivo) return res.status(404).json({ erro: 'Arquivo não encontrado.' });
+    if (arquivo.status !== 'ok' || !arquivo.caminho) {
+      return res.status(409).json({ erro: 'Esse arquivo ainda não foi baixado.' });
+    }
+    // O caminho vem do banco, mas conferimos assim mesmo: nada fora do volume.
+    if (!servicoArquivos.dentroDoVolume(arquivo.caminho)) {
+      return res.status(400).json({ erro: 'Caminho de arquivo inválido.' });
+    }
+
+    const absoluto = servicoArquivos.caminhoAbsoluto(arquivo.caminho);
+    if (!fs.existsSync(absoluto)) {
+      return res.status(410).json({ erro: 'O arquivo não está mais no volume. Baixe a documentação de novo.' });
+    }
+
+    // PDF abre na tela; o resto vai como download.
+    const inline = arquivo.extensao === '.pdf' && req.query.baixar !== '1';
+    res.setHeader('Content-Type', arquivo.extensao === '.pdf' ? 'application/pdf' : 'application/octet-stream');
+    res.setHeader(
+      'Content-Disposition',
+      `${inline ? 'inline' : 'attachment'}; filename="${encodeURIComponent(arquivo.nome_arquivo)}"`
+    );
+    fs.createReadStream(absoluto).pipe(res);
+  } catch (erro) {
+    res.status(500).json({ erro: 'Não foi possível entregar o arquivo.', detalhe: erro.message });
+  }
+});
+
+// GET /api/licitacoes/:id/zip — "Baixar tudo (.zip)" (seção 7.3).
+rotas.get('/:id/zip', async (req, res) => {
+  try {
+    const [[licitacao]] = await pool.query('SELECT id, pasta FROM licitacoes WHERE id = ?', [req.params.id]);
+    if (!licitacao) return res.status(404).json({ erro: 'Licitação não encontrada.' });
+    if (!licitacao.pasta || !servicoArquivos.dentroDoVolume(licitacao.pasta)) {
+      return res.status(409).json({ erro: 'Esta licitação ainda não tem documentação baixada.' });
+    }
+
+    const absoluta = servicoArquivos.caminhoAbsoluto(licitacao.pasta);
+    if (!fs.existsSync(absoluta)) {
+      return res.status(409).json({ erro: 'Esta licitação ainda não tem documentação baixada.' });
+    }
+
+    // archiver 8 expõe classes por formato; não existe mais a fábrica archiver('zip').
+    const { ZipArchive } = require('archiver');
+    const zip = new ZipArchive({ zlib: { level: 6 } });
+
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(`${licitacao.pasta}.zip`)}"`);
+    // Se o empacotamento falhar no meio, o cabeçalho já foi: resta cortar a conexão.
+    zip.on('error', (erro) => {
+      console.error('Falha ao montar o zip:', erro);
+      res.destroy(erro);
+    });
+    zip.pipe(res);
+    zip.directory(absoluta, false);
+    await zip.finalize();
+  } catch (erro) {
+    if (!res.headersSent) res.status(500).json({ erro: 'Não foi possível montar o zip.', detalhe: erro.message });
   }
 });
 

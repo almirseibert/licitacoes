@@ -195,9 +195,16 @@ module.exports = {
     return buscarNaApi(`/orgaos/${cnpj}/compras/${ano}/${sequencial}/itens/${numeroItem}/resultados`);
   },
 
-  /** Stream do arquivo para disco (Fase 3). */
+  /**
+   * Stream do arquivo para disco (Fase 3).
+   *
+   * O PNCP responde 422 em cerca de uma chamada a cada cinco, com
+   * "Erro ao tentar carregar arquivo <bucket>/input/<uuid>" — é falha dele ao
+   * puxar do bucket, não pedido inválido nosso: a mesma URL devolve 200 na
+   * tentativa seguinte. Por isso 422 entra na retentativa só aqui.
+   */
   async baixarArquivo({ url }) {
-    const resposta = await buscar(url, { aceitar: '*/*' });
+    const resposta = await buscar(url, { aceitar: '*/*', tentativas: 4, repetirEm: [422] });
     return {
       corpo: resposta.body,
       // O nome real vem no Content-Disposition e às vezes precisa de dois decodeURIComponent.

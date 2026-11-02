@@ -14,7 +14,12 @@ module.exports = {
   obrigatorio,
   porta: Number(process.env.PORTA || 4000),
   ambiente: process.env.NODE_ENV || 'development',
-  dirDados: process.env.DIR_DADOS || path.resolve(__dirname, '..', '..', 'dados'),
+  // Sempre absoluto: um DIR_DADOS relativo (`./dados`) resolvido contra o
+  // diretório de trabalho mudaria de lugar conforme de onde o processo subiu.
+  dirDados: path.resolve(
+    path.join(__dirname, '..', '..'),
+    process.env.DIR_DADOS || 'dados'
+  ),
   jwt: {
     get segredo() { return obrigatorio('JWT_SECRET'); },
     expira: process.env.JWT_EXPIRA || '8h',

@@ -3,6 +3,7 @@
 const { fila: cfgFila } = require('../backend/config/ambiente');
 const fila = require('../backend/servicos/fila');
 const coletar = require('../backend/jobs/coletar');
+const baixar = require('../backend/jobs/baixar');
 
 const sinal = { parar: false };
 
@@ -12,6 +13,7 @@ const UMA_HORA = 60 * 60 * 1000;
 
 async function principal() {
   coletar.registrarNaFila();
+  baixar.registrarNaFila();
 
   console.log(`Worker de licitações iniciado. Driver da fila: ${cfgFila.driver}.`);
 
@@ -24,6 +26,13 @@ async function principal() {
       }
       if (resultado.semAdaptador.length) {
         console.log(`Fontes sem adaptador implementado (ignoradas): ${resultado.semAdaptador.join(', ')}`);
+      }
+
+      // Documentação das licitações que valem a pena (seção 14): entra atrás da
+      // coleta na fila, com prioridade menor, para nunca atrasar o Radar.
+      const documentos = await baixar.baixarEditais({ limite: 20 });
+      if (documentos.enfileiradas) {
+        console.log(`Download de documentação enfileirado para ${documentos.enfileiradas} licitações.`);
       }
     } catch (erro) {
       console.error('Falha ao agendar a varredura:', erro.message);

@@ -13,12 +13,17 @@
     "semear": "node backend/config/semear.js",
     "coletar": "node backend/jobs/executar-coleta.js",
     "repontuar": "node backend/jobs/executar-repontuar.js",
+    "baixar": "node backend/jobs/executar-download.js",
     "build": "npm --prefix frontend ci && npm --prefix frontend run build",
     "postinstall": "echo \"Rode: npm run migrar && npm run semear\""
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
-    "bcrypt": "^5.1.1",
+    "adm-zip": "^0.6.1",
+    "archiver": "^8.0.0",
+    "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",

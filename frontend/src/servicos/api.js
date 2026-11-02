@@ -51,6 +51,49 @@ async function requisitar(caminho, opcoes = {}) {
   return dados;
 }
 
+/**
+ * Busca um arquivo do volume como blob. O `<iframe>` do visualizador não manda
+ * cabeçalho de autorização, então o token entra aqui e o que vai para a tela é
+ * uma URL de objeto — nada de token em query string (seção 13).
+ */
+async function obterBlob(caminho) {
+  const token = obterToken();
+  const resposta = await fetch(`${BASE}${caminho}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (resposta.status === 401) {
+    encerrarSessao();
+    window.location.reload();
+    throw new Error('Sessão expirada.');
+  }
+  if (!resposta.ok) {
+    const texto = await resposta.text();
+    let mensagem = 'Não foi possível abrir o arquivo.';
+    try {
+      mensagem = JSON.parse(texto).erro || mensagem;
+    } catch {
+      /* resposta não-JSON: fica a mensagem padrão */
+    }
+    throw new Error(mensagem);
+  }
+
+  return resposta.blob();
+}
+
+/** Entrega o blob ao navegador com o nome certo, sem abrir aba nova. */
+async function salvarComo(caminho, nome) {
+  const blob = await obterBlob(caminho);
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = nome;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
 export const api = {
   login: (email, senha) =>
     requisitar('/auth/login', { method: 'POST', body: JSON.stringify({ email, senha }) }),
@@ -73,6 +116,18 @@ export const api = {
     requisitar(`/licitacoes/${id}`, { method: 'PATCH', body: JSON.stringify(campos) }),
 
   detalharLicitacao: (id) => requisitar(`/licitacoes/${id}/detalhar`, { method: 'POST' }),
+
+  arquivos: (id) => requisitar(`/licitacoes/${id}/arquivos`),
+
+  baixarDocumentacao: (id, confirmado = false) =>
+    requisitar(`/licitacoes/${id}/baixar`, { method: 'POST', body: JSON.stringify({ confirmado }) }),
+
+  verArquivo: (id, arqId) => obterBlob(`/licitacoes/${id}/arquivos/${arqId}`),
+
+  salvarArquivo: (id, arqId, nome) =>
+    salvarComo(`/licitacoes/${id}/arquivos/${arqId}?baixar=1`, nome),
+
+  salvarZip: (id, nome) => salvarComo(`/licitacoes/${id}/zip`, `${nome || 'documentacao'}.zip`),
 
   fontes: () => requisitar('/fontes'),
 

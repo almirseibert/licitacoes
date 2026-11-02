@@ -316,6 +316,21 @@ function Tabela({ dados, onAbrir, onFavorito }) {
   );
 }
 
+/** Estado da documentação no card (seção 7.3): quem já tem edital na mão. */
+function SeloDocumentos({ status }) {
+  const estados = {
+    na_fila: ['na fila', 'text-texto-suave'],
+    baixando: ['baixando', 'text-texto-suave'],
+    ok: ['edital baixado', 'text-ok'],
+    parcial: ['edital parcial', 'text-atencao'],
+    sem_arquivo: ['sem arquivo', 'text-texto-suave'],
+    grande_demais: ['acima de 300 MB', 'text-atencao'],
+  };
+  const estado = estados[status];
+  if (!estado) return null;
+  return <span className={`text-[10px] uppercase tracking-wide ${estado[1]}`}>· {estado[0]}</span>;
+}
+
 function Card({ licitacao: l, onAbrir, onFavorito }) {
   const faixa = faixaPontuacao(l.pontuacao);
   return (
@@ -347,6 +362,7 @@ function Card({ licitacao: l, onAbrir, onFavorito }) {
       <div className="mt-2 flex items-center gap-2">
         <span className="text-[10px] uppercase tracking-wide" style={{ color: faixa.cor }}>{faixa.rotulo}</span>
         <SeloBeneficio valor={l.beneficio_me} />
+        <SeloDocumentos status={l.arquivos_status} />
         <a
           href={l.link_disputa || l.link_portal}
           target="_blank"

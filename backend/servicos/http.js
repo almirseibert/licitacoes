@@ -50,7 +50,10 @@ class ErroHttp extends Error {
 /**
  * Busca com retentativa. Devolve a Response (corpo ainda não lido).
  * @param {string} url
- * @param {{ metodo?: string, cabecalhos?: object, corpo?: any, timeoutMs?: number, tentativas?: number, aceitar?: string }} opcoes
+ * @param {{ metodo?: string, cabecalhos?: object, corpo?: any, timeoutMs?: number,
+ *            tentativas?: number, aceitar?: string, repetirEm?: number[] }} opcoes
+ *   `repetirEm` acrescenta status que, naquela chamada, são sabidamente
+ *   intermitentes do lado do portal — ver o 422 do PNCP em adaptadores/pncp.js.
  */
 async function buscar(url, opcoes = {}) {
   const {
@@ -60,7 +63,10 @@ async function buscar(url, opcoes = {}) {
     timeoutMs = cfg.timeoutMs,
     tentativas = 3,
     aceitar = 'application/json, text/plain, */*',
+    repetirEm = [],
   } = opcoes;
+
+  const vaiRepetir = (status) => status === 429 || status >= 500 || repetirEm.includes(status);
 
   const dominio = new URL(url).host;
   let ultimoErro;
@@ -86,7 +92,7 @@ async function buscar(url, opcoes = {}) {
       });
 
       // 429 e 5xx: retentativa com espera progressiva, respeitando Retry-After.
-      if (resposta.status === 429 || resposta.status >= 500) {
+      if (vaiRepetir(resposta.status)) {
         const retryAfter = Number(resposta.headers.get('retry-after'));
         const texto = await resposta.text().catch(() => '');
         ultimoErro = new ErroHttp(`HTTP ${resposta.status} em ${url}`, resposta.status, texto.slice(0, 300));
@@ -106,7 +112,7 @@ async function buscar(url, opcoes = {}) {
     } catch (erro) {
       const abortou = erro.name === 'AbortError';
       ultimoErro = abortou ? new ErroHttp(`Tempo esgotado (${timeoutMs} ms) em ${url}`, 408) : erro;
-      const recuperavel = abortou || !(erro instanceof ErroHttp) || erro.status >= 500 || erro.status === 429;
+      const recuperavel = abortou || !(erro instanceof ErroHttp) || vaiRepetir(erro.status);
       if (tentativa < tentativas - 1 && recuperavel) {
         esperaAntes = ESPERAS_MS[tentativa];
         continue;

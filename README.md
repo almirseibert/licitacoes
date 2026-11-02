@@ -3,12 +3,15 @@
 CRM de captação e inscrição em licitações de órgãos públicos. A especificação completa
 está em [PAINEL_LICITACOES_INSTRUCOES.md](PAINEL_LICITACOES_INSTRUCOES.md) — 32 seções, 14 fases.
 
-**Estado: Fases 1 e 2 implementadas e validadas em 02/11/2026.**
+**Estado: Fases 1, 2 e 3 implementadas e validadas em 02/11/2026.**
 
 A primeira coleta real no PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas
 com link que abre o edital no portal. Depois, pela tela, a palavra "videomonitoramento" foi
 simulada (82 no portal), ativada e trouxe **57 licitações novas na coleta seguinte — sem tocar
 em código**, que é o aceite da Fase 2.
+
+Em seguida, a documentação de **20 licitações seguidas foi baixada sem erro (57 arquivos,
+38 MB)** e, rodando de novo, **nada foi rebaixado** — o aceite da Fase 3.
 
 O que existe hoje:
 
@@ -30,6 +33,13 @@ O que existe hoje:
 | Pesos da aderência em tabela + Configurações | [backend/regras/pesos.js](backend/regras/pesos.js), [frontend/src/paginas/Configuracoes.jsx](frontend/src/paginas/Configuracoes.jsx) |
 | Objeto social por CNAE (seção 6.2) | [backend/regras/objeto-social.js](backend/regras/objeto-social.js), [backend/config/dados/perfil-padrao.js](backend/config/dados/perfil-padrao.js) |
 | Repontuar sem ir aos portais | [backend/jobs/coletar.js](backend/jobs/coletar.js) (`repontuar`) |
+
+| Item da Fase 3 | Onde |
+|---|---|
+| `licitacao_arquivos` + job `baixar_edital` idempotente | [backend/migrations/003_arquivos.sql](backend/migrations/003_arquivos.sql), [backend/jobs/baixar.js](backend/jobs/baixar.js) |
+| Pastas no volume e nomes de arquivo (seção 7.1) | [backend/servicos/arquivos.js](backend/servicos/arquivos.js) |
+| Aba Arquivos com visualizador de PDF e download | [frontend/src/paginas/Detalhe.jsx](frontend/src/paginas/Detalhe.jsx) |
+| "Baixar tudo (.zip)" | [backend/rotas/licitacoes.js](backend/rotas/licitacoes.js) |
 
 Tudo em português: código, comentários, tabelas, interface.
 
@@ -124,6 +134,24 @@ npm run repontuar
 Recalcula a pontuação, o objeto social e o "pode participar" de tudo que já está gravado, sem
 ir aos portais. Pela tela, o botão **Repontuar o Radar** em Configurações faz o mesmo pela fila.
 
+### 6. Documentação dos editais
+
+```bash
+npm run baixar
+```
+
+Baixa os documentos das 20 melhores licitações ainda sem arquivo, para
+`$DIR_DADOS/editais/<data UF cidade - órgão (SIGLA nº)>/`. Variações:
+
+```bash
+npm run baixar -- --licitacao=582 --confirmado
+```
+
+`--confirmado` libera o limite de 300 MB por licitação. O job é **idempotente**: arquivo já
+gravado com tamanho maior que zero é pulado, então rodar de novo só busca o que faltou ou o que
+o portal publicou depois. Pela tela, a aba **Arquivos** de cada licitação faz o mesmo pela fila,
+abre PDF ali mesmo e entrega a pasta inteira em `.zip`.
+
 ---
 
 ## Arquitetura
@@ -190,6 +218,9 @@ GET    /api/configuracoes          PATCH /api/configuracoes/pesos
 POST   /api/configuracoes/pesos/:chave/restaurar
 POST   /api/configuracoes/repontuar
 GET    /api/empresa/perfis         POST /api/empresa/perfis      PATCH /api/empresa/perfis/:id
+POST   /api/licitacoes/:id/baixar  GET /api/licitacoes/:id/arquivos
+GET    /api/licitacoes/:id/arquivos/:arqId     ?baixar=1 força download
+GET    /api/licitacoes/:id/zip     a pasta inteira
 GET    /api/painel/resumo          GET /api/saude
 ```
 
@@ -197,13 +228,20 @@ Erro sempre no formato `{ "erro": "mensagem em português", "detalhe": "técnico
 
 ---
 
-## Próximo passo — Fase 3
+## Próximo passo — Fase 4
 
-Documentação da licitação: tabela `licitacao_arquivos` e job `baixar_editais` (idempotente, com
-extração de ZIP), tela de arquivos com visualizador de PDF e download individual, e "Baixar tudo
-(.zip)". O critério de aceite é abrir uma licitação, baixar o edital e ver os arquivos listados
-e abertos na tela.
+Leitura do edital e checklist de exigências: extração do texto dos PDFs (a coluna
+`licitacao_arquivos.texto_extraido` já existe), catálogo de exigências, detecção sensível a
+negação e a tela de checklist. O critério de aceite é ler 10 editais e a checagem de exigências
+acertar em pelo menos 8.
 
-Ponto de atenção herdado da Fase 1: os endpoints de **itens e arquivos do PNCP** (`/pncp-api/v1`)
-responderam 503 de forma intermitente na validação. O adaptador já tenta duas bases e tolera a
-ausência sem perder a licitação — a Fase 3 depende de eles estarem no ar.
+### O que o PNCP nos ensinou até aqui
+
+- **Itens e arquivos vivem em `/pncp-api/v1`**, não na API de consulta. Em 01/11 esse serviço
+  respondeu 503 geral; em 02/11 voltou. O adaptador tenta duas bases antes de desistir.
+- **O download de arquivo devolve 422 em cerca de uma chamada a cada cinco**, com
+  "Erro ao tentar carregar arquivo &lt;bucket&gt;" — é falha dele ao puxar do bucket, não pedido
+  inválido. A mesma URL responde 200 na tentativa seguinte, por isso 422 entra na retentativa
+  só no download ([backend/adaptadores/pncp.js](backend/adaptadores/pncp.js)).
+- **O portal publica documento novo depois da coleta** (retificação, resposta a
+  esclarecimento). Rodar o download de novo traz só isso — foi o que aconteceu no aceite.

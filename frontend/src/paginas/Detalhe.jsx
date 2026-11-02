@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ExternalLink, Loader2, RefreshCcw, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ExternalLink, Loader2, RefreshCcw, X, Download, Eye, FolderDown, FileText, AlertTriangle } from 'lucide-react';
 import { api } from '../servicos/api';
 import { moeda, moedaExata, dataHora } from '../servicos/formato';
 import Anel from '../componentes/Anel';
@@ -11,9 +11,9 @@ const ETAPAS = [
 ];
 
 /**
- * Gaveta de detalhe da licitação. Na Fase 1 traz Resumo e Itens; as abas
- * Arquivos, Exigências, Preço, Concorrentes e Anotações entram nas fases
- * seguintes (seção 11.2).
+ * Gaveta de detalhe da licitação (seção 11.2). Hoje traz Resumo, Itens,
+ * Pontuação e Arquivos; Exigências, Preço, Concorrentes e Anotações entram nas
+ * fases seguintes.
  */
 export default function Detalhe({ id, onFechar }) {
   const [licitacao, setLicitacao] = useState(null);
@@ -136,6 +136,7 @@ export default function Detalhe({ id, onFechar }) {
                   ['resumo', 'Resumo'],
                   ['itens', `Itens${licitacao.itens ? ` (${licitacao.itens.length})` : ''}`],
                   ['pontuacao', 'Pontuação'],
+                  ['arquivos', 'Arquivos'],
                 ].map(([chave, rotulo]) => (
                   <button
                     key={chave}
@@ -162,6 +163,7 @@ export default function Detalhe({ id, onFechar }) {
               {aba === 'resumo' && <Resumo licitacao={licitacao} />}
               {aba === 'itens' && <Itens itens={licitacao.itens || []} />}
               {aba === 'pontuacao' && <Pontuacao detalhe={licitacao.pontuacao_detalhe} />}
+              {aba === 'arquivos' && <Arquivos id={id} />}
             </div>
           </>
         )}
@@ -263,4 +265,193 @@ function Pontuacao({ detalhe }) {
       ))}
     </div>
   );
+}
+
+/**
+ * Aba Arquivos (seção 7.3): enfileira o download, mostra o progresso em
+ * "3 de 7", abre PDF na própria tela e entrega qualquer arquivo individualmente
+ * ou a pasta inteira em .zip.
+ */
+function Arquivos({ id }) {
+  const [dados, setDados] = useState(null);
+  const [erro, setErro] = useState(null);
+  const [aviso, setAviso] = useState(null);
+  const [ocupado, setOcupado] = useState(false);
+  const [vendo, setVendo] = useState(null);
+  const visualizador = useRef(null);
+
+  const carregar = () =>
+    api.arquivos(id).then((r) => { setDados(r); setErro(null); }).catch((e) => setErro(e.message));
+
+  useEffect(() => {
+    carregar();
+    // O download roda no worker: enquanto estiver em andamento, a tela se atualiza sozinha.
+    const relogio = setInterval(() => {
+      setDados((atual) => {
+        if (atual && (atual.status === 'na_fila' || atual.status === 'baixando')) carregar();
+        return atual;
+      });
+    }, 5000);
+    return () => clearInterval(relogio);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  // A URL do objeto vive enquanto o visualizador estiver aberto.
+  useEffect(() => () => vendo && URL.revokeObjectURL(vendo.url), [vendo]);
+
+  const baixar = async (confirmado = false) => {
+    setOcupado(true);
+    setErro(null);
+    try {
+      const r = await api.baixarDocumentacao(id, confirmado);
+      setAviso(r.mensagem);
+      await carregar();
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setOcupado(false);
+    }
+  };
+
+  const ver = async (arquivo) => {
+    setErro(null);
+    try {
+      const blob = await api.verArquivo(id, arquivo.id);
+      if (vendo) URL.revokeObjectURL(vendo.url);
+      setVendo({ arquivo, url: URL.createObjectURL(blob) });
+      // O visualizador nasce abaixo da lista: leva o usuário até ele.
+      setTimeout(() => visualizador.current && visualizador.current.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+    } catch (e) {
+      setErro(e.message);
+    }
+  };
+
+  if (erro && !dados) return <p className="text-sm text-erro">{erro}</p>;
+  if (!dados) return <Loader2 size={16} className="animate-spin text-texto-suave" />;
+
+  const total = dados.dados.filter((a) => a.status !== 'sem_arquivo').length;
+  const semArquivo = dados.status === 'sem_arquivo';
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-3 flex-wrap">
+        <button className="botao-primario flex items-center gap-1" onClick={() => baixar(false)} disabled={ocupado}>
+          {ocupado ? <Loader2 size={12} className="animate-spin" /> : <FolderDown size={12} />}
+          {total ? 'Baixar o que falta' : 'Baixar documentação'}
+        </button>
+
+        {dados.prontos > 0 && (
+          <button className="botao flex items-center gap-1" onClick={() => api.salvarZip(id, dados.pasta).catch((e) => setErro(e.message))}>
+            <Download size={12} /> Baixar tudo (.zip)
+          </button>
+        )}
+
+        <span className="text-xs text-texto-suave">
+          {semArquivo
+            ? 'o portal não publicou arquivos desta licitação'
+            : total
+              ? `${dados.prontos} de ${total} arquivos${dados.status === 'na_fila' ? ' · na fila' : ''}${dados.status === 'baixando' ? ' · baixando' : ''}`
+              : 'nenhum arquivo baixado ainda'}
+        </span>
+      </div>
+
+      {dados.pasta && (
+        <p className="text-[11px] text-texto-suave font-mono">
+          {dados.pasta}
+          {dados.baixado_em && <span className="ml-2">· {dataHora(dados.baixado_em)}</span>}
+        </p>
+      )}
+
+      {aviso && <p className="text-xs text-texto-suave border border-borda rounded px-3 py-2 bg-superficie">{aviso}</p>}
+      {erro && <p className="text-xs text-erro">{erro}</p>}
+
+      {dados.status === 'grande_demais' && (
+        <div className="flex items-center gap-2 text-xs border border-atencao/40 bg-atencao/5 rounded px-3 py-2">
+          <AlertTriangle size={14} className="text-atencao shrink-0" />
+          <span className="text-texto-suave">
+            Esta licitação passou de 300 MB e o download parou por segurança.
+          </span>
+          <button className="botao ml-auto" onClick={() => baixar(true)}>
+            Continuar mesmo assim
+          </button>
+        </div>
+      )}
+
+      {semArquivo ? (
+        <p className="text-sm text-texto-suave">
+          Nada para baixar aqui. O edital costuma estar na plataforma de disputa — o link está no
+          cabeçalho desta gaveta, e a pasta no volume guarda um aviso com ele.
+        </p>
+      ) : (
+        <table className="w-full text-sm tabela-densa">
+          <thead>
+            <tr>
+              <th className="w-10 text-right">#</th>
+              <th>Arquivo</th>
+              <th className="w-24 text-right">Tamanho</th>
+              <th className="w-24"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {dados.dados.map((a) => (
+              <tr key={a.id}>
+                <td className="text-right font-mono text-xs text-texto-suave">{a.sequencial}</td>
+                <td>
+                  <span className="text-xs">{a.nome_arquivo || a.titulo}</span>
+                  {a.status === 'erro' && <p className="text-[11px] text-erro">{a.erro}</p>}
+                  {a.status === 'ok' && a.erro && <p className="text-[11px] text-atencao">{a.erro}</p>}
+                  {a.status === 'pendente' && <p className="text-[11px] text-texto-suave">ainda não baixado</p>}
+                </td>
+                <td className="text-right font-mono text-xs text-texto-suave">{tamanho(a.tamanho_bytes)}</td>
+                <td>
+                  <div className="flex items-center justify-end gap-2">
+                    {a.status === 'ok' && a.extensao === '.pdf' && (
+                      <button className="text-texto-suave hover:text-texto" title="ver aqui" onClick={() => ver(a)}>
+                        <Eye size={13} />
+                      </button>
+                    )}
+                    {a.status === 'ok' && (
+                      <button
+                        className="text-texto-suave hover:text-texto"
+                        title="baixar este arquivo"
+                        onClick={() => api.salvarArquivo(id, a.id, a.nome_arquivo).catch((e) => setErro(e.message))}
+                      >
+                        <Download size={13} />
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      {vendo && (
+        <div ref={visualizador} className="border border-borda rounded overflow-hidden">
+          <div className="px-3 py-2 bg-superficie border-b border-borda flex items-center gap-2 text-xs">
+            <FileText size={13} className="text-texto-suave" />
+            <span className="truncate">{vendo.arquivo.nome_arquivo}</span>
+            <button
+              className="ml-auto text-texto-suave hover:text-texto"
+              onClick={() => {
+                URL.revokeObjectURL(vendo.url);
+                setVendo(null);
+              }}
+            >
+              <X size={14} />
+            </button>
+          </div>
+          <iframe title={vendo.arquivo.nome_arquivo} src={vendo.url} className="w-full h-[60vh] bg-white" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function tamanho(bytes) {
+  if (!bytes) return '—';
+  const mb = bytes / 1024 / 1024;
+  if (mb >= 1) return `${mb.toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
