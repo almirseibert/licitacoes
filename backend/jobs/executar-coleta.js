@@ -18,7 +18,13 @@ async function principal() {
 
   let fontes;
   if (fonteId) {
-    fontes = [{ id: Number(fonteId) }];
+    const [linhas] = await pool.query('SELECT id, nome FROM fontes WHERE id = ?', [Number(fonteId)]);
+    if (!linhas.length) {
+      console.error(`Fonte ${fonteId} não existe.`);
+      await pool.end();
+      process.exit(1);
+    }
+    fontes = linhas;
   } else {
     const [linhas] = await pool.query('SELECT id, nome FROM fontes WHERE ativa = 1 ORDER BY prioridade');
     fontes = linhas;

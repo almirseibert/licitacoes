@@ -11,6 +11,9 @@ const pool = require('../config/db');
 const fila = require('../servicos/fila');
 const adaptadores = require('../adaptadores');
 const { pontuar } = require('../regras/aderencia');
+const { normalizar } = require('../regras/texto');
+const pesosDoBanco = require('../regras/pesos');
+const objetoSocial = require('../regras/objeto-social');
 
 const PONTUACAO_PARA_DETALHAR = 30;
 
@@ -34,13 +37,33 @@ async function carregarContexto() {
     'SELECT id, termo, grupo, peso, usar_aspas, fontes_ids FROM palavras_chave WHERE ativa = 1 ORDER BY peso DESC, termo ASC'
   );
   const [excluidas] = await pool.query('SELECT termo FROM palavras_excluidas WHERE ativa = 1');
+  const [perfis] = await pool.query(
+    'SELECT cnaes FROM empresa_perfis ORDER BY padrao DESC, id ASC LIMIT 1'
+  );
+  const cnaes = perfis.length
+    ? (typeof perfis[0].cnaes === 'string' ? JSON.parse(perfis[0].cnaes || '[]') : perfis[0].cnaes) || []
+    : [];
+
   return {
     palavras: palavras.map((p) => ({
       ...p,
       fontes_ids: typeof p.fontes_ids === 'string' ? JSON.parse(p.fontes_ids) : p.fontes_ids,
     })),
     palavrasExcluidas: excluidas.map((e) => e.termo),
+    pesos: await pesosDoBanco.carregar(),
+    cnaes,
   };
+}
+
+/**
+ * Checa o objeto social (seção 6.2) e só então pontua — `pontuar()` lê
+ * `licitacao.objeto_social` para aplicar a penalidade.
+ */
+function avaliar(licitacao, contexto) {
+  const social = objetoSocial.avaliar(licitacao.objeto, contexto.cnaes);
+  const participacao = objetoSocial.podeParticipar(social);
+  const avaliacao = pontuar({ ...licitacao, objeto_social: social.estado }, contexto);
+  return { ...avaliacao, social, participacao };
 }
 
 function palavraAtendeFonte(palavra, fonteId) {
@@ -84,24 +107,41 @@ async function salvarLicitacao(licitacao, avaliacao) {
     pontuacao: avaliacao.pontuacao,
     pontuacao_detalhe: JSON.stringify(avaliacao.detalhe || []),
     beneficio_me: recortar(avaliacao.beneficio_me, 40),
+    objeto_social: (avaliacao.social && avaliacao.social.estado) || null,
+    objeto_social_motivo: recortar(avaliacao.social && avaliacao.social.motivo, 255),
+    pode_participar: (avaliacao.participacao && avaliacao.participacao.pode) || 'Depende',
+    motivo_participacao: recortar(avaliacao.participacao && avaliacao.participacao.motivo, 255),
     bruto: JSON.stringify(licitacao.bruto || null),
   };
 
   const colunas = Object.keys(campos);
-  const valores = colunas.map((c) => campos[c]);
-  // Colunas do usuário (etapa, favorito, descartada, motivo_descarte) ficam de fora
-  // do UPDATE de propósito: a coleta não desfaz decisão de quem usa o painel.
-  const atualizaveis = colunas.filter((c) => c !== 'fonte_id' && c !== 'chave_externa');
 
-  const sql = `INSERT INTO licitacoes (${colunas.map((c) => `\`${c}\``).join(', ')})
-    VALUES (${colunas.map(() => '?').join(', ')})
-    ON DUPLICATE KEY UPDATE
-      ${atualizaveis.map((c) => `\`${c}\` = VALUES(\`${c}\`)`).join(',\n      ')},
-      id = LAST_INSERT_ID(id)`;
+  // Procuramos antes de gravar em vez de usar ON DUPLICATE KEY UPDATE: neste
+  // servidor `affectedRows` vem 1 tanto na inserção quanto na duplicata sem
+  // mudança, e aí o "novas" da coleta mentiria — e licitação nova é o que
+  // dispara o detalhamento.
+  const [existentes] = await pool.query(
+    'SELECT id FROM licitacoes WHERE fonte_id = ? AND chave_externa = ? LIMIT 1',
+    [campos.fonte_id, campos.chave_externa]
+  );
 
-  const [resultado] = await pool.query(sql, valores);
-  // affectedRows: 1 = inserida, 2 = atualizada, 0 = igual (nada mudou)
-  return { id: resultado.insertId, novo: resultado.affectedRows === 1 };
+  if (existentes.length) {
+    // Colunas do usuário (etapa, favorito, descartada, motivo_descarte) ficam de fora
+    // do UPDATE de propósito: a coleta não desfaz decisão de quem usa o painel.
+    const atualizaveis = colunas.filter((c) => c !== 'fonte_id' && c !== 'chave_externa');
+    await pool.query(
+      `UPDATE licitacoes SET ${atualizaveis.map((c) => `\`${c}\` = ?`).join(', ')} WHERE id = ?`,
+      [...atualizaveis.map((c) => campos[c]), existentes[0].id]
+    );
+    return { id: existentes[0].id, novo: false };
+  }
+
+  const [resultado] = await pool.query(
+    `INSERT INTO licitacoes (${colunas.map((c) => `\`${c}\``).join(', ')})
+     VALUES (${colunas.map(() => '?').join(', ')})`,
+    colunas.map((c) => campos[c])
+  );
+  return { id: resultado.insertId, novo: true };
 }
 
 async function salvarItens(licitacaoId, itens) {
@@ -141,7 +181,14 @@ async function salvarItens(licitacaoId, itens) {
  * Coleta uma fonte inteira. Com `simular: true` não grava nada — é o
  * "Testar agora" da tela de Fontes (seção 4.1).
  */
-async function coletarFonte({ fonteId, termo = null, simular = false, limitePaginas = null }) {
+async function coletarFonte({
+  fonteId,
+  termo = null,
+  usarAspas = true,
+  peso = 10,
+  simular = false,
+  limitePaginas = null,
+}) {
   const inicio = Date.now();
   const [fontes] = await pool.query('SELECT * FROM fontes WHERE id = ?', [fonteId]);
   if (!fontes.length) throw new Error(`Fonte ${fonteId} não encontrada.`);
@@ -152,8 +199,14 @@ async function coletarFonte({ fonteId, termo = null, simular = false, limitePagi
   const contexto = await carregarContexto();
 
   const termos = termo
-    ? [{ termo, peso: 10, grupo: null, usar_aspas: 1 }]
+    ? [{ termo, peso, grupo: null, usar_aspas: usarAspas ? 1 : 0 }]
     : contexto.palavras.filter((p) => palavraAtendeFonte(p, fonte.id));
+
+  // Simulação de um termo ainda não cadastrado: ele entra na pontuação só desta
+  // execução, senão a tela mostraria notas menores do que as reais depois de ativar.
+  if (termo && !contexto.palavras.some((p) => normalizar(p.termo) === normalizar(termo))) {
+    contexto.palavras = [...contexto.palavras, { termo, peso, grupo: null }];
+  }
 
   const paginasMax = limitePaginas || Number(config.paginas_max || 3);
   const resumo = { encontradas: 0, novas: 0, atualizadas: 0, ignoradas: 0, erros: [], amostra: [] };
@@ -184,7 +237,7 @@ async function coletarFonte({ fonteId, termo = null, simular = false, limitePagi
         if (vistas.has(identidade)) continue; // mesma licitação em dois termos
         vistas.add(identidade);
 
-        const avaliacao = pontuar(licitacao, contexto);
+        const avaliacao = avaliar(licitacao, contexto);
 
         // Encerradas e palavras excluídas não entram no Radar (seção 6).
         if (avaliacao.encerrada || avaliacao.excluida) {
@@ -204,6 +257,7 @@ async function coletarFonte({ fonteId, termo = null, simular = false, limitePagi
               fim_propostas: licitacao.fim_propostas,
               pontuacao: avaliacao.pontuacao,
               palavra: avaliacao.palavra,
+              objeto_social: avaliacao.social.estado,
               link_portal: licitacao.link_portal,
             });
           }
@@ -321,7 +375,7 @@ async function detalharLicitacao({ licitacaoId }) {
     ...Object.fromEntries(Object.entries(detalhe || {}).filter(([, v]) => v !== null && v !== undefined)),
     beneficios_itens: itens.map((i) => i.beneficio).filter(Boolean),
   };
-  const avaliacao = pontuar(mesclada, contexto);
+  const avaliacao = avaliar(mesclada, contexto);
 
   await pool.query(
     `UPDATE licitacoes SET
@@ -337,6 +391,10 @@ async function detalharLicitacao({ licitacaoId }) {
        valor_homologado = COALESCE(?, valor_homologado),
        link_disputa = COALESCE(?, link_disputa),
        beneficio_me = COALESCE(?, beneficio_me),
+       objeto_social = ?,
+       objeto_social_motivo = ?,
+       pode_participar = ?,
+       motivo_participacao = ?,
        pontuacao = ?,
        pontuacao_detalhe = ?
      WHERE id = ?`,
@@ -353,6 +411,10 @@ async function detalharLicitacao({ licitacaoId }) {
       (detalhe && detalhe.valor_homologado) ?? null,
       recortar(detalhe && detalhe.link_disputa, 500),
       recortar(avaliacao.beneficio_me, 40),
+      avaliacao.social.estado,
+      recortar(avaliacao.social.motivo, 255),
+      avaliacao.participacao.pode,
+      recortar(avaliacao.participacao.motivo, 255),
       avaliacao.pontuacao,
       JSON.stringify(avaliacao.detalhe || []),
       licitacaoId,
@@ -362,8 +424,76 @@ async function detalharLicitacao({ licitacaoId }) {
   return { itens: gravados, pontuacao: avaliacao.pontuacao };
 }
 
+/**
+ * Repontua o que já está gravado, sem ir aos portais. É o que faz a tela de
+ * Configurações valer alguma coisa: mudou um peso, um CNAE ou uma palavra de
+ * corte, o Radar inteiro se reorganiza.
+ *
+ * Licitação que passa a casar com uma palavra excluída é descartada com o
+ * motivo à vista — nunca apagada, para o histórico continuar explicável.
+ */
+async function repontuar({ lote = 500 } = {}) {
+  const contexto = await carregarContexto();
+  const resumo = { avaliadas: 0, mudaram: 0, descartadas: 0 };
+  let ultimoId = 0;
+
+  for (;;) {
+    const [linhas] = await pool.query(
+      `SELECT id, objeto, uf, modalidade, valor_estimado, orcamento_sigiloso, fim_propostas,
+              pontuacao, descartada, beneficio_me
+         FROM licitacoes
+        WHERE id > ?
+        ORDER BY id ASC
+        LIMIT ?`,
+      [ultimoId, lote]
+    );
+    if (!linhas.length) break;
+    ultimoId = linhas[linhas.length - 1].id;
+
+    for (const linha of linhas) {
+      // O benefício ME/EPP já apurado nos itens é preservado: `pontuar()` o
+      // relê a partir de beneficios_itens, que aqui vem do que foi gravado.
+      const avaliacao = avaliar(
+        { ...linha, beneficios_itens: linha.beneficio_me ? [linha.beneficio_me] : [] },
+        contexto
+      );
+      resumo.avaliadas += 1;
+
+      const descartar = avaliacao.excluida && !linha.descartada;
+      if (descartar) resumo.descartadas += 1;
+      if (avaliacao.pontuacao !== linha.pontuacao) resumo.mudaram += 1;
+
+      await pool.query(
+        `UPDATE licitacoes SET
+           pontuacao = ?, pontuacao_detalhe = ?, grupo = ?, palavra_casada = ?,
+           objeto_social = ?, objeto_social_motivo = ?,
+           pode_participar = ?, motivo_participacao = ?
+           ${descartar ? ', descartada = 1, motivo_descarte = ?' : ''}
+         WHERE id = ?`,
+        [
+          avaliacao.pontuacao,
+          JSON.stringify(avaliacao.detalhe || []),
+          recortar(avaliacao.grupo, 60),
+          recortar(avaliacao.palavra, 160),
+          avaliacao.social.estado,
+          recortar(avaliacao.social.motivo, 255),
+          avaliacao.participacao.pode,
+          recortar(avaliacao.participacao.motivo, 255),
+          ...(descartar ? [recortar('palavra excluída passou a valer', 255)] : []),
+          linha.id,
+        ]
+      );
+    }
+
+    if (linhas.length < lote) break;
+  }
+
+  return resumo;
+}
+
 function registrarNaFila() {
   fila.registrar('coletar_fontes', (payload) => coletarFontes(payload || {}));
+  fila.registrar('repontuar', (payload) => repontuar(payload || {}));
   fila.registrar('coletar_fonte', (payload) => coletarFonte(payload));
   fila.registrar('detalhar_licitacao', (payload) => detalharLicitacao(payload));
 }
@@ -372,6 +502,8 @@ module.exports = {
   coletarFonte,
   coletarFontes,
   detalharLicitacao,
+  repontuar,
+  avaliar,
   salvarLicitacao,
   salvarItens,
   carregarContexto,

@@ -12,6 +12,7 @@
     "migrar": "node backend/config/migrar.js",
     "semear": "node backend/config/semear.js",
     "coletar": "node backend/jobs/executar-coleta.js",
+    "repontuar": "node backend/jobs/executar-repontuar.js",
     "build": "npm --prefix frontend ci && npm --prefix frontend run build",
     "postinstall": "echo \"Rode: npm run migrar && npm run semear\""
   },

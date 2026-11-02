@@ -1,15 +1,17 @@
 import { useState } from 'react';
-import { Radar as IconeRadar, Database, Tags, LogOut } from 'lucide-react';
+import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, LogOut } from 'lucide-react';
 import { obterToken, obterUsuario, encerrarSessao } from './servicos/api';
 import Login from './paginas/Login';
 import Radar from './paginas/Radar';
 import Fontes from './paginas/Fontes';
 import Palavras from './paginas/Palavras';
+import Configuracoes from './paginas/Configuracoes';
 
 const TELAS = [
   { chave: 'radar', rotulo: 'Radar', icone: IconeRadar },
   { chave: 'fontes', rotulo: 'Fontes', icone: Database },
   { chave: 'palavras', rotulo: 'Palavras-chave', icone: Tags },
+  { chave: 'configuracoes', rotulo: 'Configurações', icone: SlidersHorizontal },
 ];
 
 export default function App() {
@@ -63,6 +65,7 @@ export default function App() {
         {tela === 'radar' && <Radar />}
         {tela === 'fontes' && <Fontes />}
         {tela === 'palavras' && <Palavras />}
+        {tela === 'configuracoes' && <Configuracoes />}
       </main>
     </div>
   );

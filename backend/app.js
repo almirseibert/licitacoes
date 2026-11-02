@@ -22,6 +22,8 @@ app.use('/api/licitacoes', autenticar, require('./rotas/licitacoes'));
 app.use('/api/fontes', autenticar, require('./rotas/fontes'));
 app.use('/api/palavras', autenticar, require('./rotas/palavras'));
 app.use('/api/painel', autenticar, require('./rotas/painel'));
+app.use('/api/configuracoes', autenticar, require('./rotas/configuracoes'));
+app.use('/api/empresa', autenticar, require('./rotas/empresa'));
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ erro: 'Rota não encontrada.' });

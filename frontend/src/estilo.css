@@ -21,6 +21,25 @@ body {
   @apply bg-white/[0.03];
 }
 
+/* Edição em linha, sem modal (seções 11.3 e 11.4): o campo só se revela ao focar,
+   para a tabela continuar legível como tabela. */
+.campo {
+  @apply bg-transparent border border-transparent rounded px-2 py-1 text-sm w-full
+         hover:border-borda focus:border-voltagem focus:outline-none focus:bg-obsidiana;
+}
+.campo-caixa {
+  @apply bg-obsidiana border border-borda rounded px-2 py-1 text-sm
+         focus:border-voltagem focus:outline-none;
+}
+.botao {
+  @apply border border-borda rounded px-3 py-1.5 text-xs text-texto-suave
+         hover:text-texto hover:border-texto-suave disabled:opacity-40 transition-colors;
+}
+.botao-primario {
+  @apply border border-voltagem/60 text-voltagem rounded px-3 py-1.5 text-xs
+         hover:bg-voltagem/10 disabled:opacity-40 transition-colors;
+}
+
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: #0A0E1A; }
 ::-webkit-scrollbar-thumb { background: #1F2937; border-radius: 6px; }

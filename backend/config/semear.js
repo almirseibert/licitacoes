@@ -1,8 +1,10 @@
-// Carga inicial: fontes da seção 5.5 e palavras-chave validadas da seção 4.2.
+// Carga inicial: fontes da seção 5.5, palavras-chave validadas da seção 4.2 e o
+// perfil padrão da empresa com os CNAEs da seção 4.7.
 // Idempotente — roda quantas vezes quiser, não duplica e não sobrescreve o que
 // o usuário já editou na tela (só insere o que falta).
 //   npm run semear
 const pool = require('../config/db');
+const perfilPadrao = require('./dados/perfil-padrao');
 
 const FONTES = [
   {
@@ -156,7 +158,9 @@ async function semearFontes() {
         fonte.observacao,
       ]
     );
-    if (r.affectedRows === 1) inseridas += 1;
+    // Em ON DUPLICATE KEY UPDATE, `affectedRows` vem 1 nos dois casos; quem
+    // distingue é o insertId, que fica 0 quando a linha já existia.
+    if (r.insertId) inseridas += 1;
   }
   return inseridas;
 }
@@ -170,7 +174,9 @@ async function semearPalavras() {
        ON DUPLICATE KEY UPDATE id = id`,
       [termo, grupo, peso]
     );
-    if (r.affectedRows === 1) inseridas += 1;
+    // Em ON DUPLICATE KEY UPDATE, `affectedRows` vem 1 nos dois casos; quem
+    // distingue é o insertId, que fica 0 quando a linha já existia.
+    if (r.insertId) inseridas += 1;
   }
   return inseridas;
 }
@@ -183,19 +189,47 @@ async function semearExcluidas() {
        ON DUPLICATE KEY UPDATE id = id`,
       [termo]
     );
-    if (r.affectedRows === 1) inseridas += 1;
+    // Em ON DUPLICATE KEY UPDATE, `affectedRows` vem 1 nos dois casos; quem
+    // distingue é o insertId, que fica 0 quando a linha já existia.
+    if (r.insertId) inseridas += 1;
   }
   return inseridas;
+}
+
+// O perfil só é criado se ainda não houver nenhum: a partir daí os CNAEs são
+// editados pela tela de Configurações e o seed não encosta mais neles.
+async function semearPerfil() {
+  const [existentes] = await pool.query('SELECT id FROM empresa_perfis LIMIT 1');
+  if (existentes.length) return false;
+
+  await pool.query(
+    `INSERT INTO empresa_perfis (nome, natureza, regime, capital_social, cnaes, padrao)
+     VALUES (?, ?, ?, ?, CAST(? AS JSON), 1)`,
+    [
+      perfilPadrao.nome,
+      perfilPadrao.natureza,
+      perfilPadrao.regime,
+      perfilPadrao.capital_social,
+      JSON.stringify(perfilPadrao.cnaes),
+    ]
+  );
+  return true;
 }
 
 async function principal() {
   const fontes = await semearFontes();
   const palavras = await semearPalavras();
   const excluidas = await semearExcluidas();
+  const perfil = await semearPerfil();
 
   console.log(`Fontes inseridas: ${fontes} (de ${FONTES.length}).`);
   console.log(`Palavras-chave inseridas: ${palavras} (de ${PALAVRAS.length}).`);
   console.log(`Palavras excluídas inseridas: ${excluidas} (de ${EXCLUIDAS.length}).`);
+  console.log(
+    perfil
+      ? `Perfil da empresa criado: ${perfilPadrao.nome} (${perfilPadrao.cnaes.length} CNAEs).`
+      : 'Perfil da empresa já existia — preservado como está.'
+  );
   console.log('Seed concluído. O que já existia foi preservado.');
   await pool.end();
 }

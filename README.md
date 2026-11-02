@@ -3,9 +3,14 @@
 CRM de captação e inscrição em licitações de órgãos públicos. A especificação completa
 está em [PAINEL_LICITACOES_INSTRUCOES.md](PAINEL_LICITACOES_INSTRUCOES.md) — 32 seções, 14 fases.
 
-**Estado: Fase 1 (Fundação) implementada e validada em 02/11/2026** — primeira coleta real no
-PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas com link que abre o edital
-no portal (5 na faixa alta, 201 em "analisar", 527 "talvez"). O que existe hoje:
+**Estado: Fases 1 e 2 implementadas e validadas em 02/11/2026.**
+
+A primeira coleta real no PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas
+com link que abre o edital no portal. Depois, pela tela, a palavra "videomonitoramento" foi
+simulada (82 no portal), ativada e trouxe **57 licitações novas na coleta seguinte — sem tocar
+em código**, que é o aceite da Fase 2.
+
+O que existe hoje:
 
 | Item da Fase 1 | Onde |
 |---|---|
@@ -17,6 +22,14 @@ no portal (5 na faixa alta, 201 em "analisar", 527 "talvez"). O que existe hoje:
 | Job `coletar_fontes` com fila em tabela | [backend/jobs/coletar.js](backend/jobs/coletar.js), [backend/servicos/fila.js](backend/servicos/fila.js) |
 | Motor de aderência 0–100 | [backend/regras/aderencia.js](backend/regras/aderencia.js) |
 | Tela Radar com filtros e tabela | [frontend/src/paginas/Radar.jsx](frontend/src/paginas/Radar.jsx) |
+
+| Item da Fase 2 | Onde |
+|---|---|
+| CRUD de Fontes com "Testar agora" | [backend/rotas/fontes.js](backend/rotas/fontes.js), [frontend/src/paginas/Fontes.jsx](frontend/src/paginas/Fontes.jsx) |
+| CRUD de Palavras-chave e excluídas com "Simular" | [backend/rotas/palavras.js](backend/rotas/palavras.js), [frontend/src/paginas/Palavras.jsx](frontend/src/paginas/Palavras.jsx) |
+| Pesos da aderência em tabela + Configurações | [backend/regras/pesos.js](backend/regras/pesos.js), [frontend/src/paginas/Configuracoes.jsx](frontend/src/paginas/Configuracoes.jsx) |
+| Objeto social por CNAE (seção 6.2) | [backend/regras/objeto-social.js](backend/regras/objeto-social.js), [backend/config/dados/perfil-padrao.js](backend/config/dados/perfil-padrao.js) |
+| Repontuar sem ir aos portais | [backend/jobs/coletar.js](backend/jobs/coletar.js) (`repontuar`) |
 
 Tudo em português: código, comentários, tabelas, interface.
 
@@ -102,6 +115,15 @@ npm run coletar -- --fonte=1 --termo="videomonitoramento" --simular
 
 `--simular` não grava nada: devolve o que o portal retornou e a pontuação que cada licitação teria.
 
+### 5. Depois de mexer em pesos, CNAEs ou palavras de corte
+
+```bash
+npm run repontuar
+```
+
+Recalcula a pontuação, o objeto social e o "pode participar" de tudo que já está gravado, sem
+ir aos portais. Pela tela, o botão **Repontuar o Radar** em Configurações faz o mesmo pela fila.
+
 ---
 
 ## Arquitetura
@@ -159,16 +181,29 @@ POST   /api/licitacoes/:id/detalhar enfileira detalhe + itens
 GET    /api/fontes                  POST /api/fontes/:id/testar   (simula, não grava)
 POST   /api/fontes/:id/coletar      POST /api/fontes/coletar-todas
 GET    /api/fontes/execucoes        histórico das últimas coletas
-GET    /api/palavras                GET /api/painel/resumo        GET /api/saude
+GET    /api/palavras               POST /api/palavras            PATCH /api/palavras/:id
+DELETE /api/palavras/:id           POST /api/palavras/simular
+POST   /api/palavras/excluidas     PATCH /api/palavras/excluidas/:id
+DELETE /api/palavras/excluidas/:id
+POST   /api/fontes                 PATCH /api/fontes/:id         DELETE /api/fontes/:id
+GET    /api/configuracoes          PATCH /api/configuracoes/pesos
+POST   /api/configuracoes/pesos/:chave/restaurar
+POST   /api/configuracoes/repontuar
+GET    /api/empresa/perfis         POST /api/empresa/perfis      PATCH /api/empresa/perfis/:id
+GET    /api/painel/resumo          GET /api/saude
 ```
 
 Erro sempre no formato `{ "erro": "mensagem em português", "detalhe": "técnico" }`.
 
 ---
 
-## Próximo passo — Fase 2
+## Próximo passo — Fase 3
 
-Editável pelo usuário: CRUD de Fontes com "Testar agora", CRUD de Palavras-chave com "Simular",
-pesos da aderência na tabela `regras_pontuacao` com tela de Configurações, e a checagem de objeto
-social por CNAE (seção 6.2). O critério de aceite é adicionar a palavra "videomonitoramento",
-simular, ativar e ver as novas licitações na coleta seguinte — sem tocar em código.
+Documentação da licitação: tabela `licitacao_arquivos` e job `baixar_editais` (idempotente, com
+extração de ZIP), tela de arquivos com visualizador de PDF e download individual, e "Baixar tudo
+(.zip)". O critério de aceite é abrir uma licitação, baixar o edital e ver os arquivos listados
+e abertos na tela.
+
+Ponto de atenção herdado da Fase 1: os endpoints de **itens e arquivos do PNCP** (`/pncp-api/v1`)
+responderam 503 de forma intermitente na validação. O adaptador já tenta duas bases e tolera a
+ausência sem perder a licitação — a Fase 3 depende de eles estarem no ar.

@@ -81,5 +81,46 @@ export const api = {
 
   coletarFonte: (id) => requisitar(`/fontes/${id}/coletar`, { method: 'POST' }),
 
+  criarFonte: (campos) => requisitar('/fontes', { method: 'POST', body: JSON.stringify(campos) }),
+
+  salvarFonte: (id, campos) =>
+    requisitar(`/fontes/${id}`, { method: 'PATCH', body: JSON.stringify(campos) }),
+
+  apagarFonte: (id) => requisitar(`/fontes/${id}`, { method: 'DELETE' }),
+
+  testarFonte: (id, termo) =>
+    requisitar(`/fontes/${id}/testar`, { method: 'POST', body: JSON.stringify({ termo }) }),
+
   palavras: () => requisitar('/palavras'),
+
+  criarPalavra: (campos) => requisitar('/palavras', { method: 'POST', body: JSON.stringify(campos) }),
+
+  salvarPalavra: (id, campos) =>
+    requisitar(`/palavras/${id}`, { method: 'PATCH', body: JSON.stringify(campos) }),
+
+  apagarPalavra: (id) => requisitar(`/palavras/${id}`, { method: 'DELETE' }),
+
+  simularPalavra: (campos) =>
+    requisitar('/palavras/simular', { method: 'POST', body: JSON.stringify(campos) }),
+
+  criarExcluida: (termo) =>
+    requisitar('/palavras/excluidas', { method: 'POST', body: JSON.stringify({ termo }) }),
+
+  salvarExcluida: (id, campos) =>
+    requisitar(`/palavras/excluidas/${id}`, { method: 'PATCH', body: JSON.stringify(campos) }),
+
+  apagarExcluida: (id) => requisitar(`/palavras/excluidas/${id}`, { method: 'DELETE' }),
+
+  configuracoes: () => requisitar('/configuracoes'),
+
+  salvarPesos: (pesos) =>
+    requisitar('/configuracoes/pesos', { method: 'PATCH', body: JSON.stringify(pesos) }),
+
+  restaurarPeso: (chave) =>
+    requisitar(`/configuracoes/pesos/${chave}/restaurar`, { method: 'POST' }),
+
+  repontuar: () => requisitar('/configuracoes/repontuar', { method: 'POST' }),
+
+  salvarPerfil: (id, campos) =>
+    requisitar(`/empresa/perfis/${id}`, { method: 'PATCH', body: JSON.stringify(campos) }),
 };
