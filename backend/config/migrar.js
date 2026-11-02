@@ -18,10 +18,27 @@ async function principal() {
     charset: 'utf8mb4_unicode_ci',
   });
 
-  await conexao.query(
-    `CREATE DATABASE IF NOT EXISTS \`${BANCO}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
-  );
-  await conexao.changeUser({ database: BANCO });
+  // Em servidor gerenciado (EasyPanel, aaPanel) o usuário da aplicação costuma ter
+  // privilégio só no próprio banco: não pode criar, mas pode usar. Tentamos criar e,
+  // se o servidor recusar, seguimos com o banco que já existe.
+  try {
+    await conexao.query(
+      `CREATE DATABASE IF NOT EXISTS \`${BANCO}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
+    );
+  } catch (erro) {
+    console.warn(`· sem permissão para criar o banco \`${BANCO}\` — usando o que já existir.`);
+  }
+
+  try {
+    await conexao.changeUser({ database: BANCO });
+  } catch (erro) {
+    throw new Error(
+      `o usuário \`${process.env.DB_USER}\` não alcança o banco \`${BANCO}\`. ` +
+        `Crie o banco e libere o acesso:\n` +
+        `  CREATE DATABASE \`${BANCO}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;\n` +
+        `  GRANT ALL PRIVILEGES ON \`${BANCO}\`.* TO '${process.env.DB_USER}'@'%';`
+    );
+  }
   console.log(`Banco \`${BANCO}\` pronto.`);
 
   await conexao.query(`CREATE TABLE IF NOT EXISTS migracoes (
