@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Download, Paperclip, Trash2, AlertTriangle, PackageCheck, RotateCcw } from 'lucide-react';
+import { Loader2, Download, Paperclip, Trash2, AlertTriangle, PackageCheck, RotateCcw, FileSignature, Eye } from 'lucide-react';
 import { api } from '../servicos/api';
 import { dataHora } from '../servicos/formato';
 
@@ -15,6 +15,8 @@ export default function Envio({ id }) {
   const [dados, setDados] = useState(null);
   const [marcados, setMarcados] = useState(new Set());
   const [anexosMarcados, setAnexosMarcados] = useState(new Set());
+  const [declaracoes, setDeclaracoes] = useState(new Set());
+  const [vendo, setVendo] = useState(null);
   const [formato, setFormato] = useState('pdf');
   const [erro, setErro] = useState(null);
   const [aviso, setAviso] = useState(null);
@@ -29,6 +31,7 @@ export default function Envio({ id }) {
         setDados(r);
         setMarcados(new Set(r.documentos.filter((d) => d.marcado).map((d) => d.documento_id)));
         setAnexosMarcados(new Set(r.anexos.map((a) => a.id)));
+        setDeclaracoes(new Set(r.declaracoes.filter((d) => d.marcado).map((d) => d.modelo_id)));
         setErro(null);
       })
       .catch((e) => setErro(e.message));
@@ -74,6 +77,7 @@ export default function Envio({ id }) {
         kit_id: dados.kit.id,
         formato,
         documentos: escolhidos.map((d) => d.documento_id),
+        declaracoes: [...declaracoes],
         anexos: [...anexosMarcados],
         confirma_vencidos: escolhidos.some((d) => d.vencido),
       });
@@ -186,15 +190,67 @@ export default function Envio({ id }) {
 
       {/* ------------------------------------------------ 2. declarações */}
       <section className="border border-borda rounded">
-        <header className="px-3 py-2 border-b border-borda">
+        <header className="px-3 py-2 border-b border-borda flex items-center gap-3">
           <h3 className="text-xs uppercase tracking-wide text-texto-suave">
             2. Declarações geradas com os dados desta licitação
           </h3>
+          <span className="ml-auto text-[11px] text-texto-suave">
+            número, órgão e objeto entram sozinhos · você só assina
+          </span>
         </header>
-        <p className="px-3 py-3 text-xs text-texto-suave">
-          O gerador de declarações é a Fase 5.1. Até lá, suba o PDF assinado no cofre com o código da
-          declaração (não emprego de menor, PcD, proposta independente…) e ele entra aqui pelo bloco 1.
-        </p>
+
+        <table className="w-full text-sm tabela-densa">
+          <tbody>
+            {dados.declaracoes.map((d) => (
+              <tr key={d.modelo_id}>
+                <td className="w-8">
+                  <input
+                    type="checkbox"
+                    checked={declaracoes.has(d.modelo_id)}
+                    onChange={() => {
+                      const novo = new Set(declaracoes);
+                      if (novo.has(d.modelo_id)) novo.delete(d.modelo_id);
+                      else novo.add(d.modelo_id);
+                      setDeclaracoes(novo);
+                    }}
+                  />
+                </td>
+                <td className="text-xs">
+                  <FileSignature size={11} className="inline mr-1 text-texto-suave" />
+                  {d.titulo}
+                  {!d.do_sistema && <span className="ml-2 text-[11px] text-voltagem">sua versão</span>}
+                  {!d.exigido_no_edital && (
+                    <span className="ml-2 text-[11px] text-texto-suave">de praxe, o edital não cita</span>
+                  )}
+                </td>
+                <td className="w-10 text-right">
+                  <button
+                    className="text-texto-suave hover:text-texto"
+                    title="ver o PDF preenchido"
+                    onClick={async () => {
+                      try {
+                        const blob = await api.verDeclaracao(id, d.modelo_id);
+                        if (vendo) URL.revokeObjectURL(vendo.url);
+                        setVendo({ titulo: d.titulo, url: URL.createObjectURL(blob) });
+                      } catch (e) {
+                        setErro(e.message);
+                      }
+                    }}
+                  >
+                    <Eye size={13} />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+
+        {dados.declaracoes.some((d) => d.aviso) && (
+          <p className="px-3 py-2 border-t border-borda text-[11px] text-atencao flex items-start gap-2">
+            <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+            <span>{dados.declaracoes.find((d) => d.aviso).aviso}</span>
+          </p>
+        )}
       </section>
 
       {/* ------------------------------------- 3. específicos da licitação */}
@@ -302,6 +358,26 @@ export default function Envio({ id }) {
           >
             <Download size={12} /> baixar
           </button>
+        </div>
+      )}
+
+      {vendo && (
+        <div className="fixed inset-0 bg-obsidiana/80 flex items-start justify-center p-6 z-20">
+          <div className="bg-superficie border border-borda rounded w-full max-w-3xl">
+            <div className="px-4 py-2 border-b border-borda flex items-center gap-2 text-xs">
+              <span className="truncate">{vendo.titulo}</span>
+              <button
+                className="ml-auto text-texto-suave hover:text-texto"
+                onClick={() => {
+                  URL.revokeObjectURL(vendo.url);
+                  setVendo(null);
+                }}
+              >
+                fechar
+              </button>
+            </div>
+            <iframe title={vendo.titulo} src={vendo.url} className="w-full h-[70vh] bg-white" />
+          </div>
         </div>
       )}
 

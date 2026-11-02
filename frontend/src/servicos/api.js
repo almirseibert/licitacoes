@@ -260,4 +260,31 @@ export const api = {
 
   removerAnexo: (id, anexoId) =>
     requisitar(`/licitacoes/${id}/envio/anexos/${anexoId}`, { method: 'DELETE' }),
+
+  // ---------------------------------------------- declarações (seção 18)
+  modelos: () => requisitar('/modelos-declaracao'),
+
+  criarModelo: (campos) =>
+    requisitar('/modelos-declaracao', { method: 'POST', body: JSON.stringify(campos) }),
+
+  duplicarModelo: (id) => requisitar(`/modelos-declaracao/${id}/duplicar`, { method: 'POST' }),
+
+  salvarModelo: (id, campos) =>
+    requisitar(`/modelos-declaracao/${id}`, { method: 'PATCH', body: JSON.stringify(campos) }),
+
+  apagarModelo: (id) => requisitar(`/modelos-declaracao/${id}`, { method: 'DELETE' }),
+
+  previaModelo: (corpo) =>
+    requisitar('/modelos-declaracao/previa', { method: 'POST', body: JSON.stringify({ corpo }) }),
+
+  previaPdf: (id) => obterBlob(`/modelos-declaracao/${id}/previa.pdf`),
+
+  verDeclaracao: (licitacaoId, modeloId) =>
+    obterBlob(`/licitacoes/${licitacaoId}/declaracoes/${modeloId}`),
+
+  gerarDeclaracoes: (licitacaoId, modelos) =>
+    requisitar(`/licitacoes/${licitacaoId}/declaracoes`, {
+      method: 'POST',
+      body: JSON.stringify({ modelos }),
+    }),
 };

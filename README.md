@@ -3,7 +3,7 @@
 CRM de captação e inscrição em licitações de órgãos públicos. A especificação completa
 está em [PAINEL_LICITACOES_INSTRUCOES.md](PAINEL_LICITACOES_INSTRUCOES.md) — 32 seções, 14 fases.
 
-**Estado: Fases 1 a 5 implementadas e validadas em 02/11/2026.**
+**Estado: Fases 1 a 5.1 implementadas e validadas em 02/11/2026.**
 
 A primeira coleta real no PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas
 com link que abre o edital no portal. Depois, pela tela, a palavra "videomonitoramento" foi
@@ -20,6 +20,9 @@ condicional de amostra) — o aceite da Fase 4 admite no máximo uma errada.
 Com cinco documentos no cofre, o envio de uma licitação real saiu em **segundos**: kit escolhido
 sozinho, quatro peças marcadas pelo cruzamento com o edital, **a certidão vencida bloqueada** e
 o **PDF único de 42 folhas** com capa, índice e numeração contínua — o aceite da Fase 5.
+
+As declarações entraram em seguida: **9 geradas sozinhas** com o número, o órgão e o objeto da
+licitação, e o pacote passou a 13 peças em 51 folhas — o aceite da Fase 5.1, sem digitar nada.
 
 O que existe hoje:
 
@@ -64,6 +67,13 @@ O que existe hoje:
 | Cruzamento kit × exigências × cofre | [backend/servicos/envio.js](backend/servicos/envio.js) |
 | ZIP numerado e PDF único com capa e índice | [backend/servicos/pacote.js](backend/servicos/pacote.js) |
 | Tela "Montar envio" e "Repetir envio" | [frontend/src/paginas/Envio.jsx](frontend/src/paginas/Envio.jsx) |
+
+| Item da Fase 5.1 | Onde |
+|---|---|
+| Os 11 modelos do seed | [backend/config/dados/modelos-declaracao.js](backend/config/dados/modelos-declaracao.js) |
+| Substituição de variáveis e geração em PDF | [backend/servicos/declaracao.js](backend/servicos/declaracao.js) |
+| CRUD dos modelos e pré-visualização | [backend/rotas/modelos.js](backend/rotas/modelos.js), [frontend/src/paginas/Modelos.jsx](frontend/src/paginas/Modelos.jsx) |
+| Declarações da licitação | [backend/rotas/declaracoes.js](backend/rotas/declaracoes.js) |
 
 Tudo em português: código, comentários, tabelas, interface.
 
@@ -169,6 +179,9 @@ Não há comando de terminal: o cofre e a montagem do envio vivem na tela.
   bloqueia documento vencido e gera **PDF único** (capa, índice, numeração contínua) ou **ZIP
   numerado** com `00_CHECKLIST.pdf` e `00_FALTANDO.txt`.
 - **Repetir envio** — traz a seleção de um envio anterior já com as versões atuais do cofre.
+- **Declarações** (menu lateral) — os 11 modelos da seção 18, com editor, variáveis clicáveis e
+  pré-visualização usando uma licitação real. Modelo do sistema não se edita: duplique e edite a
+  cópia. No envio, o bloco 2 gera os PDFs com o número, o órgão e o objeto daquela licitação.
 
 O worker confere as validades todo dia e cria alerta em 30, 15 e 3 dias antes do vencimento.
 
@@ -272,6 +285,11 @@ PATCH  /api/empresa/documentos/:id DELETE /api/empresa/documentos/:id
 GET    /api/empresa/documentos/:id/arquivo
 GET    /api/kits                   POST /api/kits                 PATCH /api/kits/:id
 PUT    /api/kits/:id/itens         DELETE /api/kits/:id
+GET    /api/modelos-declaracao     POST /api/modelos-declaracao
+POST   /api/modelos-declaracao/:id/duplicar    POST /api/modelos-declaracao/previa
+GET    /api/modelos-declaracao/:id/previa.pdf
+GET    /api/licitacoes/:id/declaracoes         POST /api/licitacoes/:id/declaracoes
+GET    /api/licitacoes/:id/declaracoes/:modeloId   PDF já preenchido
 GET    /api/licitacoes/:id/envio   POST /api/licitacoes/:id/envio
 POST   /api/licitacoes/:id/envio/repetir/:pacoteId
 GET    /api/licitacoes/:id/envio/pacotes/:pacoteId/arquivo
@@ -289,16 +307,18 @@ Erro sempre no formato `{ "erro": "mensagem em português", "detalhe": "técnico
 
 ---
 
-## Próximo passo — Fase 5.1
+## Antes de usar para valer
 
-Gerador de declarações (seção 18): tabela de modelos com os 11 do seed, substituição de
-variáveis e geração em PDF, editor com pré-visualização e aviso quando o edital trouxer anexo
-próprio de declaração. O aceite é gerar as declarações de uma licitação com número, órgão e
-objeto corretos, sem digitar nada.
+O perfil da empresa está com os valores do seed. Complete em **Configurações** o CNPJ, a razão
+social, o endereço e o representante legal com CPF: sem eles, a capa do pacote e as declarações
+saem com lacuna (`____________`), de propósito — o painel nunca inventa dado.
 
-Hoje o bloco 2 da tela "Montar envio" está vazio de propósito: até o gerador existir, uma
-declaração assinada entra pelo cofre, com o código dela, e vai no pacote como qualquer outra
-peça.
+## Próximo passo — Fase 6
+
+Funil e alertas (seção 10): Kanban com as oito etapas e arrastar e soltar, automação por etapa
+(entrar em "Analisando" dispara o download; "Vou disputar" cria alerta de 48 h e 2 h antes do
+fim das propostas) e o motivo de descarte em lista fechada, que é o que alimenta o diagnóstico
+da Fase 9.
 
 ### O que o PNCP nos ensinou até aqui
 

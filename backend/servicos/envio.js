@@ -13,6 +13,8 @@ const path = require('path');
 const pool = require('../config/db');
 const arquivos = require('./arquivos');
 const { semaforo, tituloPadrao } = require('../regras/validades');
+const declaracao = require('./declaracao');
+const pacote = require('./pacote');
 const { PORCODIGO } = require('../regras/exigencias');
 
 // Códigos que são condição, não papel para anexar: cobrá-los do cofre só
@@ -50,6 +52,53 @@ async function escolherKit(perfilId, kitId) {
   if (!kits.length) throw new Error('Nenhum kit cadastrado para este perfil.');
   const escolhido = (kitId && kits.find((k) => k.id === Number(kitId))) || kits[0];
   return { kit: escolhido, kits };
+}
+
+// Declarações que entram marcadas mesmo sem o edital citar o código: são as
+// que praticamente todo certame pede na sessão.
+const DECLARACOES_DE_PRAXE = new Set(['cumpre_requisitos', 'fato_impeditivo', 'ciencia_do_edital']);
+
+/**
+ * Bloco 2 da tela (seção 17.4): o que o painel gera com os dados da licitação.
+ *
+ * Quando o edital traz anexo próprio de declaração, o modelo genérico perde
+ * para o anexo — a tela avisa, como manda a seção 18.2.
+ */
+async function sugerirDeclaracoes({ licitacaoId, exigidos, perfilId }) {
+  const [modelos] = await pool.query(
+    `SELECT id, codigo, titulo, padrao_sistema FROM modelos_declaracao
+      WHERE ativo = 1 AND (perfil_id IS NULL OR perfil_id = ?)
+      ORDER BY padrao_sistema ASC, titulo ASC`,
+    [perfilId]
+  );
+  if (!modelos.length) return [];
+
+  // Modelo próprio do usuário tem preferência sobre o do sistema, por código.
+  const escolhidos = new Map();
+  for (const modelo of modelos) {
+    const atual = escolhidos.get(modelo.codigo);
+    if (!atual || (atual.padrao_sistema && !modelo.padrao_sistema)) escolhidos.set(modelo.codigo, modelo);
+  }
+
+  const [arquivosDoEdital] = await pool.query(
+    "SELECT titulo, nome_arquivo FROM licitacao_arquivos WHERE licitacao_id = ? AND status = 'ok'",
+    [licitacaoId]
+  );
+  const temAnexoDeDeclaracao = arquivosDoEdital.some((a) =>
+    /declarac|anexo/i.test(`${a.titulo || ''} ${a.nome_arquivo || ''}`.normalize('NFD').replace(/[̀-ͯ]/g, ''))
+  );
+
+  return [...escolhidos.values()].map((modelo) => ({
+    modelo_id: modelo.id,
+    codigo: modelo.codigo,
+    titulo: modelo.titulo,
+    do_sistema: Boolean(modelo.padrao_sistema),
+    exigido_no_edital: exigidos.has(modelo.codigo),
+    marcado: exigidos.has(modelo.codigo) || DECLARACOES_DE_PRAXE.has(modelo.codigo),
+    aviso: temAnexoDeDeclaracao
+      ? 'o edital tem anexo próprio de declaração — se for o caso, use o anexo em vez deste modelo'
+      : null,
+  }));
 }
 
 /**
@@ -160,6 +209,8 @@ async function montar({ licitacaoId, kitId = null, perfilId = null }) {
     }
   }
 
+  const declaracoes = await sugerirDeclaracoes({ licitacaoId, exigidos, perfilId: perfil.id });
+
   const [anexos] = await pool.query(
     'SELECT id, titulo, nome_arquivo, tamanho_bytes FROM licitacao_anexos WHERE licitacao_id = ? ORDER BY id',
     [licitacaoId]
@@ -182,6 +233,7 @@ async function montar({ licitacaoId, kitId = null, perfilId = null }) {
     documentos: linhas,
     fora_do_kit: foraDoKit,
     condicoes,
+    declaracoes,
     anexos,
     faltando,
     pacotes,
@@ -200,7 +252,8 @@ async function montar({ licitacaoId, kitId = null, perfilId = null }) {
  */
 async function gerar({
   licitacaoId, kitId = null, perfilId = null, formato = 'pdf',
-  documentos = null, anexos = null, confirmaVencidos = false, observacao = null,
+  documentos = null, anexos = null, declaracoes = null,
+  confirmaVencidos = false, observacao = null,
 }) {
   const montagem = await montar({ licitacaoId, kitId, perfilId });
   const [[licitacao]] = await pool.query('SELECT * FROM licitacoes WHERE id = ?', [licitacaoId]);
@@ -248,6 +301,40 @@ async function gerar({
     ordem += 1;
   }
 
+  // Camada 2: as declarações, geradas agora com os dados desta licitação.
+  const idsDeclaracoes = declaracoes
+    ? declaracoes.map(Number)
+    : montagem.declaracoes.filter((d) => d.marcado).map((d) => d.modelo_id);
+
+  const lacunas = [];
+  if (idsDeclaracoes.length) {
+    const [modelos] = await pool.query(
+      `SELECT * FROM modelos_declaracao WHERE id IN (${idsDeclaracoes.map(() => '?').join(',')})`,
+      idsDeclaracoes
+    );
+    const dadosDaDeclaracao = declaracao.variaveis({ licitacao, perfil });
+
+    for (const modelo of modelos) {
+      const { texto, faltando } = declaracao.preencher(modelo.corpo, dadosDaDeclaracao);
+      if (faltando.length) lacunas.push({ titulo: modelo.titulo, faltando });
+
+      const bytes = await declaracao.gerarPdf({ titulo: modelo.titulo, texto, dados: dadosDaDeclaracao });
+      const nome = `${arquivos.limpar(modelo.titulo).replace(/\s+/g, '_').slice(0, 80)}.pdf`;
+      const salvo = await pacote.gravar(`declaracoes/${licitacaoId}`, nome, bytes);
+
+      pecas.push({
+        ordem,
+        rotulo: modelo.titulo,
+        codigo: modelo.codigo,
+        modelo_id: modelo.id,
+        caminhoAbsoluto: arquivos.caminhoAbsoluto(salvo.caminho),
+        extensao: '.pdf',
+        validade: 'gerada agora com os dados desta licitação',
+      });
+      ordem += 1;
+    }
+  }
+
   // Camada 3: o que é específico desta licitação.
   const idsAnexos = anexos ? anexos.map(Number) : montagem.anexos.map((a) => a.id);
   if (idsAnexos.length) {
@@ -275,7 +362,7 @@ async function gerar({
     throw new Error('Nenhum documento válido para montar o envio. Suba as peças no cofre primeiro.');
   }
 
-  return { montagem, licitacao, perfil, pecas, vencidosIncluidos, formato, observacao };
+  return { montagem, licitacao, perfil, pecas, vencidosIncluidos, lacunas, formato, observacao };
 }
 
 module.exports = { montar, gerar, perfilPadrao, rotuloDe };

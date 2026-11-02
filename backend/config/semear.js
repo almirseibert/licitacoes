@@ -6,6 +6,7 @@
 const pool = require('../config/db');
 const perfilPadrao = require('./dados/perfil-padrao');
 const kitsPadrao = require('./dados/kits-padrao');
+const modelosDeclaracao = require('./dados/modelos-declaracao');
 
 const FONTES = [
   {
@@ -246,12 +247,28 @@ async function semearKits() {
   return criados;
 }
 
+// Modelos de declaração da seção 18.2. São do sistema: o usuário duplica e
+// edita a cópia, e o original segue intacto para a próxima disputa.
+async function semearModelos() {
+  let criados = 0;
+  for (const modelo of modelosDeclaracao) {
+    const [r] = await pool.query(
+      `INSERT INTO modelos_declaracao (codigo, titulo, corpo, padrao_sistema, ativo)
+       VALUES (?, ?, ?, 1, 1) ON DUPLICATE KEY UPDATE id = id`,
+      [modelo.codigo, modelo.titulo, modelo.corpo]
+    );
+    if (r.insertId) criados += 1;
+  }
+  return criados;
+}
+
 async function principal() {
   const fontes = await semearFontes();
   const palavras = await semearPalavras();
   const excluidas = await semearExcluidas();
   const perfil = await semearPerfil();
   const kits = await semearKits();
+  const modelos = await semearModelos();
 
   console.log(`Fontes inseridas: ${fontes} (de ${FONTES.length}).`);
   console.log(`Palavras-chave inseridas: ${palavras} (de ${PALAVRAS.length}).`);
@@ -262,6 +279,7 @@ async function principal() {
       : 'Perfil da empresa já existia — preservado como está.'
   );
   console.log(`Kits de documentos criados: ${kits} (de ${kitsPadrao.length}).`);
+  console.log(`Modelos de declaração criados: ${modelos} (de ${modelosDeclaracao.length}).`);
   console.log('Seed concluído. O que já existia foi preservado.');
   await pool.end();
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, LogOut } from 'lucide-react';
+import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, LogOut } from 'lucide-react';
 import { obterToken, obterUsuario, encerrarSessao } from './servicos/api';
 import Login from './paginas/Login';
 import Radar from './paginas/Radar';
@@ -7,12 +7,14 @@ import Fontes from './paginas/Fontes';
 import Palavras from './paginas/Palavras';
 import Configuracoes from './paginas/Configuracoes';
 import Cofre from './paginas/Cofre';
+import Modelos from './paginas/Modelos';
 
 const TELAS = [
   { chave: 'radar', rotulo: 'Radar', icone: IconeRadar },
   { chave: 'fontes', rotulo: 'Fontes', icone: Database },
   { chave: 'palavras', rotulo: 'Palavras-chave', icone: Tags },
   { chave: 'cofre', rotulo: 'Documentos', icone: FolderLock },
+  { chave: 'modelos', rotulo: 'Declarações', icone: FileSignature },
   { chave: 'configuracoes', rotulo: 'Configurações', icone: SlidersHorizontal },
 ];
 
@@ -68,6 +70,7 @@ export default function App() {
         {tela === 'fontes' && <Fontes />}
         {tela === 'palavras' && <Palavras />}
         {tela === 'cofre' && <Cofre />}
+        {tela === 'modelos' && <Modelos />}
         {tela === 'configuracoes' && <Configuracoes />}
       </main>
     </div>

@@ -6,6 +6,7 @@ const arquivos = require('../servicos/arquivos');
 const upload = require('../servicos/upload');
 const envio = require('../servicos/envio');
 const pacote = require('../servicos/pacote');
+const declaracao = require('../servicos/declaracao');
 
 const rotas = express.Router({ mergeParams: true });
 
@@ -36,12 +37,13 @@ rotas.post('/', async (req, res) => {
       perfilId: corpo.perfil_id || null,
       formato,
       documentos: Array.isArray(corpo.documentos) ? corpo.documentos : null,
+      declaracoes: Array.isArray(corpo.declaracoes) ? corpo.declaracoes : null,
       anexos: Array.isArray(corpo.anexos) ? corpo.anexos : null,
       confirmaVencidos: Boolean(corpo.confirma_vencidos),
       observacao: corpo.observacao || null,
     });
 
-    const { licitacao, perfil, pecas, montagem, vencidosIncluidos } = preparado;
+    const { licitacao, perfil, pecas, montagem, vencidosIncluidos, lacunas } = preparado;
     const nome = pacote.nomeDoPacote({ licitacao, perfil, formato });
     const pasta = `pacotes/${licitacaoId}`;
 
@@ -101,6 +103,7 @@ rotas.post('/', async (req, res) => {
       corpo.observacao || null,
       vencidosIncluidos.length ? `Enviado com documento vencido, por confirmação: ${vencidosIncluidos.join(', ')}.` : null,
       fora.length ? `Fora do PDF por não serem PDF: ${fora.map((f) => f.rotulo).join(', ')}.` : null,
+      lacunas.length ? `Declarações com lacuna: ${lacunas.map((l) => l.titulo).join(', ')}.` : null,
     ].filter(Boolean).join(' ');
 
     const [r] = await pool.query(
@@ -123,6 +126,7 @@ rotas.post('/', async (req, res) => {
       pecas: pecas.length,
       faltando: montagem.faltando,
       fora_do_pdf: fora.map((f) => ({ rotulo: f.rotulo, motivo: f.erro || 'não é PDF' })),
+      lacunas,
       mensagem: montagem.faltando.length
         ? `Pacote gerado com ${pecas.length} peças, mas ${montagem.faltando.length} pendência(s) — confira antes de enviar.`
         : `Pacote gerado com ${pecas.length} peças${folhas ? ` em ${folhas} folhas` : ''}.`,
