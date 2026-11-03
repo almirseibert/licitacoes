@@ -3,5 +3,7 @@ dist/
 .env
 .env.local
 *.log
-dados/
+# Só o volume na raiz: sem a barra inicial, esta regra também escondia
+# backend/config/dados/, que é código do seed.
+/dados/
 .DS_Store
