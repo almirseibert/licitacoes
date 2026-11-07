@@ -9,6 +9,8 @@ const validades = require('../backend/jobs/validades');
 const prazos = require('../backend/jobs/prazos');
 const encerradas = require('../backend/jobs/encerradas');
 const descartarVencidas = require('../backend/jobs/descartar-vencidas');
+const monitorar = require('../backend/jobs/monitorar');
+const estrategicas = require('../backend/jobs/estrategicas');
 
 const sinal = { parar: false };
 
@@ -23,6 +25,11 @@ const UMA_HORA = 60 * 60 * 1000;
 const HORA_DAS_ENCERRADAS = 3;
 let diaDaUltimaVarreduraDeEncerradas = null;
 
+// `varrer_estrategicas` é diário, às 05h (seção 14): roda depois da coleta de
+// encerradas das 03h, porque é dela que saem as desertas que a varredura lê.
+const HORA_DAS_ESTRATEGICAS = 5;
+let diaDaUltimaVarreduraDeEstrategicas = null;
+
 function hojeLocal() {
   return new Date().toLocaleDateString('en-CA'); // AAAA-MM-DD
 }
@@ -35,6 +42,8 @@ async function principal() {
   prazos.registrarNaFila();
   encerradas.registrarNaFila();
   descartarVencidas.registrarNaFila();
+  monitorar.registrarNaFila();
+  estrategicas.registrarNaFila();
 
   console.log(`Worker de licitações iniciado. Driver da fila: ${cfgFila.driver}.`);
 
@@ -77,12 +86,38 @@ async function principal() {
         console.log('Coleta de encerradas enfileirada para hoje.');
       }
 
+      // Monitor (seção 21.2): a cadência de cada licitação está gravada em
+      // `monitoramentos.proxima_checagem`; aqui só se pergunta quem venceu.
+      // O limite por rodada existe porque cada checagem são de duas a quatro
+      // requisições ao portal, e a seção 5.4 manda andar devagar.
+      const monitorado = await monitorar.monitorar({ limite: 25 });
+      if (monitorado.checadas) {
+        console.log(
+          `Monitor: ${monitorado.checadas} licitação(ões) checadas, ${monitorado.eventos} evento(s), ` +
+            `${monitorado.alertas} alerta(s), ${monitorado.encerrados} monitoramento(s) encerrados.`
+        );
+      }
+      if (monitorado.erros.length) {
+        console.log(`Monitor com erro em ${monitorado.erros.length}: ${monitorado.erros[0]}`);
+      }
+
       // Vencidas sem análise (seção 20.4): entra no mesmo relógio de hora em
       // hora. É barato — um UPDATE filtrado — e mantém o Radar limpo sem que
       // ninguém precise descartar na mão.
       const vencidas = await descartarVencidas.descartarVencidas({});
       if (vencidas.descartadas) {
         console.log(`${vencidas.descartadas} licitação(ões) descartadas por prazo vencido sem análise.`);
+      }
+
+      // Estratégicas: desertas, fracassadas e reaberturas, uma vez por dia
+      // (seção 22.3). Não vai à internet — lê o que a coleta já trouxe.
+      if (agora.getHours() >= HORA_DAS_ESTRATEGICAS && diaDaUltimaVarreduraDeEstrategicas !== hojeLocal()) {
+        diaDaUltimaVarreduraDeEstrategicas = hojeLocal();
+        const varridas = await estrategicas.varrerEstrategicas({});
+        console.log(
+          `Estratégicas: ${varridas.aguardando} oportunidade(s) aguardando` +
+            (varridas.reaberturas.ligadas ? `, ${varridas.reaberturas.ligadas} reabertura(s)` : '') + '.'
+        );
       }
 
       // Validade dos documentos do cofre (seção 9.2).

@@ -30,6 +30,7 @@ app.use('/api/alertas', autenticar, require('./rotas/alertas'));
 app.use('/api/precos-referencia', autenticar, require('./rotas/precos-referencia'));
 app.use('/api/concorrentes', autenticar, require('./rotas/concorrentes'));
 app.use('/api/diagnostico', autenticar, require('./rotas/diagnostico'));
+app.use('/api/oportunidades', autenticar, require('./rotas/oportunidades'));
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ erro: 'Rota não encontrada.' });

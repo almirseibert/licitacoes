@@ -59,5 +59,7 @@ npm install && npm run migrar && npm run semear
 `npm run api`, `npm run worker`, `npm run dev:front`. Jobs pela linha de comando:
 `npm run coletar`, `npm run repontuar`, `npm run baixar`, `npm run ler`,
 `npm run encerradas` (amostra de preço), `npm run resultados -- --licitacao=<id>`,
-`npm run diagnostico` (fecha as vencidas sem análise e imprime o ranking de bloqueios).
+`npm run diagnostico` (fecha as vencidas sem análise e imprime o ranking de bloqueios),
+`npm run monitorar` (uma rodada do monitor; `-- --licitacao=<id>` checa uma agora),
+`npm run estrategicas` (desertas, fracassadas e reaberturas — não vai à internet).
 O README tem o detalhe de cada um.

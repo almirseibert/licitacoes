@@ -8,12 +8,22 @@ const pool = require('../config/db');
  * Cria o alerta se ainda não existir.
  * @returns {boolean} true quando criou agora
  */
-async function criar({ tipo, chave, mensagem, licitacaoId = null, documentoId = null, quando = null }) {
+async function criar({
+  tipo,
+  chave,
+  mensagem,
+  licitacaoId = null,
+  documentoId = null,
+  quando = null,
+  // 'vermelho' é o aviso que não pode passar batido — edital alterado, hoje
+  // (seção 21.3). O padrão continua 'info' para não repintar o que já existia.
+  nivel = 'info',
+}) {
   const [r] = await pool.query(
-    `INSERT INTO alertas (tipo, chave, mensagem, licitacao_id, documento_id, quando)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO alertas (tipo, nivel, chave, mensagem, licitacao_id, documento_id, quando)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE id = id`,
-    [tipo, chave, String(mensagem).slice(0, 500), licitacaoId, documentoId, quando]
+    [tipo, nivel, chave, String(mensagem).slice(0, 500), licitacaoId, documentoId, quando]
   );
   return Boolean(r.insertId);
 }

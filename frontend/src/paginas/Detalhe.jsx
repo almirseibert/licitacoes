@@ -7,6 +7,7 @@ import Contagem from '../componentes/Contagem';
 import Exigencias from './Exigencias';
 import Envio from './Envio';
 import Historico from './Historico';
+import LinhaDoTempo from './LinhaDoTempo';
 import Preco from './Preco';
 import Proposta from './Proposta';
 import Concorrentes from './Concorrentes';
@@ -139,7 +140,7 @@ export default function Detalhe({ id, onFechar }) {
                 )}
               </div>
 
-              <nav className="mt-3 flex gap-4 text-xs">
+              <nav className="mt-3 flex gap-4 text-xs overflow-x-auto">
                 {[
                   ['resumo', 'Resumo'],
                   ['itens', `Itens${licitacao.itens ? ` (${licitacao.itens.length})` : ''}`],
@@ -150,12 +151,13 @@ export default function Detalhe({ id, onFechar }) {
                   ['concorrentes', 'Concorrentes'],
                   ['proposta', 'Proposta'],
                   ['envio', 'Montar envio'],
+                  ['linha', 'Linha do tempo'],
                   ['historico', 'Histórico'],
                 ].map(([chave, rotulo]) => (
                   <button
                     key={chave}
                     onClick={() => setAba(chave)}
-                    className={`pb-1 border-b-2 ${
+                    className={`pb-1 border-b-2 whitespace-nowrap ${
                       aba === chave ? 'border-texto text-texto' : 'border-transparent text-texto-suave hover:text-texto'
                     }`}
                   >
@@ -165,7 +167,7 @@ export default function Detalhe({ id, onFechar }) {
                 <button
                   onClick={rebuscar}
                   disabled={salvando}
-                  className="ml-auto flex items-center gap-1 text-texto-suave hover:text-texto"
+                  className="ml-auto flex items-center gap-1 whitespace-nowrap text-texto-suave hover:text-texto"
                   title="Buscar detalhe e itens no portal de novo"
                 >
                   <RefreshCcw size={12} /> rebuscar no portal
@@ -183,6 +185,7 @@ export default function Detalhe({ id, onFechar }) {
               {aba === 'concorrentes' && <Concorrentes id={id} />}
               {aba === 'proposta' && <Proposta id={id} />}
               {aba === 'envio' && <Envio id={id} />}
+              {aba === 'linha' && <LinhaDoTempo id={id} />}
               {aba === 'historico' && <Historico id={id} />}
             </div>
           </>

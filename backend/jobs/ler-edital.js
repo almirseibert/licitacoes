@@ -63,9 +63,20 @@ async function lerEdital({ licitacaoId }) {
 
   await marcar(licitacaoId, 'lendo');
 
+  // Só a versão mais recente de cada arquivo. Desde a Fase 10 o edital
+  // alterado convive com o antigo na mesma pasta (`01_Edital.pdf` e
+  // `01_Edital_v2.pdf`); ler os dois faria a detecção de exigências casar com
+  // texto revogado e dobrar cada ocorrência.
   const [registros] = await pool.query(
-    "SELECT id, nome_arquivo, extensao, caminho FROM licitacao_arquivos WHERE licitacao_id = ? AND status = 'ok' ORDER BY sequencial",
-    [licitacaoId]
+    `SELECT a.id, a.nome_arquivo, a.extensao, a.caminho
+       FROM licitacao_arquivos a
+       JOIN (SELECT sequencial, MAX(versao) AS versao
+               FROM licitacao_arquivos WHERE licitacao_id = ? AND status = 'ok'
+              GROUP BY sequencial) u
+         ON u.sequencial = a.sequencial AND u.versao = a.versao
+      WHERE a.licitacao_id = ? AND a.status = 'ok'
+      ORDER BY a.sequencial`,
+    [licitacaoId, licitacaoId]
   );
 
   const paginas = [];

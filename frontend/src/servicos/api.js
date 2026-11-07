@@ -375,4 +375,19 @@ export const api = {
   diagnostico: (periodo = 90) => requisitar(`/diagnostico?periodo=${periodo}`),
 
   descartarVencidas: () => requisitar('/diagnostico/descartar-vencidas', { method: 'POST' }),
+
+  // ------------------- monitor e oportunidades (seções 21 e 22)
+  linhaDoTempo: (id) => requisitar(`/licitacoes/${id}/linha-do-tempo`),
+
+  monitorar: (id, acao = 'ligar') =>
+    requisitar(`/licitacoes/${id}/monitorar`, { method: 'POST', body: JSON.stringify({ acao }) }),
+
+  oportunidades: (dias = 90) => requisitar(`/oportunidades?dias=${dias}`),
+
+  varrerEstrategicas: () => requisitar('/oportunidades/varrer', { method: 'POST' }),
+
+  salvarOportunidade: (id, campos) =>
+    requisitar(`/oportunidades/${id}`, { method: 'PATCH', body: JSON.stringify(campos) }),
+
+  acompanharOrgao: (id) => requisitar(`/oportunidades/${id}/acompanhar`, { method: 'POST' }),
 };

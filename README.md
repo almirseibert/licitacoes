@@ -3,7 +3,7 @@
 CRM de captação e inscrição em licitações de órgãos públicos. A especificação completa
 está em [PAINEL_LICITACOES_INSTRUCOES.md](PAINEL_LICITACOES_INSTRUCOES.md) — 32 seções, 14 fases.
 
-**Estado: Fases 1 a 9 implementadas e validadas — as seis primeiras em 02/11/2026, as Fases 7, 8 e 9 em 07/11/2026.**
+**Estado: Fases 1 a 10 implementadas e validadas — as seis primeiras em 02/11/2026, as Fases 7 a 10 em 07/11/2026.**
 
 A primeira coleta real no PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas
 com link que abre o edital no portal. Depois, pela tela, a palavra "videomonitoramento" foi
@@ -62,6 +62,20 @@ o atestado ao final — custo baixo*) e a simulação ao desconto mediano do gru
 449.201.159,78 em contratos disputáveis**. Esse é o aceite da Fase 9 na mecânica inteira; o
 número de 90 dias só vai existir com 90 dias de uso — a base hoje tem cinco dias, e a tela mostra
 o que há nela, sem completar o resto.
+
+A Fase 10 pôs o painel para olhar sozinho. O aceite do hash: adulterando à mão o `hash_arquivos`
+da licitação **195 — IPPUC, plataforma de IA generativa** —, a checagem seguinte **detectou a
+alteração, gravou o evento com o diff, levantou o alerta vermelho** *"O edital mudou. Reveja
+antes de enviar"* e **baixou `01_..._EDITAL_v2.pdf` ao lado do original, sem apagá-lo**. Rodando
+o monitor de verdade sobre a base, **246 monitoramentos** foram ligados e as primeiras checagens
+já pegaram mudança real no portal: a licitação **29 passou a Suspensa** e a **260 voltou de
+Suspensa para Divulgada**, cada uma com seu evento na linha do tempo. A captura de resultado foi
+conferida com os vencedores reais da licitação **677**: com o CNPJ da empresa igual ao do
+vencedor o card foi para **Ganhamos** (IVM Telecomunicações, R$ 6.554.088); com outro CNPJ, para
+**Perdemos**; **sem CNPJ no perfil o card não se move** e o painel diz por quê; e card em
+**"Descartada" não é tocado** — decisão do usuário não se sobrescreve. A varredura de
+estratégicas achou, na base real, **45 oportunidades de retomada em 180 dias (36 em 90 dias,
+R$ 11.863.724 em jogo)** e **175 contratações de baixa concorrência** — o aceite pedia 20.
 
 O que existe hoje:
 
@@ -155,6 +169,18 @@ O que existe hoje:
 | Rotas do diagnóstico | [backend/rotas/diagnostico.js](backend/rotas/diagnostico.js) |
 | Tela Diagnóstico | [frontend/src/paginas/Diagnostico.jsx](frontend/src/paginas/Diagnostico.jsx) |
 | Mesma conta no terminal | [backend/jobs/executar-diagnostico.js](backend/jobs/executar-diagnostico.js) |
+
+| Item da Fase 10 | Onde |
+|---|---|
+| `monitoramentos`, `eventos_licitacao` e `oportunidades_retomada` | [backend/migrations/011_monitor.sql](backend/migrations/011_monitor.sql) |
+| Cadência da seção 21.2 e hashes de arquivos e datas | [backend/regras/monitor.js](backend/regras/monitor.js) |
+| Assinatura de objeto e similaridade por trigramas (24.3) | [backend/regras/similaridade.js](backend/regras/similaridade.js) |
+| Linha do tempo, ligar/desligar e alerta vermelho | [backend/servicos/monitor.js](backend/servicos/monitor.js) |
+| Job `monitorar`: edital alterado, `_v2` e captura de resultado | [backend/jobs/monitorar.js](backend/jobs/monitorar.js) |
+| Job `varrer_estrategicas` e reaberturas | [backend/jobs/estrategicas.js](backend/jobs/estrategicas.js) |
+| Rotas de oportunidades e da linha do tempo | [backend/rotas/oportunidades.js](backend/rotas/oportunidades.js), [backend/rotas/licitacoes.js](backend/rotas/licitacoes.js) |
+| Aba Linha do tempo e tela Oportunidades | [frontend/src/paginas/LinhaDoTempo.jsx](frontend/src/paginas/LinhaDoTempo.jsx), [frontend/src/paginas/Oportunidades.jsx](frontend/src/paginas/Oportunidades.jsx) |
+| Os mesmos jobs no terminal | [backend/jobs/executar-monitor.js](backend/jobs/executar-monitor.js), [backend/jobs/executar-estrategicas.js](backend/jobs/executar-estrategicas.js) |
 
 Tudo em português: código, comentários, tabelas, interface.
 
@@ -377,6 +403,51 @@ O job nunca sobrescreve decisão sua: só toca em card parado em Triagem, não f
 descarte. E tirar um card de "Descartada" apaga o descarte inteiro — motivo, código e data —
 para que ele não continue pesando num ranking que já foi desfeito.
 
+### 13. Monitor e linha do tempo
+
+Depois de enviar a proposta, acompanhar deixou de ser trabalho manual. A aba **Linha do tempo**
+da licitação mostra publicação, alterações, sessão e resultado, com data e hora de cada evento,
+e é também a prova documental do que aconteceu, útil se houver recurso: nada ali é editável e
+nada some.
+
+O painel liga o monitoramento sozinho no que está em disputa, no que é favorito e nas encerradas
+recentes que alimentam a base de preços. A cadência é a da seção 21.2 — de 30 em 30 minutos no
+dia da sessão, de 3 em 3 horas na véspera, semanal para o resto — e se encerra sozinha depois de
+30 dias sem resultado ou 90 sem novidade. Na tela há **vigiar / parar de vigiar** e **checar
+agora**, que vai ao portal na hora.
+
+A cada checagem o painel compara o SHA-256 da lista de arquivos (sequencial, título e tamanho) e
+o das datas. Se mudou, grava o evento, **baixa a versão nova sem apagar a antiga** —
+`01_Edital.pdf` e `01_Edital_v2.pdf` convivem — e levanta o alerta **vermelho**: *"O edital
+mudou. Reveja antes de enviar."* A leitura de exigências passa a usar só a versão mais recente.
+
+Quando o portal publica resultado, os vencedores entram nos itens, o card vai para **Ganhamos**
+ou **Perdemos** conforme o CNPJ, e a base de preços e a de concorrentes são alimentadas. Sem
+CNPJ no perfil da empresa o card fica parado e o painel diz por quê — ele não chuta. Card que
+você já classificou à mão não é tocado.
+
+### 14. Oportunidades
+
+Três abas, ordenadas por valor estimado dentro de 90 dias (180 e 365 também), porque aqui se
+escolhe onde investir o dia.
+
+**Desertas** é o filão: ninguém apresentou proposta, o órgão ainda precisa comprar e o art. 75,
+III da Lei 14.133 abre caminho para contratação direta. **Fracassadas** tem o mesmo tratamento
+legal e um aviso na tela — houve interessados, leia o que desclassificou as propostas antes de
+montar a sua. **Baixa concorrência** não é oportunidade imediata: revela nicho.
+
+Cada linha tem **"acompanhar este órgão"**, que liga o monitoramento no que ele já tem aberto na
+base. A varredura roda sozinha às 5h e liga reaberturas: quando o mesmo órgão abre de novo um
+objeto que ficou sem vencedor, as duas são ligadas e sai o alerta com o novo prazo. O que
+reconhece "o mesmo objeto" é a assinatura da seção 24.3 — *"Contratação de empresa especializada
+para hospedagem do site institucional da Prefeitura"* vira `hospedagem institucional site` — com
+similaridade de trigramas a partir de 0,70.
+
+Duas ressalvas ficam escritas na própria tela, porque o número vale o que vale a fonte:
+oportunidade sem item vem da amostra de encerradas, e o PNCP não diz ali se foi deserta ou
+fracassada; e baixa concorrência é **inferida pelo desconto** (1º quartil do grupo ou abaixo),
+não por contagem de propostas — essa é do Compras.gov.br, que hoje bloqueia.
+
 ---
 
 ## Arquitetura
@@ -480,6 +551,12 @@ POST   /api/precos-referencia/coletar          varre as encerradas (leva minutos
 GET    /api/concorrentes           GET /api/concorrentes/:cnpj
 GET    /api/diagnostico?periodo=90|182|365     ranking, simulação e vencidas sem análise
 POST   /api/diagnostico/descartar-vencidas     job da seção 20.4 na mão
+GET    /api/licitacoes/:id/linha-do-tempo      eventos + estado do monitoramento
+POST   /api/licitacoes/:id/monitorar           { acao: ligar | desligar | checar }
+GET    /api/oportunidades?dias=90|180|365      desertas, fracassadas e baixa concorrencia
+POST   /api/oportunidades/varrer               varredura da secao 22.3 na mao
+PATCH  /api/oportunidades/:id                  situacao e observacao
+POST   /api/oportunidades/:id/acompanhar       acompanhar este orgao
 GET    /api/painel/resumo          GET /api/saude
 ```
 
@@ -493,13 +570,14 @@ O perfil da empresa está com os valores do seed. Complete em **Configurações*
 social, o endereço e o representante legal com CPF: sem eles, a capa do pacote e as declarações
 saem com lacuna (`____________`), de propósito — o painel nunca inventa dado.
 
-## Próximo passo — Fase 10
+## Próximo passo — Fase 11
 
-Monitor e oportunidades (seções 21 e 22): tabelas `monitoramentos` e `eventos_licitacao` com
-detecção de edital alterado por hash, linha do tempo na licitação, captura automática de
-resultado movendo o card e alimentando preços, e `varrer_estrategicas` com a tela Oportunidades.
-O aceite é alterar à mão o hash de uma licitação e receber o alerta, e ver pelo menos 20
-oportunidades de retomada reais na tela.
+Leitura assistida e recorrência (seções 23 e 24): `servicos/ia.js` com schema de saída validado
+e cache por hash do texto, resumo e armadilhas na tela marcados como sugestão até você
+confirmar, `recorrencias` com a detecção por assinatura de objeto — que a Fase 10 já deixou
+pronta em `regras/similaridade.js` — e a tela Calendário. O aceite é a IA acertar o resumo e as
+exigências críticas de cinco editais conferidos à mão, e o calendário prever ao menos três
+recorrências reais.
 
 ### Sobre o XLSX — por que escrito à mão
 

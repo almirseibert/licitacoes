@@ -79,7 +79,10 @@ async function sugerirDeclaracoes({ licitacaoId, exigidos, perfilId }) {
   }
 
   const [arquivosDoEdital] = await pool.query(
-    "SELECT titulo, nome_arquivo FROM licitacao_arquivos WHERE licitacao_id = ? AND status = 'ok'",
+    // DISTINCT porque desde a Fase 10 o mesmo documento pode ter duas versões
+    // na pasta: aqui só interessa se existe um anexo de declaração, não
+    // quantos.
+    "SELECT DISTINCT titulo, nome_arquivo FROM licitacao_arquivos WHERE licitacao_id = ? AND status = 'ok'",
     [licitacaoId]
   );
   const temAnexoDeDeclaracao = arquivosDoEdital.some((a) =>

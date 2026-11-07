@@ -15,4 +15,17 @@ async function padrao(perfilId) {
   return linhas[0];
 }
 
-module.exports = { padrao };
+/**
+ * O CNPJ da empresa, só dígitos, ou null quando o perfil ainda não o tem.
+ *
+ * É por ele que o monitor decide se ganhamos ou perdemos (seção 21.3). Null
+ * não é detalhe: sem CNPJ o painel não tem como comparar com o vencedor, e
+ * prefere deixar o card parado a chutar.
+ */
+async function cnpjDaEmpresa(perfilId) {
+  const perfil = await padrao(perfilId).catch(() => null);
+  const digitos = String((perfil && perfil.cnpj) || '').replace(/\D/g, '');
+  return digitos.length === 14 ? digitos : null;
+}
+
+module.exports = { padrao, cnpjDaEmpresa };

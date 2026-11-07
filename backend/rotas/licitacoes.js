@@ -8,6 +8,8 @@ const funil = require('../regras/funil');
 const descarte = require('../regras/descarte');
 const exigencias = require('../regras/exigencias');
 const prazos = require('../jobs/prazos');
+const servicoMonitor = require('../servicos/monitor');
+const monitorar = require('../jobs/monitorar');
 
 const rotas = express.Router();
 
@@ -539,6 +541,71 @@ rotas.post('/:id/ler', async (req, res) => {
     res.status(202).json({ ok: true, mensagem: 'Leitura do edital na fila.' });
   } catch (erro) {
     res.status(500).json({ erro: 'Não foi possível enfileirar a leitura.', detalhe: erro.message });
+  }
+});
+
+// GET /api/licitacoes/:id/linha-do-tempo — a aba da seção 21.4.
+// Publicação → alterações → sessão → resultado, com data e hora de cada
+// evento. É também a prova documental do que aconteceu, útil se houver recurso.
+rotas.get('/:id/linha-do-tempo', async (req, res) => {
+  try {
+    const [[licitacao]] = await pool.query(
+      `SELECT id, objeto, orgao_nome, criado_em, abertura_propostas, fim_propostas,
+              situacao, etapa, estrategica, reaberta_como
+         FROM licitacoes WHERE id = ?`,
+      [req.params.id]
+    );
+    if (!licitacao) return res.status(404).json({ erro: 'Licitação não encontrada.' });
+
+    const { eventos, monitoramento } = await servicoMonitor.linhaDoTempo(req.params.id);
+    res.json({ licitacao, eventos, monitoramento });
+  } catch (erro) {
+    console.error('Erro na linha do tempo:', erro.message);
+    res.status(500).json({ erro: 'Não foi possível carregar a linha do tempo.', detalhe: erro.message });
+  }
+});
+
+// POST /api/licitacoes/:id/monitorar — liga, desliga ou checa agora.
+rotas.post('/:id/monitorar', async (req, res) => {
+  const acao = (req.body && req.body.acao) || 'ligar';
+  try {
+    if (acao === 'desligar') {
+      await servicoMonitor.desligar(req.params.id, 'desligado na tela');
+      return res.json({ ok: true, mensagem: 'Monitoramento desligado.' });
+    }
+
+    const monitoramento = await servicoMonitor.ligar({
+      licitacaoId: Number(req.params.id),
+      motivo: (req.body && req.body.motivo) || 'interesse',
+    });
+    if (!monitoramento) return res.status(404).json({ erro: 'Licitação não encontrada.' });
+
+    if (acao !== 'checar') {
+      return res.json({ ok: true, monitoramento, mensagem: 'Monitoramento ligado.' });
+    }
+
+    // "Checar agora" vai ao portal na hora: é o que a pessoa faz quando
+    // desconfia que mudou alguma coisa e não quer esperar a cadência.
+    const [[completo]] = await pool.query(
+      `SELECT m.*, l.etapa, l.objeto, l.orgao_nome, l.orgao_cnpj, l.chave_externa, l.fonte_id,
+              l.abertura_propostas, l.fim_propostas, l.situacao, l.valor_estimado, l.pasta, f.adaptador
+         FROM monitoramentos m
+         JOIN licitacoes l ON l.id = m.licitacao_id
+         JOIN fontes f ON f.id = l.fonte_id
+        WHERE m.licitacao_id = ?`,
+      [req.params.id]
+    );
+    const resultado = await monitorar.checar(completo);
+    res.json({
+      ok: true,
+      resultado,
+      mensagem: resultado.eventos.length
+        ? `Checado agora: ${resultado.eventos.join('; ')}.`
+        : 'Checado agora: nada mudou no portal.',
+    });
+  } catch (erro) {
+    console.error('Erro no monitoramento:', erro.message);
+    res.status(500).json({ erro: 'Não foi possível falar com o portal agora.', detalhe: erro.message });
   }
 });
 

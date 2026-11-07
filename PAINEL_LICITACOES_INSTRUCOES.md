@@ -1290,10 +1290,10 @@ API que já está configurada no monorepo.
 - **Aceite:** com 90 dias de uso, a tela apontar o bloqueio nº 1 e o valor que ele custou.
 
 ### Fase 10 — Monitor e oportunidades (seções 21 e 22)
-- [ ] `monitoramentos` e `eventos_licitacao`, com detecção de edital alterado por hash
-- [ ] Linha do tempo na licitação
-- [ ] Captura automática de resultado, movendo o card e alimentando preços
-- [ ] `varrer_estrategicas` + tela Oportunidades com as três abas
+- [x] `monitoramentos` e `eventos_licitacao`, com detecção de edital alterado por hash
+- [x] Linha do tempo na licitação
+- [x] Captura automática de resultado, movendo o card e alimentando preços
+- [x] `varrer_estrategicas` + tela Oportunidades com as três abas
 - **Aceite:** alterar artificialmente o hash de uma licitação e receber o alerta; ver pelo menos 20 oportunidades de retomada reais na tela.
 
 ### Fase 11 — Leitura assistida e recorrência (seções 23 e 24)

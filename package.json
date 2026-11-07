@@ -19,7 +19,9 @@
     "postinstall": "echo \"Rode: npm run migrar && npm run semear\"",
     "encerradas": "node backend/jobs/executar-encerradas.js",
     "resultados": "node backend/jobs/executar-resultados.js",
-    "diagnostico": "node backend/jobs/executar-diagnostico.js"
+    "diagnostico": "node backend/jobs/executar-diagnostico.js",
+    "monitorar": "node backend/jobs/executar-monitor.js",
+    "estrategicas": "node backend/jobs/executar-estrategicas.js"
   },
   "engines": {
     "node": ">=20"

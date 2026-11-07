@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, Check } from 'lucide-react';
+import { Bell, Check, AlertTriangle } from 'lucide-react';
 import { api } from '../servicos/api';
 import { dataHora } from '../servicos/formato';
 
@@ -31,12 +31,20 @@ export default function Alertas({ aoAbrirLicitacao }) {
     carregar();
   };
 
+  // O nível vem do backend desde a Fase 10: alerta vermelho é o que não pode
+  // passar batido — edital alterado, hoje (seção 21.3). O tipo continua
+  // pintando o que o backend ainda manda como 'info'.
+  const POR_NIVEL = { vermelho: 'text-erro', atencao: 'text-atencao' };
   const CORES = {
     prazo_2h: 'text-erro',
     prazo_48h: 'text-atencao',
     validade_vencido: 'text-erro',
     nova_licitacao_alta: 'text-voltagem',
+    edital_alterado: 'text-erro',
+    reabertura: 'text-atencao',
+    resultado: 'text-voltagem',
   };
+  const corDe = (a) => POR_NIVEL[a.nivel] || CORES[a.tipo] || 'text-texto';
 
   return (
     <div className="relative">
@@ -96,7 +104,10 @@ export default function Alertas({ aoAbrirLicitacao }) {
                       }
                     }}
                   >
-                    <p className={`text-xs ${CORES[a.tipo] || 'text-texto'}`}>{a.mensagem}</p>
+                    <p className={`text-xs ${corDe(a)}`}>
+                      {a.nivel === 'vermelho' && <AlertTriangle size={11} className="inline mr-1 -translate-y-px" />}
+                      {a.mensagem}
+                    </p>
                     <p className="text-[11px] text-texto-suave mt-0.5">
                       {dataHora(a.criado_em)}
                       {a.quando && <span> · fim das propostas {dataHora(a.quando)}</span>}
