@@ -1305,10 +1305,10 @@ API que já está configurada no monorepo.
 - **Aceite:** resumo correto em 8 de 10 editais conferidos à mão; e o calendário apontar pelo menos 5 recorrências com duas ocorrências comprovadas.
 
 ### Fase 12 — Prazos e dossiês (seções 25, 26 e 27)
-- [ ] Tabela de feriados (BrasilAPI + cadastro local) e cálculo de dias úteis
-- [ ] `questionamentos` com modelos e guarda da resposta do órgão
-- [ ] Agregação de `concorrentes` e `orgaos`
-- [ ] Consulta CEIS/CNEP com cache de 30 dias
+- [x] Tabela de feriados (BrasilAPI + cadastro local) e cálculo de dias úteis
+- [x] `questionamentos` com modelos e guarda da resposta do órgão
+- [x] Agregação de `concorrentes` e `orgaos`
+- [x] Consulta CEIS/CNEP com cache de 30 dias
 - **Aceite:** o painel acertar a data limite de esclarecimento em 10 licitações conferidas no edital; e a ficha de um concorrente bater com a contagem manual.
 
 ### Fase 13 — Pós-vitória (seção 28)

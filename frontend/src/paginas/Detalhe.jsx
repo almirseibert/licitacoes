@@ -9,6 +9,7 @@ import Envio from './Envio';
 import Historico from './Historico';
 import LinhaDoTempo from './LinhaDoTempo';
 import LeituraIA from './LeituraIA';
+import Questionamentos from './Questionamentos';
 import Preco from './Preco';
 import Proposta from './Proposta';
 import Concorrentes from './Concorrentes';
@@ -152,6 +153,7 @@ export default function Detalhe({ id, onFechar }) {
                   ['concorrentes', 'Concorrentes'],
                   ['proposta', 'Proposta'],
                   ['envio', 'Montar envio'],
+                  ['questionar', 'Questionar'],
                   ['linha', 'Linha do tempo'],
                   ['historico', 'Histórico'],
                 ].map(([chave, rotulo]) => (
@@ -186,6 +188,7 @@ export default function Detalhe({ id, onFechar }) {
               {aba === 'concorrentes' && <Concorrentes id={id} />}
               {aba === 'proposta' && <Proposta id={id} />}
               {aba === 'envio' && <Envio id={id} />}
+              {aba === 'questionar' && <Questionamentos id={id} />}
               {aba === 'linha' && <LinhaDoTempo id={id} />}
               {aba === 'historico' && <Historico id={id} />}
             </div>

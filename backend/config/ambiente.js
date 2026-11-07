@@ -58,6 +58,12 @@ module.exports = {
     precoEntrada: Number(process.env.IA_PRECO_ENTRADA || 0),
     precoSaida: Number(process.env.IA_PRECO_SAIDA || 0),
   },
+  // CEIS e CNEP pelo Portal da Transparência (seção 26.3). A chave é gratuita,
+  // pelo cadastro no gov.br. Sem ela a consulta fica desligada e a tela diz
+  // isso — em vez de devolver "nenhuma sanção", que seria uma mentira com data.
+  sancoes: {
+    chave: process.env.PORTAL_TRANSPARENCIA_CHAVE || '',
+  },
   http: {
     userAgent: process.env.USER_AGENT || 'StudioMythosLicitacoes/1.0 (+https://studiomythos.com.br)',
     timeoutMs: Number(process.env.HTTP_TIMEOUT_MS || 30000),

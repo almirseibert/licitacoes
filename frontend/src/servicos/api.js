@@ -414,4 +414,46 @@ export const api = {
   detectarRecorrencias: () => requisitar('/calendario/detectar', { method: 'POST' }),
 
   prepararRecorrencia: (id) => requisitar(`/calendario/${id}/preparar`, { method: 'POST' }),
+
+  // ------------- prazos, questionamentos e dossiês (seções 25 a 27)
+  questionamentos: (id) => requisitar(`/licitacoes/${id}/questionamentos`),
+
+  montarQuestionamento: (id, codigo) =>
+    requisitar(`/licitacoes/${id}/questionamentos/montar`, {
+      method: 'POST',
+      body: JSON.stringify({ codigo }),
+    }),
+
+  criarQuestionamento: (id, campos) =>
+    requisitar(`/licitacoes/${id}/questionamentos`, { method: 'POST', body: JSON.stringify(campos) }),
+
+  salvarQuestionamento: (id, qid, campos) =>
+    requisitar(`/licitacoes/${id}/questionamentos/${qid}`, { method: 'PATCH', body: JSON.stringify(campos) }),
+
+  orgaos: (parametros = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(parametros).forEach(([k, v]) => {
+      if (v !== '' && v !== null && v !== undefined) q.set(k, v);
+    });
+    return requisitar(`/dossies/orgaos?${q.toString()}`);
+  },
+
+  orgao: (cnpj) => requisitar(`/dossies/orgaos/${cnpj}`),
+
+  dossieConcorrente: (cnpj) => requisitar(`/dossies/concorrentes/${cnpj}`),
+
+  consultarSancoes: (cnpj) =>
+    requisitar(`/dossies/concorrentes/${cnpj}/sancoes`, { method: 'POST', body: JSON.stringify({}) }),
+
+  minhasSancoes: () => requisitar('/dossies/minhas-sancoes', { method: 'POST', body: JSON.stringify({}) }),
+
+  agregarDossies: () => requisitar('/dossies/agregar', { method: 'POST' }),
+
+  feriados: (ano) => requisitar(`/feriados?ano=${ano || new Date().getFullYear()}`),
+
+  importarFeriados: () => requisitar('/feriados/importar', { method: 'POST' }),
+
+  criarFeriado: (campos) => requisitar('/feriados', { method: 'POST', body: JSON.stringify(campos) }),
+
+  apagarFeriado: (id) => requisitar(`/feriados/${id}`, { method: 'DELETE' }),
 };

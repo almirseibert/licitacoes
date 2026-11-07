@@ -65,5 +65,7 @@ npm install && npm run migrar && npm run semear
 `npm run monitorar` (uma rodada do monitor; `-- --licitacao=<id>` checa uma agora),
 `npm run estrategicas` (desertas, fracassadas e reaberturas — não vai à internet),
 `npm run recorrencias` (calendário da seção 24), `npm run ia` (leitura assistida; sem
-`GEMINI_API_KEY` ela fica desligada e o painel funciona inteiro sem ela).
+`GEMINI_API_KEY` ela fica desligada e o painel funciona inteiro sem ela),
+`npm run prazos` (dias úteis e o limite de esclarecimento), `npm run dossies`
+(fichas de concorrente e órgão).
 O README tem o detalhe de cada um.

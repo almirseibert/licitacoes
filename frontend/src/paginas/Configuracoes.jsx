@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, RotateCcw, Save, RefreshCw } from 'lucide-react';
+import { Loader2, RotateCcw, Save, RefreshCw, X } from 'lucide-react';
 import { api } from '../servicos/api';
 import { moeda } from '../servicos/formato';
 
@@ -218,8 +218,184 @@ export default function Configuracoes() {
             </div>
           </div>
         </section>
+
+        <Feriados aoErro={setErro} aoAvisar={setAviso} />
       </div>
     </div>
+  );
+}
+
+/**
+ * Feriados (seção 25.1) — é deles que sai a contagem de dias úteis do prazo
+ * de esclarecimento e impugnação.
+ *
+ * Os nacionais vêm da BrasilAPI e não se apagam. Os estaduais e municipais são
+ * cadastrados aqui porque não existe fonte única e confiável para eles no
+ * Brasil, e um feriado municipal faltando faz o painel contar um dia a mais —
+ * que é o lado certo para errar, mas ainda é errar.
+ */
+function Feriados({ aoErro, aoAvisar }) {
+  const [ano, setAno] = useState(new Date().getFullYear());
+  const [dados, setDados] = useState(null);
+  const [ocupado, setOcupado] = useState(null);
+  const [novo, setNovo] = useState({ data: '', nome: '', abrangencia: 'municipal', uf: '', municipio: '' });
+
+  const carregar = (qual = ano) =>
+    api
+      .feriados(qual)
+      .then((r) => setDados(r.dados))
+      .catch((e) => aoErro(e.message));
+
+  useEffect(() => {
+    carregar(ano);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ano]);
+
+  const importar = async () => {
+    setOcupado('importar');
+    try {
+      const r = await api.importarFeriados();
+      aoAvisar(r.mensagem);
+      await carregar();
+    } catch (e) {
+      aoErro(e.message);
+    } finally {
+      setOcupado(null);
+    }
+  };
+
+  const adicionar = async () => {
+    setOcupado('add');
+    try {
+      const r = await api.criarFeriado(novo);
+      aoAvisar(r.mensagem);
+      setNovo({ data: '', nome: '', abrangencia: 'municipal', uf: '', municipio: '' });
+      await carregar();
+    } catch (e) {
+      aoErro(e.message);
+    } finally {
+      setOcupado(null);
+    }
+  };
+
+  const locais = (dados || []).filter((f) => f.abrangencia !== 'nacional');
+  const nacionais = (dados || []).filter((f) => f.abrangencia === 'nacional');
+
+  return (
+    <section>
+      <div className="flex items-baseline gap-3 mb-2 flex-wrap">
+        <h2 className="font-titulo text-base">Feriados</h2>
+        <p className="text-xs text-texto-suave flex-1">
+          É deles que sai a contagem de dias úteis do prazo de esclarecimento (seção 25.1).
+        </p>
+        <select className="campo-caixa" value={ano} onChange={(e) => setAno(Number(e.target.value))}>
+          {[0, 1, 2].map((d) => {
+            const a = new Date().getFullYear() + d;
+            return (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            );
+          })}
+        </select>
+        <button className="botao" onClick={importar} disabled={Boolean(ocupado)}>
+          {ocupado === 'importar' ? 'importando…' : 'importar nacionais'}
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="border border-borda rounded">
+          <p className="px-3 py-2 text-[11px] uppercase tracking-wide text-texto-suave border-b border-borda">
+            Nacionais · {nacionais.length} · BrasilAPI
+          </p>
+          <ul className="max-h-56 overflow-auto">
+            {nacionais.map((f) => (
+              <li key={f.id} className="px-3 py-1 text-xs flex gap-2 border-b border-borda/40">
+                <span className="font-mono text-texto-suave">{String(f.data).slice(0, 10)}</span>
+                <span>{f.nome}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="border border-borda rounded">
+          <p className="px-3 py-2 text-[11px] uppercase tracking-wide text-texto-suave border-b border-borda">
+            Estaduais e municipais · {locais.length} · cadastrados por você
+          </p>
+          <ul className="max-h-40 overflow-auto">
+            {locais.map((f) => (
+              <li key={f.id} className="px-3 py-1 text-xs flex gap-2 items-center border-b border-borda/40">
+                <span className="font-mono text-texto-suave">{String(f.data).slice(0, 10)}</span>
+                <span className="flex-1">{f.nome}</span>
+                <span className="text-texto-suave">
+                  {f.abrangencia === 'estadual' ? f.uf : `${f.municipio}/${f.uf || '—'}`}
+                </span>
+                <button
+                  className="text-texto-suave hover:text-erro"
+                  onClick={async () => {
+                    await api.apagarFeriado(f.id).catch((e) => aoErro(e.message));
+                    carregar();
+                  }}
+                >
+                  <X size={11} />
+                </button>
+              </li>
+            ))}
+            {locais.length === 0 && (
+              <li className="px-3 py-3 text-xs text-texto-suave">
+                Nenhum. Cadastre o 20 de setembro no RS, o aniversário da sua cidade, e os do município de
+                cada órgão que você costuma disputar.
+              </li>
+            )}
+          </ul>
+
+          <div className="p-2 border-t border-borda grid grid-cols-2 gap-1.5">
+            <input
+              className="campo-caixa"
+              type="date"
+              value={novo.data}
+              onChange={(e) => setNovo({ ...novo, data: e.target.value })}
+            />
+            <input
+              className="campo-caixa"
+              placeholder="nome"
+              value={novo.nome}
+              onChange={(e) => setNovo({ ...novo, nome: e.target.value })}
+            />
+            <select
+              className="campo-caixa"
+              value={novo.abrangencia}
+              onChange={(e) => setNovo({ ...novo, abrangencia: e.target.value })}
+            >
+              <option value="municipal">municipal</option>
+              <option value="estadual">estadual</option>
+            </select>
+            <input
+              className="campo-caixa"
+              placeholder="UF"
+              maxLength={2}
+              value={novo.uf}
+              onChange={(e) => setNovo({ ...novo, uf: e.target.value.toUpperCase() })}
+            />
+            {novo.abrangencia === 'municipal' && (
+              <input
+                className="campo-caixa col-span-2"
+                placeholder="município (igual ao que vem do portal)"
+                value={novo.municipio}
+                onChange={(e) => setNovo({ ...novo, municipio: e.target.value })}
+              />
+            )}
+            <button
+              className="botao-primario col-span-2"
+              onClick={adicionar}
+              disabled={Boolean(ocupado) || !novo.data || !novo.nome}
+            >
+              {ocupado === 'add' ? 'salvando…' : 'Cadastrar feriado'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 

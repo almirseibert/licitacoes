@@ -12,6 +12,7 @@ const servicoMonitor = require('../servicos/monitor');
 const monitorar = require('../jobs/monitorar');
 const servicoIa = require('../servicos/ia');
 const jobIa = require('../jobs/ia-resumos');
+const questionamento = require('../servicos/questionamento');
 
 const rotas = express.Router();
 
@@ -662,6 +663,80 @@ rotas.patch('/:id/ia', async (req, res) => {
   try {
     const [r] = await pool.query('UPDATE licitacoes SET ia_situacao = ? WHERE id = ?', [situacao, req.params.id]);
     if (!r.affectedRows) return res.status(404).json({ erro: 'Licitação não encontrada.' });
+    res.json({ ok: true });
+  } catch (erro) {
+    res.status(500).json({ erro: 'Não foi possível salvar.', detalhe: erro.message });
+  }
+});
+
+// GET /api/licitacoes/:id/questionamentos — prazo, modelos e o que já foi
+// enviado (seção 25).
+rotas.get('/:id/questionamentos', async (req, res) => {
+  try {
+    const calculado = await questionamento.calcular(Number(req.params.id));
+    if (!calculado) return res.status(404).json({ erro: 'Licitação não encontrada.' });
+
+    res.json({
+      prazo: calculado.prazo || null,
+      motivo: calculado.motivo || null,
+      modelos: questionamento.MODELOS.map((m) => ({ codigo: m.codigo, titulo: m.titulo, tipo: m.tipo })),
+      enviados: await questionamento.listar(req.params.id),
+    });
+  } catch (erro) {
+    console.error('Erro nos questionamentos:', erro.message);
+    res.status(500).json({ erro: 'Não foi possível carregar os questionamentos.', detalhe: erro.message });
+  }
+});
+
+// POST /api/licitacoes/:id/questionamentos/montar — o texto do modelo pronto.
+rotas.post('/:id/questionamentos/montar', async (req, res) => {
+  try {
+    const r = await questionamento.montarTexto({
+      licitacaoId: Number(req.params.id),
+      codigo: (req.body && req.body.codigo) || '',
+    });
+    res.json(r);
+  } catch (erro) {
+    res.status(422).json({ erro: erro.message });
+  }
+});
+
+// POST /api/licitacoes/:id/questionamentos — registra o pedido.
+rotas.post('/:id/questionamentos', async (req, res) => {
+  const { tipo, assunto, texto } = req.body || {};
+  if (!['esclarecimento', 'impugnacao'].includes(tipo)) {
+    return res.status(400).json({ erro: 'Use tipo: esclarecimento ou impugnacao.' });
+  }
+  try {
+    const r = await questionamento.criar({ licitacaoId: Number(req.params.id), tipo, assunto, texto });
+    res.status(201).json(r);
+  } catch (erro) {
+    res.status(500).json({ erro: 'Não foi possível registrar o pedido.', detalhe: erro.message });
+  }
+});
+
+// PATCH /api/licitacoes/:id/questionamentos/:qid — protocolo, resposta e
+// resultado. A resposta do órgão vale como parte do edital (seção 25.2).
+const CAMPOS_QUESTIONAMENTO = ['protocolo', 'texto_enviado', 'resposta', 'resultado', 'enviado_em', 'respondido_em', 'assunto'];
+
+rotas.patch('/:id/questionamentos/:qid', async (req, res) => {
+  const corpo = req.body || {};
+  const partes = [];
+  const valores = [];
+
+  for (const campo of CAMPOS_QUESTIONAMENTO) {
+    if (corpo[campo] === undefined) continue;
+    partes.push(`${campo} = ?`);
+    valores.push(corpo[campo] === '' ? null : corpo[campo]);
+  }
+  if (!partes.length) return res.status(400).json({ erro: 'Nada para atualizar.' });
+
+  try {
+    const [r] = await pool.query(
+      `UPDATE questionamentos SET ${partes.join(', ')} WHERE id = ? AND licitacao_id = ?`,
+      [...valores, req.params.qid, req.params.id]
+    );
+    if (!r.affectedRows) return res.status(404).json({ erro: 'Pedido não encontrado.' });
     res.json({ ok: true });
   } catch (erro) {
     res.status(500).json({ erro: 'Não foi possível salvar.', detalhe: erro.message });

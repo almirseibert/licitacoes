@@ -3,7 +3,7 @@
 CRM de captação e inscrição em licitações de órgãos públicos. A especificação completa
 está em [PAINEL_LICITACOES_INSTRUCOES.md](PAINEL_LICITACOES_INSTRUCOES.md) — 32 seções, 14 fases.
 
-**Estado: Fases 1 a 11 implementadas e validadas — as seis primeiras em 02/11/2026, as Fases 7 a 11 em 07/11/2026.**
+**Estado: Fases 1 a 12 implementadas e validadas — as seis primeiras em 02/11/2026, as Fases 7 a 12 em 07/11/2026.**
 
 A primeira coleta real no PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas
 com link que abre o edital no portal. Depois, pela tela, a palavra "videomonitoramento" foi
@@ -91,6 +91,18 @@ ou mais, 64 com janela prevista** — o aceite pedia 5 — entre elas o São Pau
 comprando kit de higiene cinco vezes e a Câmara de São João da Paraúna renovando o site cinco
 vezes. A sugestão de palavras-chave (seção 23.5) devolveu 10 termos novos, cada um citando a
 licitação que o justifica.
+
+A Fase 12 fechou os prazos e os dossiês. O aceite do prazo: nas **10 licitações cujo edital foi
+lido, o painel acertou as 10 datas limite de esclarecimento**, conferidas contra o texto do
+próprio edital — seis repetem os 3 dias úteis da Lei 14.133 e as outras quatro não escrevem
+prazo nenhum, caso em que vale a regra legal. Os feriados reais entraram na conta: São Bento do
+Sul pulou **Nossa Senhora Aparecida (12/10)** e Curral Novo do Piauí pulou **Finados (02/11)**,
+cada um deslocando o limite um dia útil. Cadastrando um feriado municipal de teste em
+Garanhuns, o prazo daquela licitação andou de 19/10 para 16/10 e o de uma licitação de Recife
+**não se moveu** — o feriado de um município não suspende prazo de outro. O aceite do dossiê:
+as fichas de **quatro concorrentes bateram com a contagem manual** em todos os campos, incluindo
+o desconto mediano na quarta casa decimal. Os dossiês saíram em **1,2 s para 22 concorrentes e
+1.007 órgãos**.
 
 O que existe hoje:
 
@@ -207,6 +219,18 @@ O que existe hoje:
 | Rotas da IA e do calendário | [backend/rotas/ia.js](backend/rotas/ia.js), [backend/rotas/calendario.js](backend/rotas/calendario.js) |
 | Bloco "Leitura assistida" e tela Calendário | [frontend/src/paginas/LeituraIA.jsx](frontend/src/paginas/LeituraIA.jsx), [frontend/src/paginas/Calendario.jsx](frontend/src/paginas/Calendario.jsx) |
 | Os mesmos jobs no terminal | [backend/jobs/executar-ia.js](backend/jobs/executar-ia.js), [backend/jobs/executar-recorrencias.js](backend/jobs/executar-recorrencias.js) |
+
+| Item da Fase 12 | Onde |
+|---|---|
+| `feriados`, `questionamentos`, `concorrentes`, `orgaos` e `sancoes_consultas` | [backend/migrations/013_prazos_dossies.sql](backend/migrations/013_prazos_dossies.sql) |
+| Dia útil e os 3 dias úteis da Lei 14.133 | [backend/regras/prazos.js](backend/regras/prazos.js) |
+| Feriados: BrasilAPI mais cadastro local | [backend/servicos/feriados.js](backend/servicos/feriados.js) |
+| Modelos de esclarecimento e impugnação, e a resposta do órgão | [backend/servicos/questionamento.js](backend/servicos/questionamento.js) |
+| CEIS e CNEP com cache de 30 dias | [backend/servicos/sancoes.js](backend/servicos/sancoes.js) |
+| Job `agregar_dossies` e `prazos_questionamento` | [backend/jobs/dossies.js](backend/jobs/dossies.js), [backend/jobs/questionamentos.js](backend/jobs/questionamentos.js) |
+| Rotas dos dossiês e dos feriados | [backend/rotas/dossies.js](backend/rotas/dossies.js), [backend/rotas/feriados.js](backend/rotas/feriados.js) |
+| Aba Questionar e tela Órgãos | [frontend/src/paginas/Questionamentos.jsx](frontend/src/paginas/Questionamentos.jsx), [frontend/src/paginas/Orgaos.jsx](frontend/src/paginas/Orgaos.jsx) |
+| Os mesmos jobs no terminal | [backend/jobs/executar-prazos.js](backend/jobs/executar-prazos.js), [backend/jobs/executar-dossies.js](backend/jobs/executar-dossies.js) |
 
 Tudo em português: código, comentários, tabelas, interface.
 
@@ -518,6 +542,53 @@ nenhuma: prever a partir de uma compra é adivinhação, e adivinhação na tela
 em tudo o mais. O que reconhece "o mesmo objeto" é a assinatura da seção 24.3, a mesma da Fase
 10. Alertas saem 60 e 30 dias antes da janela.
 
+### 17. Questionar o edital
+
+A aba **Questionar** da licitação mostra até quando dá para pedir esclarecimento ou impugnar: os
+3 dias úteis antes da abertura que a Lei 14.133 fixa. A conta fica aberta na tela — os dias
+úteis contados, um a um, e o que foi pulado, com o motivo (sábado, domingo, Finados). Prazo é
+coisa que se confere contra o edital, não que se acredita. A hora limite de 18h é suposição do
+painel, e ele diz que é: a lei não fixa, os editais seguem o expediente do órgão.
+
+Os feriados vêm da BrasilAPI para os nacionais; os estaduais e municipais são cadastrados em
+**Configurações**, porque não existe fonte única e confiável para eles no Brasil. Feriado
+municipal só suspende prazo do próprio município — o de Garanhuns não mexe no de Recife.
+
+Mas isto não é lembrete. O pedido de esclarecimento é ferramenta de trabalho: destrava exigência
+desproporcional, confirma por escrito que um documento seu serve, e corrige especificação
+impossível antes que o item fracasse. Por isso há **três modelos** — esclarecimento, impugnação
+por exigência restritiva e impugnação por erro de especificação — já com o número do pregão, o
+órgão e os seus dados, pelo mesmo motor das declarações. O que o painel não sabe vira lacuna
+visível: o item do edital e a razão são seus. E a **resposta do órgão fica guardada** com
+protocolo e data, porque ela vale como parte do edital.
+
+Depois de vencido o prazo, exigência restritiva já não se discute — só resta decidir se disputa
+assim. A tela diz isso.
+
+### 18. Órgãos e concorrentes
+
+Duas perguntas que se respondem antes de gastar o dia montando proposta.
+
+**Este órgão costuma exigir o quê?** A ficha do órgão traz contratações, quanto homologou,
+itens que ficaram sem vencedor, desconto médio obtido, modalidade e plataforma mais usadas, os
+fornecedores que se repetem, as recorrências detectadas e o **perfil de exigência** — atestado
+em 10 de 14, balanço em 2 de 14. Órgão que quase sempre pede atestado avisa o que você precisa
+resolver antes de mirar nele; taxa de deserto alta é sinal de preço estimado defasado.
+
+**Qual o piso que estes três praticam?** A ficha do concorrente traz quantas disputou, quantas
+ganhou, desconto médio e mediano, desclassificações, onde atua, quantas vezes encontrou você — e
+o **menor preço já praticado por grupo**. Se o seu custo está acima disso, aquela disputa não é
+sua.
+
+**Sanções** em CEIS e CNEP, pelo Portal da Transparência, com cache de 30 dias porque a API
+limita requisições. Serve para dois usos: checar o próprio CNPJ antes de ser inabilitado por
+engano, e checar o vencedor quando você fica em segundo — empresa impedida que vence abre
+caminho para recurso. Sem `PORTAL_TRANSPARENCIA_CHAVE` a consulta fica desligada, e a tela diz
+isso em vez de mostrar "nenhuma sanção" — que seria uma afirmação sem consulta.
+
+Nada aqui é coletado à parte: é tudo derivado da base que já temos, recalculado pelo job mensal
+ou pelo botão **recalcular**.
+
 ---
 
 ## Arquitetura
@@ -636,6 +707,17 @@ PATCH  /api/ia/palavras-sugeridas/:id          { situacao: aceita | recusada }
 GET    /api/calendario                         doze meses de recorrencias previstas
 POST   /api/calendario/detectar                recalcula as recorrencias
 POST   /api/calendario/:id/preparar            lembrete com checklist da janela
+GET    /api/licitacoes/:id/questionamentos     prazo, modelos e o que ja foi enviado
+POST   /api/licitacoes/:id/questionamentos/montar   texto do modelo pronto
+POST   /api/licitacoes/:id/questionamentos     registra o pedido
+PATCH  /api/licitacoes/:id/questionamentos/:qid     protocolo, resposta e resultado
+GET    /api/dossies/orgaos                     GET /api/dossies/orgaos/:cnpj
+GET    /api/dossies/concorrentes/:cnpj         POST .../sancoes  consulta CEIS/CNEP
+POST   /api/dossies/minhas-sancoes             checa o proprio CNPJ
+POST   /api/dossies/agregar                    recalcula as fichas
+GET    /api/feriados?ano=2026                  POST /api/feriados  (estadual/municipal)
+POST   /api/feriados/importar                  baixa os nacionais da BrasilAPI
+DELETE /api/feriados/:id                       so os cadastrados a mao
 GET    /api/painel/resumo          GET /api/saude
 ```
 
@@ -649,13 +731,11 @@ O perfil da empresa está com os valores do seed. Complete em **Configurações*
 social, o endereço e o representante legal com CPF: sem eles, a capa do pacote e as declarações
 saem com lacuna (`____________`), de propósito — o painel nunca inventa dado.
 
-## Próximo passo — Fase 12
+## Próximo passo — Fase 13
 
-Prazos e dossiês (seções 25, 26 e 27): tabela de feriados (BrasilAPI mais cadastro local) e
-cálculo de dias úteis, `questionamentos` com modelos e guarda da resposta do órgão, agregação de
-`concorrentes` e `orgaos`, e consulta CEIS/CNEP com cache de 30 dias. O aceite é o painel
-acertar a data limite de esclarecimento em 10 licitações conferidas no edital, e a ficha de um
-concorrente bater com a contagem manual.
+Pós-vitória (seção 28): `contratos` e `contrato_marcos` com checklist automático, alertas de
+marco e tela de contratos, e o faturado em 12 meses com a faixa atual e quanto falta para a
+próxima. O aceite é registrar um contrato real e receber o alerta do primeiro marco.
 
 ### Sobre o XLSX — por que escrito à mão
 

@@ -23,7 +23,9 @@
     "monitorar": "node backend/jobs/executar-monitor.js",
     "estrategicas": "node backend/jobs/executar-estrategicas.js",
     "recorrencias": "node backend/jobs/executar-recorrencias.js",
-    "ia": "node backend/jobs/executar-ia.js"
+    "ia": "node backend/jobs/executar-ia.js",
+    "dossies": "node backend/jobs/executar-dossies.js",
+    "prazos": "node backend/jobs/executar-prazos.js"
   },
   "engines": {
     "node": ">=20"
