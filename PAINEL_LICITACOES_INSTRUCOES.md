@@ -1297,11 +1297,11 @@ API que já está configurada no monorepo.
 - **Aceite:** alterar artificialmente o hash de uma licitação e receber o alerta; ver pelo menos 20 oportunidades de retomada reais na tela.
 
 ### Fase 11 — Leitura assistida e recorrência (seções 23 e 24)
-- [ ] `servicos/ia.js` com schema de saída validado e cache por hash
-- [ ] Resumo, armadilhas e parecer de participação na aba Resumo, marcados como sugestão
-- [ ] Registro de custo em `ia_execucoes`
-- [ ] `assinaturaObjeto` + `recorrencias` + tela Calendário
-- [ ] Alertas de 60 e 30 dias
+- [x] `servicos/ia.js` com schema de saída validado e cache por hash
+- [x] Resumo, armadilhas e parecer de participação na aba Resumo, marcados como sugestão
+- [x] Registro de custo em `ia_execucoes`
+- [x] `assinaturaObjeto` + `recorrencias` + tela Calendário
+- [x] Alertas de 60 e 30 dias
 - **Aceite:** resumo correto em 8 de 10 editais conferidos à mão; e o calendário apontar pelo menos 5 recorrências com duas ocorrências comprovadas.
 
 ### Fase 12 — Prazos e dossiês (seções 25, 26 e 27)

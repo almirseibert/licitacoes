@@ -80,6 +80,10 @@ function normalizar(registro, { fonteId } = {}) {
     orcamento_sigiloso: registro.indicador_orcamento_sigiloso ? 1 : 0,
     abertura_propostas: paraData(registro.data_inicio_recebimento_propostas || registro.data_inicio_vigencia),
     fim_propostas: paraData(registro.data_fim_recebimento_propostas || registro.data_fim_vigencia),
+    // A busca sempre traz a publicação, e em boa parte dos registros ela é a
+    // única data que vem. Não substitui o fim das propostas; é guardada à
+    // parte, com o nome do que é (Fase 11).
+    publicada_em: paraData(registro.data_publicacao_pncp),
     situacao: registro.situacao_nome || (registro.tem_resultado ? 'Com resultado' : 'Recebendo proposta'),
     // usuario_nome é a plataforma onde a disputa acontece (seção 5.1).
     plataforma_disputa: registro.usuario_nome || null,

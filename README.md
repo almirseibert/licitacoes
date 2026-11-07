@@ -3,7 +3,7 @@
 CRM de captação e inscrição em licitações de órgãos públicos. A especificação completa
 está em [PAINEL_LICITACOES_INSTRUCOES.md](PAINEL_LICITACOES_INSTRUCOES.md) — 32 seções, 14 fases.
 
-**Estado: Fases 1 a 10 implementadas e validadas — as seis primeiras em 02/11/2026, as Fases 7 a 10 em 07/11/2026.**
+**Estado: Fases 1 a 11 implementadas e validadas — as seis primeiras em 02/11/2026, as Fases 7 a 11 em 07/11/2026.**
 
 A primeira coleta real no PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas
 com link que abre o edital no portal. Depois, pela tela, a palavra "videomonitoramento" foi
@@ -76,6 +76,21 @@ vencedor o card foi para **Ganhamos** (IVM Telecomunicações, R$ 6.554.088); co
 **"Descartada" não é tocado** — decisão do usuário não se sobrescreve. A varredura de
 estratégicas achou, na base real, **45 oportunidades de retomada em 180 dias (36 em 90 dias,
 R$ 11.863.724 em jogo)** e **175 contratações de baixa concorrência** — o aceite pedia 20.
+
+A Fase 11 trouxe a leitura assistida e o calendário. Os **10 editais com texto extraído na base
+foram lidos pelo Gemini e conferidos um a um**: os 10 resumos batem com o objeto que o PNCP
+publica, que é fonte independente do PDF, e das **22 afirmações que a IA fez e que não estavam
+no objeto** — vigência de 60 meses em Porto Velho, as 2 horas para enviar habilitação em São
+Bento do Sul, a prorrogação por até 10 anos em Medianeira, o "não haverá exigência de garantia
+contratual" em Dom Joaquim — **22 foram encontradas literalmente no texto do próprio edital**.
+O aceite pedia 8 de 10. Nenhuma invenção; a validação de schema descartou o que veio fora do
+formato e a tela mostra o que descartou. Custou **131.528 tokens de entrada e 15.436 de saída**
+em 10 chamadas, com o 10º edital servido pelo cache (mesmo texto do 9º, mesmo hash, zero
+chamada). Do outro lado, a detecção de recorrência achou **65 recorrências com duas ocorrências
+ou mais, 64 com janela prevista** — o aceite pedia 5 — entre elas o São Paulo Penitenciária
+comprando kit de higiene cinco vezes e a Câmara de São João da Paraúna renovando o site cinco
+vezes. A sugestão de palavras-chave (seção 23.5) devolveu 10 termos novos, cada um citando a
+licitação que o justifica.
 
 O que existe hoje:
 
@@ -181,6 +196,17 @@ O que existe hoje:
 | Rotas de oportunidades e da linha do tempo | [backend/rotas/oportunidades.js](backend/rotas/oportunidades.js), [backend/rotas/licitacoes.js](backend/rotas/licitacoes.js) |
 | Aba Linha do tempo e tela Oportunidades | [frontend/src/paginas/LinhaDoTempo.jsx](frontend/src/paginas/LinhaDoTempo.jsx), [frontend/src/paginas/Oportunidades.jsx](frontend/src/paginas/Oportunidades.jsx) |
 | Os mesmos jobs no terminal | [backend/jobs/executar-monitor.js](backend/jobs/executar-monitor.js), [backend/jobs/executar-estrategicas.js](backend/jobs/executar-estrategicas.js) |
+
+| Item da Fase 11 | Onde |
+|---|---|
+| `ia_execucoes`, `recorrencias` e `palavras_sugeridas` | [backend/migrations/012_ia_recorrencias.sql](backend/migrations/012_ia_recorrencias.sql) |
+| Schema de saída e validação contra injeção (23.4) | [backend/regras/ia-schema.js](backend/regras/ia-schema.js) |
+| Chamada ao modelo, recorte por seção, cache e livro-caixa | [backend/servicos/ia.js](backend/servicos/ia.js) |
+| Job `ia_resumos` e sugestão de palavras (23.5) | [backend/jobs/ia-resumos.js](backend/jobs/ia-resumos.js) |
+| Job `detectar_recorrencias` e alertas de 60/30 dias | [backend/jobs/recorrencias.js](backend/jobs/recorrencias.js) |
+| Rotas da IA e do calendário | [backend/rotas/ia.js](backend/rotas/ia.js), [backend/rotas/calendario.js](backend/rotas/calendario.js) |
+| Bloco "Leitura assistida" e tela Calendário | [frontend/src/paginas/LeituraIA.jsx](frontend/src/paginas/LeituraIA.jsx), [frontend/src/paginas/Calendario.jsx](frontend/src/paginas/Calendario.jsx) |
+| Os mesmos jobs no terminal | [backend/jobs/executar-ia.js](backend/jobs/executar-ia.js), [backend/jobs/executar-recorrencias.js](backend/jobs/executar-recorrencias.js) |
 
 Tudo em português: código, comentários, tabelas, interface.
 
@@ -448,6 +474,50 @@ oportunidade sem item vem da amostra de encerradas, e o PNCP não diz ali se foi
 fracassada; e baixa concorrência é **inferida pelo desconto** (1º quartil do grupo ou abaixo),
 não por contagem de propostas — essa é do Compras.gov.br, que hoje bloqueia.
 
+### 15. Leitura assistida
+
+Na aba **Resumo** da licitação, abaixo dos fatos do portal, o bloco **Leitura assistida**: o que
+o órgão quer, o que pedem, o prazo, as exigências críticas com o código do catálogo, as
+**armadilhas** — custo e risco que não aparecem na planilha — e um parecer de participação.
+
+Tudo ali é **sugestão até você confirmar**, e a tela diz isso o tempo todo. Não é modéstia: a
+detecção por expressão regular da seção 8 continua sendo a fonte principal, porque é
+determinística e auditável, e misturar as duas faria você confiar na mais frágil. A IA não
+encosta em pontuação, etapa, preço nem documento do cofre — só neste quadro.
+
+O conteúdo do edital é tratado como **dado, nunca instrução**. Ele vai entre delimitadores
+aleatórios, o prompt diz que ali dentro não há comando, e — a defesa que de fato conta — a
+resposta é validada campo a campo contra o schema: código de exigência que não existe no
+catálogo é descartado, enum fora da lista é descartado, confiança fora de 0–1 é cortada. O
+rodapé do bloco mostra o que foi descartado, porque resposta torta é sinal, não detalhe.
+
+Custo sob controle (seção 23.3): só roda em licitação com pontuação ≥ 55 ou favorita, manda no
+máximo 60 mil caracteres priorizando objeto, habilitação, obrigações e penalidades, e guarda o
+resultado pelo SHA-256 do texto — reprocessar o mesmo edital não chama a API. Cada chamada fica
+em `ia_execucoes` com modelo, tokens e custo. Para o custo sair em reais, preencha
+`IA_PRECO_ENTRADA` e `IA_PRECO_SAIDA` com o preço por milhão de tokens; sem eles os tokens são
+registrados do mesmo jeito.
+
+**Sem `GEMINI_API_KEY` a leitura fica desligada e o painel funciona inteiro sem ela** — a IA é
+acréscimo, não alicerce. Pela linha de comando: `npm run ia`, `npm run ia -- --licitacao=<id>`,
+`npm run ia -- --lote=10`, `npm run ia -- --palavras`.
+
+### 16. Calendário
+
+Órgão público repete contratação, e quase sempre no mesmo mês, porque segue o ciclo
+orçamentário. Quem sabe disso chega preparado; quem não sabe descobre com três dias de prazo.
+
+A tela **Calendário** mostra doze meses a partir do corrente — ninguém planeja o ano olhando
+para trás — com o que cada órgão costuma abrir, o valor médio, o último vencedor e a confiança.
+O botão **preparar** cria o lembrete da janela com o checklist: certidões em dia, atestado
+compatível e pesquisa de preço.
+
+A recorrência nasce de **duas ocorrências do mesmo objeto, no mesmo órgão, em anos diferentes** —
+0,5 de confiança; três valem 0,8; daí em diante 0,95. Com menos de duas o painel não cria linha
+nenhuma: prever a partir de uma compra é adivinhação, e adivinhação na tela estraga a confiança
+em tudo o mais. O que reconhece "o mesmo objeto" é a assinatura da seção 24.3, a mesma da Fase
+10. Alertas saem 60 e 30 dias antes da janela.
+
 ---
 
 ## Arquitetura
@@ -557,6 +627,15 @@ GET    /api/oportunidades?dias=90|180|365      desertas, fracassadas e baixa con
 POST   /api/oportunidades/varrer               varredura da secao 22.3 na mao
 PATCH  /api/oportunidades/:id                  situacao e observacao
 POST   /api/oportunidades/:id/acompanhar       acompanhar este orgao
+GET    /api/licitacoes/:id/ia                  leitura assistida da licitacao
+POST   /api/licitacoes/:id/ia                  le agora ({ forcar } ignora o cache)
+PATCH  /api/licitacoes/:id/ia                  { situacao: confirmado | recusado }
+GET    /api/ia                                 estado e livro-caixa da IA
+GET    /api/ia/palavras-sugeridas              POST para pedir uma rodada
+PATCH  /api/ia/palavras-sugeridas/:id          { situacao: aceita | recusada }
+GET    /api/calendario                         doze meses de recorrencias previstas
+POST   /api/calendario/detectar                recalcula as recorrencias
+POST   /api/calendario/:id/preparar            lembrete com checklist da janela
 GET    /api/painel/resumo          GET /api/saude
 ```
 
@@ -570,14 +649,13 @@ O perfil da empresa está com os valores do seed. Complete em **Configurações*
 social, o endereço e o representante legal com CPF: sem eles, a capa do pacote e as declarações
 saem com lacuna (`____________`), de propósito — o painel nunca inventa dado.
 
-## Próximo passo — Fase 11
+## Próximo passo — Fase 12
 
-Leitura assistida e recorrência (seções 23 e 24): `servicos/ia.js` com schema de saída validado
-e cache por hash do texto, resumo e armadilhas na tela marcados como sugestão até você
-confirmar, `recorrencias` com a detecção por assinatura de objeto — que a Fase 10 já deixou
-pronta em `regras/similaridade.js` — e a tela Calendário. O aceite é a IA acertar o resumo e as
-exigências críticas de cinco editais conferidos à mão, e o calendário prever ao menos três
-recorrências reais.
+Prazos e dossiês (seções 25, 26 e 27): tabela de feriados (BrasilAPI mais cadastro local) e
+cálculo de dias úteis, `questionamentos` com modelos e guarda da resposta do órgão, agregação de
+`concorrentes` e `orgaos`, e consulta CEIS/CNEP com cache de 30 dias. O aceite é o painel
+acertar a data limite de esclarecimento em 10 licitações conferidas no edital, e a ficha de um
+concorrente bater com a contagem manual.
 
 ### Sobre o XLSX — por que escrito à mão
 

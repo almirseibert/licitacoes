@@ -8,6 +8,7 @@ import Exigencias from './Exigencias';
 import Envio from './Envio';
 import Historico from './Historico';
 import LinhaDoTempo from './LinhaDoTempo';
+import LeituraIA from './LeituraIA';
 import Preco from './Preco';
 import Proposta from './Proposta';
 import Concorrentes from './Concorrentes';
@@ -176,7 +177,7 @@ export default function Detalhe({ id, onFechar }) {
             </header>
 
             <div className="flex-1 overflow-auto p-4 text-sm">
-              {aba === 'resumo' && <Resumo licitacao={licitacao} />}
+              {aba === 'resumo' && <Resumo licitacao={licitacao} id={id} />}
               {aba === 'itens' && <Itens itens={licitacao.itens || []} />}
               {aba === 'pontuacao' && <Pontuacao detalhe={licitacao.pontuacao_detalhe} />}
               {aba === 'arquivos' && <Arquivos id={id} />}
@@ -204,7 +205,7 @@ function Linha({ rotulo, children }) {
   );
 }
 
-function Resumo({ licitacao: l }) {
+function Resumo({ licitacao: l, id }) {
   return (
     <div>
       <Linha rotulo="Situação">{l.situacao}</Linha>
@@ -223,6 +224,10 @@ function Resumo({ licitacao: l }) {
       <Linha rotulo="Grupo">{l.grupo}</Linha>
       <Linha rotulo="Fonte">{l.fonte_nome}</Linha>
       <Linha rotulo="Coletada em"><span className="font-mono">{dataHora(l.criado_em)}</span></Linha>
+
+      {/* A leitura assistida fica abaixo dos fatos, não acima: o que o portal
+          informou vem primeiro, e o que a IA achou vem depois, rotulado. */}
+      <LeituraIA id={id} />
     </div>
   );
 }

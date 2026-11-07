@@ -49,13 +49,14 @@ async function guardarEncerrada(licitacao, { adaptador = 'pncp', grupo } = {}) {
     `INSERT INTO historico_precos
        (adaptador, chave_externa, grupo, modalidade, familia, uf, esfera,
         orgao_cnpj, orgao_nome, objeto, valor_estimado, valor_homologado,
-        desconto, sem_homologacao, encerrada_em)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        desconto, sem_homologacao, encerrada_em, publicada_em)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
        valor_homologado = VALUES(valor_homologado),
        desconto = VALUES(desconto),
        sem_homologacao = VALUES(sem_homologacao),
-       encerrada_em = VALUES(encerrada_em)`,
+       encerrada_em = COALESCE(VALUES(encerrada_em), encerrada_em),
+       publicada_em = COALESCE(VALUES(publicada_em), publicada_em)`,
     [
       adaptador,
       licitacao.chave_externa,
@@ -74,6 +75,7 @@ async function guardarEncerrada(licitacao, { adaptador = 'pncp', grupo } = {}) {
       // como fato, mas fora da mediana de desconto.
       desconto === null ? 1 : 0,
       paraData(licitacao.fim_propostas),
+      paraData(licitacao.publicada_em),
     ]
   );
 

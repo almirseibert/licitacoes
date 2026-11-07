@@ -90,7 +90,18 @@ function descontoDe({ valor_estimado: estimado, valor_homologado: homologado }) 
   const h = Number(homologado);
   if (!Number.isFinite(e) || e <= 0) return null;
   if (!Number.isFinite(h) || h <= 0) return null;
-  return Number(((e - h) / e).toFixed(4));
+
+  const desconto = (e - h) / e;
+
+  // Fora desta faixa não é desconto, é erro de digitação do órgão: estimado de
+  // R$ 1,00 com homologado de R$ 80 mil dá -79.999, que não cabe em
+  // DECIMAL(7,4) e derrubava a gravação da página inteira de resultados —
+  // medido na coleta de 07/11/2026, em três termos de busca. Descartar a linha
+  // é melhor do que travar as outras, e melhor ainda do que truncar o número e
+  // contaminar a mediana com um desconto que nunca existiu.
+  if (desconto > 1 || desconto < -99) return null;
+
+  return Number(desconto.toFixed(4));
 }
 
 /**

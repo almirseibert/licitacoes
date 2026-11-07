@@ -135,12 +135,16 @@ async function doRadar({ dias = DIAS } = {}) {
  * e a tela diz isso.
  */
 async function daAmostra({ dias = DIAS } = {}) {
+  // COALESCE com a publicação pelo mesmo motivo da Fase 11: sem ela, mais da
+  // metade da amostra ficava invisível aqui, e deserta que ninguém vê é
+  // exatamente o que esta tela existe para achar.
   const [linhas] = await pool.query(
-    `SELECT id, orgao_cnpj, orgao_nome, uf, objeto, assinatura_objeto, valor_estimado, encerrada_em
+    `SELECT id, orgao_cnpj, orgao_nome, uf, objeto, assinatura_objeto, valor_estimado,
+            COALESCE(encerrada_em, publicada_em) AS encerrada_em
        FROM historico_precos
       WHERE sem_homologacao = 1
-        AND encerrada_em IS NOT NULL
-        AND encerrada_em >= DATE_SUB(CURDATE(), INTERVAL ? DAY)`,
+        AND COALESCE(encerrada_em, publicada_em) IS NOT NULL
+        AND COALESCE(encerrada_em, publicada_em) >= DATE_SUB(CURDATE(), INTERVAL ? DAY)`,
     [dias]
   );
 

@@ -10,6 +10,8 @@ const exigencias = require('../regras/exigencias');
 const prazos = require('../jobs/prazos');
 const servicoMonitor = require('../servicos/monitor');
 const monitorar = require('../jobs/monitorar');
+const servicoIa = require('../servicos/ia');
+const jobIa = require('../jobs/ia-resumos');
 
 const rotas = express.Router();
 
@@ -606,6 +608,63 @@ rotas.post('/:id/monitorar', async (req, res) => {
   } catch (erro) {
     console.error('Erro no monitoramento:', erro.message);
     res.status(500).json({ erro: 'Não foi possível falar com o portal agora.', detalhe: erro.message });
+  }
+});
+
+// GET /api/licitacoes/:id/ia — a sugestão da leitura assistida (seção 23).
+rotas.get('/:id/ia', async (req, res) => {
+  try {
+    const [[l]] = await pool.query(
+      'SELECT id, ia_resumo, ia_em, ia_situacao, pontuacao, favorito FROM licitacoes WHERE id = ?',
+      [req.params.id]
+    );
+    if (!l) return res.status(404).json({ erro: 'Licitação não encontrada.' });
+
+    res.json({
+      disponivel: servicoIa.disponivel(),
+      situacao: l.ia_situacao,
+      em: l.ia_em,
+      dados: typeof l.ia_resumo === 'string' ? JSON.parse(l.ia_resumo || 'null') : l.ia_resumo,
+    });
+  } catch (erro) {
+    res.status(500).json({ erro: 'Não foi possível carregar a leitura assistida.', detalhe: erro.message });
+  }
+});
+
+// POST /api/licitacoes/:id/ia — lê agora (ou lê de novo, com forcar).
+rotas.post('/:id/ia', async (req, res) => {
+  try {
+    const r = await jobIa.resumirLicitacao({
+      licitacaoId: Number(req.params.id),
+      forcar: Boolean(req.body && req.body.forcar),
+    });
+    if (!r.ok) return res.status(r.desligada ? 409 : 422).json({ erro: r.motivo });
+
+    res.json({
+      ...r,
+      mensagem: r.cache
+        ? 'Leitura recuperada do cache — este edital já havia sido lido, sem custo novo.'
+        : 'Edital lido. Confira: tudo o que está aí é sugestão até você confirmar.',
+    });
+  } catch (erro) {
+    console.error('Erro na leitura assistida:', erro.message);
+    res.status(500).json({ erro: 'Não foi possível ler o edital com a IA.', detalhe: erro.message });
+  }
+});
+
+// PATCH /api/licitacoes/:id/ia — confirmar ou recusar a sugestão.
+// A IA nunca muda pontuação, etapa ou preço: só esta coluna (seção 23.4).
+rotas.patch('/:id/ia', async (req, res) => {
+  const situacao = req.body && req.body.situacao;
+  if (!['confirmado', 'recusado', 'sugerido'].includes(situacao)) {
+    return res.status(400).json({ erro: 'Use situacao: confirmado, recusado ou sugerido.' });
+  }
+  try {
+    const [r] = await pool.query('UPDATE licitacoes SET ia_situacao = ? WHERE id = ?', [situacao, req.params.id]);
+    if (!r.affectedRows) return res.status(404).json({ erro: 'Licitação não encontrada.' });
+    res.json({ ok: true });
+  } catch (erro) {
+    res.status(500).json({ erro: 'Não foi possível salvar.', detalhe: erro.message });
   }
 });
 

@@ -390,4 +390,28 @@ export const api = {
     requisitar(`/oportunidades/${id}`, { method: 'PATCH', body: JSON.stringify(campos) }),
 
   acompanharOrgao: (id) => requisitar(`/oportunidades/${id}/acompanhar`, { method: 'POST' }),
+
+  // ------------ leitura assistida e recorrência (seções 23 e 24)
+  leituraIa: (id) => requisitar(`/licitacoes/${id}/ia`),
+
+  lerComIa: (id, forcar = false) =>
+    requisitar(`/licitacoes/${id}/ia`, { method: 'POST', body: JSON.stringify({ forcar }) }),
+
+  decidirLeituraIa: (id, situacao) =>
+    requisitar(`/licitacoes/${id}/ia`, { method: 'PATCH', body: JSON.stringify({ situacao }) }),
+
+  gastoIa: (dias = 30) => requisitar(`/ia?dias=${dias}`),
+
+  palavrasSugeridas: () => requisitar('/ia/palavras-sugeridas'),
+
+  pedirPalavrasSugeridas: () => requisitar('/ia/palavras-sugeridas', { method: 'POST', body: JSON.stringify({}) }),
+
+  decidirPalavraSugerida: (id, situacao) =>
+    requisitar(`/ia/palavras-sugeridas/${id}`, { method: 'PATCH', body: JSON.stringify({ situacao }) }),
+
+  calendario: (confianca = 0) => requisitar(`/calendario?confianca=${confianca}`),
+
+  detectarRecorrencias: () => requisitar('/calendario/detectar', { method: 'POST' }),
+
+  prepararRecorrencia: (id) => requisitar(`/calendario/${id}/preparar`, { method: 'POST' }),
 };

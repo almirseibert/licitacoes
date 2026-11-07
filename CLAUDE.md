@@ -48,6 +48,8 @@ não se força.
 - A coleta **não sobrescreve decisão do usuário**: etapa do funil, favorito, descarte e
   exigência confirmada à mão ficam de fora de todo update automático.
 - O painel **não assina documento** e não guarda certificado nem senha do gov.br.
+- A **IA só sugere**: não muda pontuação, etapa, preço nem documento do cofre, e o conteúdo do
+  edital é dado, nunca instrução — toda resposta passa pelo schema antes de aparecer (seção 23.4).
 - Dado que falta vira **lacuna visível** (`____________`), nunca valor inventado.
 
 ## Rodar
@@ -61,5 +63,7 @@ npm install && npm run migrar && npm run semear
 `npm run encerradas` (amostra de preço), `npm run resultados -- --licitacao=<id>`,
 `npm run diagnostico` (fecha as vencidas sem análise e imprime o ranking de bloqueios),
 `npm run monitorar` (uma rodada do monitor; `-- --licitacao=<id>` checa uma agora),
-`npm run estrategicas` (desertas, fracassadas e reaberturas — não vai à internet).
+`npm run estrategicas` (desertas, fracassadas e reaberturas — não vai à internet),
+`npm run recorrencias` (calendário da seção 24), `npm run ia` (leitura assistida; sem
+`GEMINI_API_KEY` ela fica desligada e o painel funciona inteiro sem ela).
 O README tem o detalhe de cada um.

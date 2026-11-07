@@ -11,6 +11,8 @@ const encerradas = require('../backend/jobs/encerradas');
 const descartarVencidas = require('../backend/jobs/descartar-vencidas');
 const monitorar = require('../backend/jobs/monitorar');
 const estrategicas = require('../backend/jobs/estrategicas');
+const recorrencias = require('../backend/jobs/recorrencias');
+const iaResumos = require('../backend/jobs/ia-resumos');
 
 const sinal = { parar: false };
 
@@ -30,6 +32,19 @@ let diaDaUltimaVarreduraDeEncerradas = null;
 const HORA_DAS_ESTRATEGICAS = 5;
 let diaDaUltimaVarreduraDeEstrategicas = null;
 
+// `detectar_recorrencias` é semanal, no domingo, e `alertas_recorrencia` é
+// diário às 08h (seção 14). A detecção varre a base inteira e não muda de uma
+// hora para outra; o alerta precisa sair todo dia para não perder o marco.
+const HORA_DAS_RECORRENCIAS = 8;
+let diaDoUltimoAvisoDeRecorrencia = null;
+let semanaDaUltimaDeteccao = null;
+
+function semanaAtual() {
+  const agora = new Date();
+  const inicio = new Date(agora.getFullYear(), 0, 1);
+  return `${agora.getFullYear()}-${Math.floor((agora - inicio) / 604800000)}`;
+}
+
 function hojeLocal() {
   return new Date().toLocaleDateString('en-CA'); // AAAA-MM-DD
 }
@@ -44,6 +59,8 @@ async function principal() {
   descartarVencidas.registrarNaFila();
   monitorar.registrarNaFila();
   estrategicas.registrarNaFila();
+  recorrencias.registrarNaFila();
+  iaResumos.registrarNaFila();
 
   console.log(`Worker de licitações iniciado. Driver da fila: ${cfgFila.driver}.`);
 
@@ -118,6 +135,25 @@ async function principal() {
           `Estratégicas: ${varridas.aguardando} oportunidade(s) aguardando` +
             (varridas.reaberturas.ligadas ? `, ${varridas.reaberturas.ligadas} reabertura(s)` : '') + '.'
         );
+      }
+
+      // Recorrências (seção 24): detecção semanal, aviso diário às 08h.
+      if (agora.getDay() === 0 && semanaDaUltimaDeteccao !== semanaAtual()) {
+        semanaDaUltimaDeteccao = semanaAtual();
+        const detectadas = await recorrencias.detectarRecorrencias({});
+        console.log(`Recorrências: ${detectadas.recorrencias} em ${detectadas.orgaos} órgãos.`);
+      }
+      if (agora.getHours() >= HORA_DAS_RECORRENCIAS && diaDoUltimoAvisoDeRecorrencia !== hojeLocal()) {
+        diaDoUltimoAvisoDeRecorrencia = hojeLocal();
+        const avisados = await recorrencias.avisarRecorrencias({});
+        if (avisados.criados) console.log(`${avisados.criados} alerta(s) de recorrência criados.`);
+      }
+
+      // Leitura assistida (seção 23.3): só entra na fila quem vale o token, e
+      // só se a chave estiver configurada. Sem IA, isto é um no-op barato.
+      const lidas = await iaResumos.enfileirarResumos({ limite: 10 });
+      if (lidas.enfileiradas) {
+        console.log(`Leitura assistida enfileirada para ${lidas.enfileiradas} licitações.`);
       }
 
       // Validade dos documentos do cofre (seção 9.2).

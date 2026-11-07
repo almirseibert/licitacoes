@@ -39,6 +39,25 @@ module.exports = {
     intervaloMs: Number(process.env.FILA_INTERVALO_MS || 30000),
     redisUrl: process.env.REDIS_URL || '',
   },
+  // Leitura assistida (seção 23). Sem GEMINI_API_KEY a IA fica desligada e o
+  // painel funciona inteiro sem ela — é acréscimo, não alicerce.
+  ia: {
+    chave: process.env.GEMINI_API_KEY || '',
+    modelo: process.env.IA_MODELO || 'gemini-2.5-flash',
+    timeoutMs: Number(process.env.IA_TIMEOUT_MS || 90000),
+    // Teto da resposta e quanto dela o modelo pode gastar raciocinando. Os
+    // dois saem do mesmo orçamento no Gemini 2.5 — ver o comentário em
+    // servicos/ia.js.
+    maxTokensSaida: Number(process.env.IA_MAX_TOKENS_SAIDA || 4096),
+    orcamentoRaciocinio: Number(process.env.IA_ORCAMENTO_RACIOCINIO || 512),
+    // Pontuação a partir da qual vale gastar token (seção 23.3).
+    pontuacaoMinima: Number(process.env.IA_PONTUACAO_MINIMA || 55),
+    // Preço por milhão de tokens, em reais, para o livro-caixa. Fica em
+    // variável porque muda sem aviso e não se reescreve código por tabela de
+    // preço.
+    precoEntrada: Number(process.env.IA_PRECO_ENTRADA || 0),
+    precoSaida: Number(process.env.IA_PRECO_SAIDA || 0),
+  },
   http: {
     userAgent: process.env.USER_AGENT || 'StudioMythosLicitacoes/1.0 (+https://studiomythos.com.br)',
     timeoutMs: Number(process.env.HTTP_TIMEOUT_MS || 30000),
