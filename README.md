@@ -3,7 +3,7 @@
 CRM de captação e inscrição em licitações de órgãos públicos. A especificação completa
 está em [PAINEL_LICITACOES_INSTRUCOES.md](PAINEL_LICITACOES_INSTRUCOES.md) — 32 seções, 14 fases.
 
-**Estado: Fases 1 a 6 implementadas e validadas em 02/11/2026.**
+**Estado: Fases 1 a 7 implementadas e validadas — as seis primeiras em 02/11/2026, a Fase 7 em 07/11/2026.**
 
 A primeira coleta real no PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas
 com link que abre o edital no portal. Depois, pela tela, a palavra "videomonitoramento" foi
@@ -26,6 +26,14 @@ licitação, e o pacote passou a 13 peças em 51 folhas — o aceite da Fase 5.1
 
 Por fim, mover um card para **"Vou disputar"** criou na hora o aviso de 48 h, que apareceu no
 sino do painel — o aceite da Fase 6.
+
+A Fase 7 mediu o preço: **3.817 contratações encerradas** coletadas do PNCP, e as medianas que o
+painel calculou sozinho bateram com o levantamento da seção 12 — **Geral · Pregão: 30,8% de
+desconto mediano contra os 32% do estudo, e 3º quartil de 49,3% contra 50%**. Abrindo a licitação
+de **portal institucional da Câmara de Canoas** (Pregão eletrônico, R$ 17.282,40), a tela mostrou
+**"fecha normalmente por R$ 12.878,84"** com a faixa provável de R$ 9.227 a R$ 15.456 — o aceite
+da Fase 7. Com o custo de R$ 9.000 preenchido, o painel respondeu **margem de 30% no preço
+mediano: licitação para disputar**.
 
 O que existe hoje:
 
@@ -86,6 +94,17 @@ O que existe hoje:
 | Alerta de 48 h e 2 h | [backend/jobs/prazos.js](backend/jobs/prazos.js) |
 | Sino de alertas | [frontend/src/componentes/Alertas.jsx](frontend/src/componentes/Alertas.jsx) |
 | Alerta por e-mail (opcional) | [backend/servicos/email.js](backend/servicos/email.js) |
+
+| Item da Fase 7 | Onde |
+|---|---|
+| Tabelas `historico_precos`, `precos_referencia`, `propostas_concorrentes` | [backend/migrations/008_precos.sql](backend/migrations/008_precos.sql) |
+| Medianas, quartis, faixa e margem | [backend/regras/preco.js](backend/regras/preco.js) |
+| Escolha da referência e recálculo | [backend/servicos/preco.js](backend/servicos/preco.js) |
+| Jobs `coletar_encerradas` e resultado por item | [backend/jobs/encerradas.js](backend/jobs/encerradas.js) |
+| Adaptador `comprasgov` (e por que ele bloqueia) | [backend/adaptadores/comprasgov.js](backend/adaptadores/comprasgov.js) |
+| Aba Preço da licitação | [frontend/src/paginas/Preco.jsx](frontend/src/paginas/Preco.jsx) |
+| Aba Concorrentes | [frontend/src/paginas/Concorrentes.jsx](frontend/src/paginas/Concorrentes.jsx) |
+| Tela de preço de referência | [frontend/src/paginas/Precos.jsx](frontend/src/paginas/Precos.jsx) |
 
 Tudo em português: código, comentários, tabelas, interface.
 
@@ -243,6 +262,32 @@ gravado com tamanho maior que zero é pulado, então rodar de novo só busca o q
 o portal publicou depois. Pela tela, a aba **Arquivos** de cada licitação faz o mesmo pela fila,
 abre PDF ali mesmo e entrega a pasta inteira em `.zip`.
 
+### 10. Preço de referência e concorrentes
+
+A amostra de preço vem das contratações **já encerradas**, que o painel guarda separadas das do
+radar — encerrada não serve para disputar, serve para saber por quanto fecha:
+
+```bash
+npm run encerradas
+```
+
+Varre o PNCP com as palavras ativas, grava estimado × homologado em `historico_precos` e
+recalcula as medianas por grupo e modalidade. Leva alguns minutos: a conduta da seção 5.4 pede
+1,5 s entre chamadas. No worker isso roda sozinho uma vez por dia, às 03h.
+
+Com a amostra de pé, a aba **Preço** de cada licitação mostra o bloco da seção 12 — estimado,
+"fecha normalmente por", faixa provável — e o campo **Seu custo**, que é o que transforma a faixa
+em decisão. A tela **Preço de referência** mostra as duas origens lado a lado: o levantamento de
+10/10/2026 e o que o painel mediu, com o tamanho de cada amostra.
+
+Quem ficou com cada item vem do resultado homologado do PNCP:
+
+```bash
+npm run resultados -- --licitacao=677
+```
+
+O mesmo botão existe na aba **Concorrentes** da licitação.
+
 ---
 
 ## Arquitetura
@@ -331,6 +376,11 @@ POST   /api/licitacoes/:id/exigencias/:codigo/soltar   volta ao automático
 POST   /api/licitacoes/:id/baixar  GET /api/licitacoes/:id/arquivos
 GET    /api/licitacoes/:id/arquivos/:arqId     ?baixar=1 força download
 GET    /api/licitacoes/:id/zip     a pasta inteira
+GET    /api/licitacoes/:id/preco   PATCH /api/licitacoes/:id/preco   grava o seu custo
+GET    /api/licitacoes/:id/concorrentes        POST /api/licitacoes/:id/concorrentes
+GET    /api/precos-referencia      POST /api/precos-referencia/recalcular
+POST   /api/precos-referencia/coletar          varre as encerradas (leva minutos)
+GET    /api/concorrentes           GET /api/concorrentes/:cnpj
 GET    /api/painel/resumo          GET /api/saude
 ```
 
@@ -344,12 +394,27 @@ O perfil da empresa está com os valores do seed. Complete em **Configurações*
 social, o endereço e o representante legal com CPF: sem eles, a capa do pacote e as declarações
 saem com lacuna (`____________`), de propósito — o painel nunca inventa dado.
 
-## Próximo passo — Fase 7
+## Próximo passo — Fase 8
 
-Preço e concorrência (seções 12 e 26): adaptador `comprasgov` para puxar as propostas dos
-concorrentes, tabela `propostas_concorrentes`, histórico de preços por grupo e modalidade, e a
-ficha do concorrente. O aceite é, ao abrir uma licitação parecida com outra já disputada, o
-painel sugerir a faixa de preço praticada.
+Gerador de proposta (seção 19): tabelas `propostas` e `proposta_itens` puxando os itens do
+edital, cálculo de custo, margem e preço com as três referências e o semáforo, alerta de
+inexequibilidade, e saída em PDF (sem custo) e XLSX com fórmulas vivas. O aceite é gerar a
+proposta de uma licitação de 20 itens, conferir que o XLSX recalcula ao mudar a quantidade e que
+nenhuma coluna de custo aparece no PDF.
+
+### Sobre o Compras.gov.br — o que a Fase 7 encontrou
+
+A seção 5.2 supõe que a lista completa de propostas possa ser lida "do HTML público renderizado"
+do Compras.gov.br. **Não pode.** A página de acompanhamento é uma aplicação Angular: o HTML que o
+servidor entrega (52 kB, medido em 07/11/2026) é só a casca, e os dados chegam depois por uma API
+JSON que exige token de hCaptcha. A própria seção 5.2 diz o que fazer nesse caso, e é o que o
+painel faz: `ultimo_status = 'bloqueado'`, link para abrir à mão, e **nunca resolver CAPTCHA**.
+
+No lugar das dezessete propostas por item, o painel usa o que o PNCP publica em API aberta: o
+**resultado homologado por item**, com CNPJ, porte e valor unitário. É menos, é real, e a tela diz
+de onde veio. Em registro de preços o PNCP devolve vários fornecedores para o mesmo item — foi
+assim na licitação de telefonia da ALEPE, com TIM, Telefônica, Claro e a IVM (ME/EPP) no mesmo
+item, e a IVM levando por R$ 91,80 contra R$ 99,90 das três.
 
 ### O que o PNCP nos ensinou até aqui
 

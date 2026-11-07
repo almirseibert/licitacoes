@@ -7,3 +7,6 @@ dist/
 # backend/config/dados/, que é código do seed.
 /dados/
 .DS_Store
+
+# Preferências locais da ferramenta; o launch.json do dev server fica versionado.
+.claude/settings.local.json

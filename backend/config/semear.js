@@ -7,6 +7,8 @@ const pool = require('../config/db');
 const perfilPadrao = require('./dados/perfil-padrao');
 const kitsPadrao = require('./dados/kits-padrao');
 const modelosDeclaracao = require('./dados/modelos-declaracao');
+const encerradas = require('../jobs/encerradas');
+const regrasPreco = require('../regras/preco');
 
 const FONTES = [
   {
@@ -27,7 +29,8 @@ const FONTES = [
     ativa: 0,
     intervalo_horas: 12,
     prioridade: 2,
-    observacao: 'Propostas, concorrentes e resultado detalhado. Adaptador entra na Fase 7.',
+    observacao:
+      'Completa as propostas de uma licitação que o PNCP já trouxe. O portal carrega o quadro por JavaScript atrás de CAPTCHA: o painel não força e mostra o link para abrir à mão.',
   },
   {
     nome: 'Portal de Compras Públicas',
@@ -269,6 +272,7 @@ async function principal() {
   const perfil = await semearPerfil();
   const kits = await semearKits();
   const modelos = await semearModelos();
+  const precos = await encerradas.semearEstudo();
 
   console.log(`Fontes inseridas: ${fontes} (de ${FONTES.length}).`);
   console.log(`Palavras-chave inseridas: ${palavras} (de ${PALAVRAS.length}).`);
@@ -280,6 +284,9 @@ async function principal() {
   );
   console.log(`Kits de documentos criados: ${kits} (de ${kitsPadrao.length}).`);
   console.log(`Modelos de declaração criados: ${modelos} (de ${modelosDeclaracao.length}).`);
+  console.log(
+    `Preços de referência do levantamento de 10/10/2026: ${precos} (de ${regrasPreco.ESTUDO.length}).`
+  );
   console.log('Seed concluído. O que já existia foi preservado.');
   await pool.end();
 }

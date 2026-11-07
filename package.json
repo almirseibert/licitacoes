@@ -16,7 +16,9 @@
     "baixar": "node backend/jobs/executar-download.js",
     "ler": "node backend/jobs/executar-leitura.js",
     "build": "npm --prefix frontend ci && npm --prefix frontend run build",
-    "postinstall": "echo \"Rode: npm run migrar && npm run semear\""
+    "postinstall": "echo \"Rode: npm run migrar && npm run semear\"",
+    "encerradas": "node backend/jobs/executar-encerradas.js",
+    "resultados": "node backend/jobs/executar-resultados.js"
   },
   "engines": {
     "node": ">=20"

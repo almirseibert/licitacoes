@@ -300,4 +300,33 @@ export const api = {
 
   anotar: (id, texto) =>
     requisitar(`/licitacoes/${id}/anotacoes`, { method: 'POST', body: JSON.stringify({ texto }) }),
+  // --------------------------------------- preço e concorrência (seção 12)
+  preco: (id) => requisitar(`/licitacoes/${id}/preco`),
+
+  salvarCusto: (id, custo) =>
+    requisitar(`/licitacoes/${id}/preco`, {
+      method: 'PATCH',
+      body: JSON.stringify({ custo_estimado: custo }),
+    }),
+
+  concorrentesDa: (id) => requisitar(`/licitacoes/${id}/concorrentes`),
+
+  buscarResultados: (id) => requisitar(`/licitacoes/${id}/concorrentes`, { method: 'POST' }),
+
+  precosReferencia: () => requisitar('/precos-referencia'),
+
+  recalcularPrecos: () => requisitar('/precos-referencia/recalcular', { method: 'POST' }),
+
+  coletarEncerradas: (corpo = {}) =>
+    requisitar('/precos-referencia/coletar', { method: 'POST', body: JSON.stringify(corpo) }),
+
+  concorrentes: (parametros = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(parametros).forEach(([chave, valor]) => {
+      if (valor !== '' && valor !== null && valor !== undefined) q.set(chave, valor);
+    });
+    return requisitar(`/concorrentes?${q.toString()}`);
+  },
+
+  concorrente: (cnpj) => requisitar(`/concorrentes/${cnpj}`),
 };

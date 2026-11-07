@@ -7,6 +7,7 @@ const baixar = require('../backend/jobs/baixar');
 const lerEdital = require('../backend/jobs/ler-edital');
 const validades = require('../backend/jobs/validades');
 const prazos = require('../backend/jobs/prazos');
+const encerradas = require('../backend/jobs/encerradas');
 
 const sinal = { parar: false };
 
@@ -14,12 +15,24 @@ const sinal = { parar: false };
 // fonte (seção 14). Quando a fila virar bullmq, isto passa a ser um job repetido.
 const UMA_HORA = 60 * 60 * 1000;
 
+// `coletar_encerradas` é diário, às 03h (seção 14): varredura larga, de
+// madrugada, na janela de coleta preferencial da seção 5.4. O worker só guarda
+// o dia da última: reiniciar o container no meio da tarde não dispara uma
+// varredura fora de hora.
+const HORA_DAS_ENCERRADAS = 3;
+let diaDaUltimaVarreduraDeEncerradas = null;
+
+function hojeLocal() {
+  return new Date().toLocaleDateString('en-CA'); // AAAA-MM-DD
+}
+
 async function principal() {
   coletar.registrarNaFila();
   baixar.registrarNaFila();
   lerEdital.registrarNaFila();
   validades.registrarNaFila();
   prazos.registrarNaFila();
+  encerradas.registrarNaFila();
 
   console.log(`Worker de licitações iniciado. Driver da fila: ${cfgFila.driver}.`);
 
@@ -53,6 +66,14 @@ async function principal() {
         console.log(`${prazo.criados} alerta(s) de prazo criados${prazo.email && prazo.email.enviado ? ' e enviados por e-mail' : ''}.`);
       }
       await prazos.avisarPrioridadeAlta({});
+
+      // Amostra de preço: contratações encerradas, uma vez por dia (seção 12).
+      const agora = new Date();
+      if (agora.getHours() >= HORA_DAS_ENCERRADAS && diaDaUltimaVarreduraDeEncerradas !== hojeLocal()) {
+        diaDaUltimaVarreduraDeEncerradas = hojeLocal();
+        await fila.enfileirar('coletar_encerradas', {}, { prioridade: 20, chaveUnica: `encerradas:${hojeLocal()}` });
+        console.log('Coleta de encerradas enfileirada para hoje.');
+      }
 
       // Validade dos documentos do cofre (seção 9.2).
       const validade = await validades.verificarValidades();

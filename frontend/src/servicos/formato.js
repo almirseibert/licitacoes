@@ -22,7 +22,14 @@ export function dataHora(valor) {
 
 export function data(valor) {
   if (!valor) return '—';
-  const d = new Date(valor);
+
+  // Data pura do MySQL ('2026-10-10') vira meia-noite UTC no construtor do
+  // Date, e no fuso de Brasília isso é o dia anterior: 10/10 aparecia como
+  // 09/10. Data sem hora é dia de calendário, não instante — é montada campo a
+  // campo, no fuso local.
+  const puro = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(valor));
+  const d = puro ? new Date(Number(puro[1]), Number(puro[2]) - 1, Number(puro[3])) : new Date(valor);
+
   if (Number.isNaN(d.getTime())) return '—';
   return d.toLocaleDateString('pt-BR');
 }

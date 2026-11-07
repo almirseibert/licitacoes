@@ -7,16 +7,20 @@ import Contagem from '../componentes/Contagem';
 import Exigencias from './Exigencias';
 import Envio from './Envio';
 import Historico from './Historico';
+import Preco from './Preco';
+import Concorrentes from './Concorrentes';
 
+// As oito etapas da seção 10 — as mesmas de regras/funil.js no backend.
+// 'Documentação' e 'Resultado' eram de um rascunho anterior e o backend recusa:
+// o seletor da gaveta ficou oferecendo etapa inválida até aqui.
 const ETAPAS = [
-  'Triagem', 'Analisando', 'Vou disputar', 'Documentação',
-  'Proposta enviada', 'Em disputa', 'Resultado', 'Descartada',
+  'Triagem', 'Analisando', 'Vou disputar', 'Proposta enviada',
+  'Em disputa', 'Ganhamos', 'Perdemos', 'Descartada',
 ];
 
 /**
- * Gaveta de detalhe da licitação (seção 11.2). Hoje traz Resumo, Itens,
- * Pontuação e Arquivos; Exigências, Preço, Concorrentes e Anotações entram nas
- * fases seguintes.
+ * Gaveta de detalhe da licitação (seção 11.2): Resumo, Itens, Pontuação,
+ * Arquivos, Exigências, Preço, Concorrentes, Montar envio e Histórico.
  */
 export default function Detalhe({ id, onFechar }) {
   const [licitacao, setLicitacao] = useState(null);
@@ -141,6 +145,8 @@ export default function Detalhe({ id, onFechar }) {
                   ['pontuacao', 'Pontuação'],
                   ['arquivos', 'Arquivos'],
                   ['exigencias', 'Exigências'],
+                  ['preco', 'Preço'],
+                  ['concorrentes', 'Concorrentes'],
                   ['envio', 'Montar envio'],
                   ['historico', 'Histórico'],
                 ].map(([chave, rotulo]) => (
@@ -171,6 +177,8 @@ export default function Detalhe({ id, onFechar }) {
               {aba === 'pontuacao' && <Pontuacao detalhe={licitacao.pontuacao_detalhe} />}
               {aba === 'arquivos' && <Arquivos id={id} />}
               {aba === 'exigencias' && <Exigencias id={id} />}
+              {aba === 'preco' && <Preco id={id} />}
+              {aba === 'concorrentes' && <Concorrentes id={id} />}
               {aba === 'envio' && <Envio id={id} />}
               {aba === 'historico' && <Historico id={id} />}
             </div>

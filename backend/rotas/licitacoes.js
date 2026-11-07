@@ -207,6 +207,7 @@ const CAMPOS_DO_FUNIL = {
   valor_final: 'valor_final',
   vencedor: 'vencedor',
   cnpj_vencedor: 'cnpj_vencedor',
+  custo_estimado: 'custo_estimado',
 };
 
 rotas.patch('/:id', async (req, res) => {
@@ -472,6 +473,9 @@ rotas.use('/:id/envio', require('./envio'));
 
 // Declarações geradas com os dados da licitação (seção 18).
 rotas.use('/:id/declaracoes', require('./declaracoes'));
+
+// Preço de referência e concorrentes da licitação (seção 12).
+rotas.use('/:id', require('./preco'));
 
 // POST /api/licitacoes/:id/ler — relê o edital já baixado e refaz o checklist.
 rotas.post('/:id/ler', async (req, res) => {
