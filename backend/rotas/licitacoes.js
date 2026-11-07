@@ -474,6 +474,9 @@ rotas.use('/:id/envio', require('./envio'));
 // Declarações geradas com os dados da licitação (seção 18).
 rotas.use('/:id/declaracoes', require('./declaracoes'));
 
+// Gerador de proposta (seção 19).
+rotas.use('/:id/propostas', require('./propostas'));
+
 // Preço de referência e concorrentes da licitação (seção 12).
 rotas.use('/:id', require('./preco'));
 

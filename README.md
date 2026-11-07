@@ -3,7 +3,7 @@
 CRM de captação e inscrição em licitações de órgãos públicos. A especificação completa
 está em [PAINEL_LICITACOES_INSTRUCOES.md](PAINEL_LICITACOES_INSTRUCOES.md) — 32 seções, 14 fases.
 
-**Estado: Fases 1 a 7 implementadas e validadas — as seis primeiras em 02/11/2026, a Fase 7 em 07/11/2026.**
+**Estado: Fases 1 a 8 implementadas e validadas — as seis primeiras em 02/11/2026, as Fases 7 e 8 em 07/11/2026.**
 
 A primeira coleta real no PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas
 com link que abre o edital no portal. Depois, pela tela, a palavra "videomonitoramento" foi
@@ -34,6 +34,21 @@ de **portal institucional da Câmara de Canoas** (Pregão eletrônico, R$ 17.282
 **"fecha normalmente por R$ 12.878,84"** com a faixa provável de R$ 9.227 a R$ 15.456 — o aceite
 da Fase 7. Com o custo de R$ 9.000 preenchido, o painel respondeu **margem de 30% no preço
 mediano: licitação para disputar**.
+
+A Fase 8 fechou o ciclo com a proposta. Na licitação real de **registro de preços de material
+permanente do Município de Aparecida/SP** (Pregão eletrônico 17, R$ 3.106.412,59, **62 itens**
+puxados do edital), 20 itens entraram na disputa com custo e margem informados: total de
+**R$ 1.043.736,42**, custo de R$ 777.505,65 e o rodapé respondendo **"a esse preço, sobram
+R$ 266.230,77 no contrato inteiro"** — 7 itens verdes e 13 amarelos pelo semáforo da seção 19.
+Forçando um item a 20% do estimado, o painel marcou vermelho e levantou o **alerta de
+inexequibilidade**. O **PDF saiu com 2 páginas e os 20 itens, sem um único valor de custo e sem
+a palavra "margem"**; o **XLSX, aberto no Excel 16.0**, trouxe as colunas Item, Descrição,
+Marca/Modelo, Unidade, Quantidade, Valor unitário e Valor total — nenhuma de custo — com
+`=SUM(G8:G27)` fechando nos mesmos R$ 1.043.736,42 do PDF e, **ao mudar a quantidade do item 1 de
+20 para 40, a linha foi a R$ 67.322,85 e o total a R$ 1.077.397,85 sozinho**. Esse é o aceite da
+Fase 8. Os dois arquivos entraram no **bloco 3 de "Montar envio"** já marcados: o pacote saiu com
+9 peças, a proposta mesclada no PDF único de 47 folhas e a planilha ao lado, como manda a
+seção 17.5 para arquivo que não é PDF.
 
 O que existe hoje:
 
@@ -105,6 +120,17 @@ O que existe hoje:
 | Aba Preço da licitação | [frontend/src/paginas/Preco.jsx](frontend/src/paginas/Preco.jsx) |
 | Aba Concorrentes | [frontend/src/paginas/Concorrentes.jsx](frontend/src/paginas/Concorrentes.jsx) |
 | Tela de preço de referência | [frontend/src/paginas/Precos.jsx](frontend/src/paginas/Precos.jsx) |
+
+| Item da Fase 8 | Onde |
+|---|---|
+| Tabelas `propostas` e `proposta_itens` | [backend/migrations/009_propostas.sql](backend/migrations/009_propostas.sql) |
+| Preço, margem, semáforo e inexequibilidade | [backend/regras/proposta.js](backend/regras/proposta.js) |
+| Itens do edital, totais e geração da saída | [backend/servicos/proposta.js](backend/servicos/proposta.js) |
+| PDF sem custo e XLSX com fórmula viva | [backend/servicos/proposta-saida.js](backend/servicos/proposta-saida.js) |
+| Escritor de XLSX (fórmula sem valor colado) | [backend/servicos/planilha.js](backend/servicos/planilha.js) |
+| Rotas da proposta | [backend/rotas/propostas.js](backend/rotas/propostas.js) |
+| Aba Proposta da licitação | [frontend/src/paginas/Proposta.jsx](frontend/src/paginas/Proposta.jsx) |
+| Proposta no bloco 3 de "Montar envio" | [backend/servicos/envio.js](backend/servicos/envio.js), [frontend/src/paginas/Envio.jsx](frontend/src/paginas/Envio.jsx) |
 
 Tudo em português: código, comentários, tabelas, interface.
 
@@ -288,6 +314,23 @@ npm run resultados -- --licitacao=677
 
 O mesmo botão existe na aba **Concorrentes** da licitação.
 
+### 11. Proposta
+
+Também não tem comando de terminal: a aba **Proposta** da licitação faz tudo. O botão **Gerar
+proposta** copia os itens do edital — descrição, unidade e quantidade — e você preenche só
+**custo** e **margem**; o preço, o total e o semáforo saem da conta. Para licitação de muitos
+itens, o campo **margem em todos os itens com custo** resolve de uma vez e você corrige as
+exceções.
+
+Cada linha mostra as três referências lado a lado: o **estimado do órgão**, o que **costuma
+fechar** naquele grupo (mediana da seção 12 aplicada ao item) e o **seu preço**. Verde é abaixo
+da mediana, amarelo entre a mediana e o estimado, vermelho acima do estimado — ou abaixo do seu
+custo, ou abaixo de 30% do estimado, que é o **alerta de inexequibilidade**. Item que você não
+vai disputar sai da proposta pela caixa `disp`, sem perder a linha.
+
+**Gerar PDF e XLSX** escreve os dois no volume e eles aparecem marcados no bloco 3 de **Montar
+envio**. Custo e margem ficam na tela e **não saem em nenhum dos dois arquivos** (seção 19.4).
+
 ---
 
 ## Arquitetura
@@ -378,6 +421,14 @@ GET    /api/licitacoes/:id/arquivos/:arqId     ?baixar=1 força download
 GET    /api/licitacoes/:id/zip     a pasta inteira
 GET    /api/licitacoes/:id/preco   PATCH /api/licitacoes/:id/preco   grava o seu custo
 GET    /api/licitacoes/:id/concorrentes        POST /api/licitacoes/:id/concorrentes
+GET    /api/licitacoes/:id/propostas           POST /api/licitacoes/:id/propostas
+GET    /api/licitacoes/:id/propostas/:pid      PATCH /api/licitacoes/:id/propostas/:pid
+PATCH  /api/licitacoes/:id/propostas/:pid/itens/:itemId
+POST   /api/licitacoes/:id/propostas/:pid/itens    traz item novo do edital
+POST   /api/licitacoes/:id/propostas/:pid/margem   mesma margem em todos com custo
+POST   /api/licitacoes/:id/propostas/:pid/saida    gera o PDF e o XLSX
+GET    /api/licitacoes/:id/propostas/:pid/arquivo/:formato   pdf | xlsx, ?baixar=1
+DELETE /api/licitacoes/:id/propostas/:pid
 GET    /api/precos-referencia      POST /api/precos-referencia/recalcular
 POST   /api/precos-referencia/coletar          varre as encerradas (leva minutos)
 GET    /api/concorrentes           GET /api/concorrentes/:cnpj
@@ -394,13 +445,29 @@ O perfil da empresa está com os valores do seed. Complete em **Configurações*
 social, o endereço e o representante legal com CPF: sem eles, a capa do pacote e as declarações
 saem com lacuna (`____________`), de propósito — o painel nunca inventa dado.
 
-## Próximo passo — Fase 8
+## Próximo passo — Fase 9
 
-Gerador de proposta (seção 19): tabelas `propostas` e `proposta_itens` puxando os itens do
-edital, cálculo de custo, margem e preço com as três referências e o semáforo, alerta de
-inexequibilidade, e saída em PDF (sem custo) e XLSX com fórmulas vivas. O aceite é gerar a
-proposta de uma licitação de 20 itens, conferir que o XLSX recalcula ao mudar a quantidade e que
-nenhuma coluna de custo aparece no PDF.
+Diagnóstico de descarte (seção 20): motivos padronizados com o código da exigência que barrou,
+tela de diagnóstico com ranking de bloqueios e valor em jogo, simulação "se você tivesse X" e
+descarte automático por prazo vencido com motivo `nao_analisada`. O aceite é, com 90 dias de uso,
+a tela apontar o bloqueio nº 1 e o valor que ele custou.
+
+### Sobre o XLSX — por que escrito à mão
+
+O edital que pede planilha editável quer **fórmula viva**, não número colado: o pregoeiro muda a
+quantidade e o total tem de acompanhar. Nenhuma biblioteca leve de planilha entrega isso sem
+gravar o valor em cache junto, então [backend/servicos/planilha.js](backend/servicos/planilha.js)
+escreve o XLSX direto — seis XMLs num zip, com `adm-zip`, que já era dependência por causa do
+edital compactado. A célula de fórmula sai sem `<v>` e a pasta declara `fullCalcOnLoad`: sem esse
+par, Excel e LibreOffice mostram célula vazia até alguém editar o arquivo.
+
+Duas armadilhas custaram tempo e ficaram registradas no código:
+
+- o código de formato de moeda leva aspas (`"R$" #,##0.00`) e **precisa ir escapado** dentro do
+  atributo XML; sem isso o `styles.xml` fica inválido e o Excel recusa a planilha inteira;
+- o total da linha é `ROUND(qtd × unitário; 2)`, e o painel arredonda **meio para cima**, como o
+  Excel — com `toFixed` do JavaScript, R$ 25.608,405 virava 25.608,40 no PDF e 25.608,41 na
+  planilha, e dois totais diferentes no mesmo envelope é pedido de impugnação.
 
 ### Sobre o Compras.gov.br — o que a Fase 7 encontrou
 

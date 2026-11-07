@@ -8,6 +8,7 @@ import Exigencias from './Exigencias';
 import Envio from './Envio';
 import Historico from './Historico';
 import Preco from './Preco';
+import Proposta from './Proposta';
 import Concorrentes from './Concorrentes';
 
 // As oito etapas da seção 10 — as mesmas de regras/funil.js no backend.
@@ -20,7 +21,7 @@ const ETAPAS = [
 
 /**
  * Gaveta de detalhe da licitação (seção 11.2): Resumo, Itens, Pontuação,
- * Arquivos, Exigências, Preço, Concorrentes, Montar envio e Histórico.
+ * Arquivos, Exigências, Preço, Concorrentes, Proposta, Montar envio e Histórico.
  */
 export default function Detalhe({ id, onFechar }) {
   const [licitacao, setLicitacao] = useState(null);
@@ -147,6 +148,7 @@ export default function Detalhe({ id, onFechar }) {
                   ['exigencias', 'Exigências'],
                   ['preco', 'Preço'],
                   ['concorrentes', 'Concorrentes'],
+                  ['proposta', 'Proposta'],
                   ['envio', 'Montar envio'],
                   ['historico', 'Histórico'],
                 ].map(([chave, rotulo]) => (
@@ -179,6 +181,7 @@ export default function Detalhe({ id, onFechar }) {
               {aba === 'exigencias' && <Exigencias id={id} />}
               {aba === 'preco' && <Preco id={id} />}
               {aba === 'concorrentes' && <Concorrentes id={id} />}
+              {aba === 'proposta' && <Proposta id={id} />}
               {aba === 'envio' && <Envio id={id} />}
               {aba === 'historico' && <Historico id={id} />}
             </div>

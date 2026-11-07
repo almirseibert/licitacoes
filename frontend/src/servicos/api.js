@@ -288,6 +288,47 @@ export const api = {
       body: JSON.stringify({ modelos }),
     }),
 
+  // ------------------------------------------- gerador de proposta (seção 19)
+  propostas: (licitacaoId) => requisitar(`/licitacoes/${licitacaoId}/propostas`),
+
+  criarProposta: (licitacaoId) =>
+    requisitar(`/licitacoes/${licitacaoId}/propostas`, { method: 'POST', body: JSON.stringify({}) }),
+
+  proposta: (licitacaoId, propostaId) => requisitar(`/licitacoes/${licitacaoId}/propostas/${propostaId}`),
+
+  salvarProposta: (licitacaoId, propostaId, campos) =>
+    requisitar(`/licitacoes/${licitacaoId}/propostas/${propostaId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(campos),
+    }),
+
+  salvarItemProposta: (licitacaoId, propostaId, itemId, campos) =>
+    requisitar(`/licitacoes/${licitacaoId}/propostas/${propostaId}/itens/${itemId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(campos),
+    }),
+
+  margemDaProposta: (licitacaoId, propostaId, margem) =>
+    requisitar(`/licitacoes/${licitacaoId}/propostas/${propostaId}/margem`, {
+      method: 'POST',
+      body: JSON.stringify({ margem_pct: margem }),
+    }),
+
+  puxarItensDaProposta: (licitacaoId, propostaId) =>
+    requisitar(`/licitacoes/${licitacaoId}/propostas/${propostaId}/itens`, { method: 'POST' }),
+
+  gerarSaidaDaProposta: (licitacaoId, propostaId) =>
+    requisitar(`/licitacoes/${licitacaoId}/propostas/${propostaId}/saida`, { method: 'POST' }),
+
+  verPropostaPdf: (licitacaoId, propostaId) =>
+    obterBlob(`/licitacoes/${licitacaoId}/propostas/${propostaId}/arquivo/pdf`),
+
+  baixarArquivoDaProposta: (licitacaoId, propostaId, formato, nome) =>
+    salvarComo(`/licitacoes/${licitacaoId}/propostas/${propostaId}/arquivo/${formato}?baixar=1`, nome),
+
+  apagarProposta: (licitacaoId, propostaId) =>
+    requisitar(`/licitacoes/${licitacaoId}/propostas/${propostaId}`, { method: 'DELETE' }),
+
   // ------------------------------------------------- funil e alertas
   alertas: (lido) => requisitar(`/alertas${lido === undefined ? '' : `?lido=${lido ? 1 : 0}`}`),
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Download, Paperclip, Trash2, AlertTriangle, PackageCheck, RotateCcw, FileSignature, Eye } from 'lucide-react';
+import { Loader2, Download, Paperclip, Trash2, AlertTriangle, PackageCheck, RotateCcw, FileSignature, FileSpreadsheet, Eye } from 'lucide-react';
 import { api } from '../servicos/api';
-import { dataHora } from '../servicos/formato';
+import { dataHora, moedaExata } from '../servicos/formato';
 
 /**
  * Tela "Montar envio" (seção 17.4), em três blocos: documentos da empresa,
@@ -16,6 +16,7 @@ export default function Envio({ id }) {
   const [marcados, setMarcados] = useState(new Set());
   const [anexosMarcados, setAnexosMarcados] = useState(new Set());
   const [declaracoes, setDeclaracoes] = useState(new Set());
+  const [propostas, setPropostas] = useState(new Set());
   const [vendo, setVendo] = useState(null);
   const [formato, setFormato] = useState('pdf');
   const [erro, setErro] = useState(null);
@@ -32,6 +33,7 @@ export default function Envio({ id }) {
         setMarcados(new Set(r.documentos.filter((d) => d.marcado).map((d) => d.documento_id)));
         setAnexosMarcados(new Set(r.anexos.map((a) => a.id)));
         setDeclaracoes(new Set(r.declaracoes.filter((d) => d.marcado).map((d) => d.modelo_id)));
+        setPropostas(new Set((r.propostas || []).filter((p) => p.marcado).map((p) => p.chave)));
         setErro(null);
       })
       .catch((e) => setErro(e.message));
@@ -78,6 +80,7 @@ export default function Envio({ id }) {
         formato,
         documentos: escolhidos.map((d) => d.documento_id),
         declaracoes: [...declaracoes],
+        propostas: [...propostas],
         anexos: [...anexosMarcados],
         confirma_vencidos: escolhidos.some((d) => d.vencido),
       });
@@ -106,7 +109,11 @@ export default function Envio({ id }) {
   if (erro && !dados) return <p className="text-sm text-erro">{erro}</p>;
   if (!dados) return <Loader2 size={16} className="animate-spin text-texto-suave" />;
 
-  const escolhidos = dados.documentos.filter((d) => marcados.has(d.documento_id)).length;
+  const escolhidos =
+    dados.documentos.filter((d) => marcados.has(d.documento_id)).length +
+    declaracoes.size +
+    propostas.size +
+    anexosMarcados.size;
 
   return (
     <div className="space-y-4">
@@ -265,7 +272,43 @@ export default function Envio({ id }) {
           />
         </header>
 
-        {dados.anexos.length ? (
+        {/* A proposta da seção 19, já gerada, entra aqui sem passar por download. */}
+        {(dados.propostas || []).length > 0 && (
+          <table className="w-full text-sm tabela-densa border-b border-borda">
+            <tbody>
+              {dados.propostas.map((p) => (
+                <tr key={p.chave}>
+                  <td className="w-8">
+                    <input
+                      type="checkbox"
+                      checked={propostas.has(p.chave)}
+                      onChange={() => {
+                        const novo = new Set(propostas);
+                        if (novo.has(p.chave)) novo.delete(p.chave);
+                        else novo.add(p.chave);
+                        setPropostas(novo);
+                      }}
+                    />
+                  </td>
+                  <td className="text-xs">
+                    <FileSpreadsheet size={11} className="inline mr-1 text-texto-suave" />
+                    {p.titulo}
+                    <span className="ml-2 text-[11px] text-voltagem">gerada pelo painel · proposta #{p.proposta_id}</span>
+                    {p.status !== 'final' && (
+                      <span className="ml-2 text-[11px] text-atencao">{p.status}</span>
+                    )}
+                  </td>
+                  <td className="w-28 text-right font-mono text-xs text-texto-suave">
+                    {p.valor_total === null ? '—' : moedaExata(p.valor_total)}
+                  </td>
+                  <td className="w-10" />
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
+        {dados.anexos.length || (dados.propostas || []).length ? (
           <table className="w-full text-sm tabela-densa">
             <tbody>
               {dados.anexos.map((a) => (

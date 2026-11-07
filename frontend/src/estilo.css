@@ -40,6 +40,27 @@ body {
          hover:bg-voltagem/10 disabled:opacity-40 transition-colors;
 }
 
+/* Dinheiro dentro de tabela (seção 19): a setinha do campo numérico come 16px
+   de uma coluna que já é estreita, e em coluna de preço ela não serve para
+   nada — digitar 1.426,3315 clicando em seta ninguém faz. */
+.campo-numero {
+  @apply bg-obsidiana border border-borda rounded px-1.5 py-1 w-full text-right font-mono text-[11px]
+         focus:border-voltagem focus:outline-none;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.campo-numero::-webkit-outer-spin-button,
+.campo-numero::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* A tabela da proposta tem 11 colunas na gaveta: o respiro do Radar não cabe. */
+.tabela-proposta th,
+.tabela-proposta td {
+  @apply px-1.5;
+}
+
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: #0A0E1A; }
 ::-webkit-scrollbar-thumb { background: #1F2937; border-radius: 6px; }

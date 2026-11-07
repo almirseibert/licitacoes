@@ -38,6 +38,7 @@ rotas.post('/', async (req, res) => {
       formato,
       documentos: Array.isArray(corpo.documentos) ? corpo.documentos : null,
       declaracoes: Array.isArray(corpo.declaracoes) ? corpo.declaracoes : null,
+      propostas: Array.isArray(corpo.propostas) ? corpo.propostas : null,
       anexos: Array.isArray(corpo.anexos) ? corpo.anexos : null,
       confirmaVencidos: Boolean(corpo.confirma_vencidos),
       observacao: corpo.observacao || null,
@@ -59,7 +60,9 @@ rotas.post('/', async (req, res) => {
 
       // Peça que não é PDF não entra na mesclagem: vai junto, ao lado.
       for (const peca of fora) {
-        const destino = `${String(peca.ordem).padStart(2, '0')}_${arquivos.limpar(peca.rotulo).replace(/\s+/g, '_')}${peca.extensao}`;
+        // `nomeDoArquivo` tira a extensão que já vem no rótulo — sem isso a
+        // planilha saía como `Planilha_de_precos.xlsx.xlsx`.
+        const destino = arquivos.nomeDoArquivo(peca.ordem, peca.rotulo, peca.extensao);
         await fs.promises.copyFile(
           peca.caminhoAbsoluto,
           arquivos.caminhoAbsoluto(`${pasta}/${destino}`)
@@ -84,7 +87,7 @@ rotas.post('/', async (req, res) => {
       }
 
       for (const peca of pecas) {
-        const nomeNoZip = `${String(peca.ordem).padStart(2, '0')}_${arquivos.limpar(peca.rotulo).replace(/\s+/g, '_')}${peca.extensao}`;
+        const nomeNoZip = arquivos.nomeDoArquivo(peca.ordem, peca.rotulo, peca.extensao);
         zip.file(peca.caminhoAbsoluto, { name: nomeNoZip });
       }
 

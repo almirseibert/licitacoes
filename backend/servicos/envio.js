@@ -12,6 +12,8 @@ const path = require('path');
 
 const pool = require('../config/db');
 const arquivos = require('./arquivos');
+const perfis = require('./perfil');
+const proposta = require('./proposta');
 const { semaforo, tituloPadrao } = require('../regras/validades');
 const declaracao = require('./declaracao');
 const pacote = require('./pacote');
@@ -36,13 +38,9 @@ function rotuloDe(codigo, titulo) {
   return (doCatalogo && doCatalogo.rotulo) || tituloPadrao(codigo);
 }
 
-async function perfilPadrao(perfilId) {
-  const [linhas] = perfilId
-    ? await pool.query('SELECT * FROM empresa_perfis WHERE id = ?', [perfilId])
-    : await pool.query('SELECT * FROM empresa_perfis ORDER BY padrao DESC, id ASC LIMIT 1');
-  if (!linhas.length) throw new Error('Cadastre o perfil da empresa antes de montar um envio.');
-  return linhas[0];
-}
+// Continua exportado daqui — as rotas o chamam por `envio.perfilPadrao` —, mas
+// a consulta vive em servicos/perfil.js para quebrar o círculo com `proposta`.
+const perfilPadrao = (perfilId) => perfis.padrao(perfilId);
 
 async function escolherKit(perfilId, kitId) {
   const [kits] = await pool.query(
@@ -216,6 +214,11 @@ async function montar({ licitacaoId, kitId = null, perfilId = null }) {
     [licitacaoId]
   );
 
+  // Bloco 3 (seção 17.4): a proposta gerada pela seção 19 entra aqui, junto do
+  // que você anexa à mão. Sem isso o usuário geraria a proposta e teria de
+  // baixar e reanexar o próprio arquivo.
+  const propostas = await proposta.arquivosParaEnvio(licitacaoId);
+
   const [pacotes] = await pool.query(
     'SELECT id, formato, nome_arquivo, folhas, gerado_em FROM pacotes WHERE licitacao_id = ? ORDER BY id DESC LIMIT 5',
     [licitacaoId]
@@ -234,6 +237,7 @@ async function montar({ licitacaoId, kitId = null, perfilId = null }) {
     fora_do_kit: foraDoKit,
     condicoes,
     declaracoes,
+    propostas,
     anexos,
     faltando,
     pacotes,
@@ -252,7 +256,7 @@ async function montar({ licitacaoId, kitId = null, perfilId = null }) {
  */
 async function gerar({
   licitacaoId, kitId = null, perfilId = null, formato = 'pdf',
-  documentos = null, anexos = null, declaracoes = null,
+  documentos = null, anexos = null, declaracoes = null, propostas = null,
   confirmaVencidos = false, observacao = null,
 }) {
   const montagem = await montar({ licitacaoId, kitId, perfilId });
@@ -335,7 +339,32 @@ async function gerar({
     }
   }
 
-  // Camada 3: o que é específico desta licitação.
+  // Camada 3, primeira parte: a proposta gerada pela seção 19. Entra antes dos
+  // anexos à mão porque é o que o portal espera ver primeiro depois das
+  // declarações.
+  const chavesDeProposta = propostas
+    ? propostas.map(String)
+    : montagem.propostas.filter((p) => p.marcado).map((p) => p.chave);
+
+  for (const chave of chavesDeProposta) {
+    const peca = montagem.propostas.find((p) => p.chave === chave);
+    if (!peca || !peca.caminho || !arquivos.dentroDoVolume(peca.caminho)) continue;
+    const absoluto = arquivos.caminhoAbsoluto(peca.caminho);
+    if (!fs.existsSync(absoluto)) continue;
+
+    pecas.push({
+      ordem,
+      rotulo: peca.titulo,
+      codigo: 'proposta',
+      proposta_id: peca.proposta_id,
+      caminhoAbsoluto: absoluto,
+      extensao: `.${peca.formato}`,
+      validade: `gerada pelo painel · ${peca.status}`,
+    });
+    ordem += 1;
+  }
+
+  // Camada 3, segunda parte: o que você anexou à mão.
   const idsAnexos = anexos ? anexos.map(Number) : montagem.anexos.map((a) => a.id);
   if (idsAnexos.length) {
     const [linhasAnexo] = await pool.query(
