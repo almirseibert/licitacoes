@@ -5,6 +5,8 @@
 // disputa. `pede` são os campos que a tela cobra ao soltar o card ali — é o que
 // faz o histórico ter valor depois (preço, vencedor, motivo).
 
+const descarte = require('./descarte');
+
 const ETAPAS = [
   {
     chave: 'Triagem',
@@ -64,24 +66,15 @@ const ETAPAS = [
 const CHAVES = ETAPAS.map((e) => e.chave);
 const POR_CHAVE = new Map(ETAPAS.map((e) => [e.chave, e]));
 
-/**
- * Motivos de descarte em lista fechada (seção 10). Lista fechada não é
- * burocracia: é o que permite, meses depois, somar e descobrir qual exigência
- * mais barra a empresa — que é o diagnóstico da seção 20.
- */
-const MOTIVOS_DESCARTE = [
-  { chave: 'exigencia', rotulo: 'Exigência que não atendo', pedeCodigo: true },
-  { chave: 'objeto_fora', rotulo: 'Objeto fora do que a empresa faz' },
-  { chave: 'preco_inviavel', rotulo: 'Preço estimado inviável' },
-  { chave: 'prazo_curto', rotulo: 'Prazo curto demais para montar' },
-  { chave: 'local', rotulo: 'Local inviável (visita ou entrega)' },
-  { chave: 'valor_baixo', rotulo: 'Valor não compensa o esforço' },
-  { chave: 'concorrencia', rotulo: 'Concorrência pesada demais' },
-  { chave: 'duplicada', rotulo: 'Duplicada ou republicada' },
-  { chave: 'outro', rotulo: 'Outro motivo' },
-];
+// Os motivos de descarte moram em regras/descarte.js, na lista fechada da
+// seção 20.1. Ficam reexportados aqui porque é o funil que os cobra: a etapa
+// "Descartada" pede motivo, e quando for exigência ou documento, qual código
+// barrou. É isso que permite, meses depois, somar e descobrir qual exigência
+// mais barra a empresa — o diagnóstico da seção 20.
+const MOTIVOS_DESCARTE = descarte.MOTIVOS;
 
-const MOTIVOS_POR_CHAVE = new Map(MOTIVOS_DESCARTE.map((m) => [m.chave, m]));
+// O mapa inclui `nao_analisada`, que o job grava e a tela não oferece.
+const MOTIVOS_POR_CHAVE = descarte.POR_CHAVE;
 
 /** Campos que a etapa exige preenchidos. Devolve o que faltou. */
 function faltandoPara(etapa, dados = {}) {

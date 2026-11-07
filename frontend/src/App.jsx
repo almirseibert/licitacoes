@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, LogOut } from 'lucide-react';
+import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, LogOut } from 'lucide-react';
 import { obterToken, obterUsuario, encerrarSessao } from './servicos/api';
 import Login from './paginas/Login';
 import Radar from './paginas/Radar';
@@ -10,6 +10,7 @@ import Cofre from './paginas/Cofre';
 import Modelos from './paginas/Modelos';
 import Funil from './paginas/Funil';
 import Precos from './paginas/Precos';
+import Diagnostico from './paginas/Diagnostico';
 import Alertas from './componentes/Alertas';
 
 const TELAS = [
@@ -18,6 +19,7 @@ const TELAS = [
   { chave: 'fontes', rotulo: 'Fontes', icone: Database },
   { chave: 'palavras', rotulo: 'Palavras-chave', icone: Tags },
   { chave: 'precos', rotulo: 'Preço de referência', icone: TrendingDown },
+  { chave: 'diagnostico', rotulo: 'Diagnóstico', icone: Stethoscope },
   { chave: 'cofre', rotulo: 'Documentos', icone: FolderLock },
   { chave: 'modelos', rotulo: 'Declarações', icone: FileSignature },
   { chave: 'configuracoes', rotulo: 'Configurações', icone: SlidersHorizontal },
@@ -84,6 +86,9 @@ export default function App() {
         {tela === 'modelos' && <Modelos />}
         {tela === 'funil' && <Funil aoAbrir={setLicitacaoAberta} />}
         {tela === 'precos' && <Precos />}
+        {tela === 'diagnostico' && (
+          <Diagnostico aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />
+        )}
         {tela === 'configuracoes' && <Configuracoes />}
       </main>
     </div>

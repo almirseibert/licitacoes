@@ -8,6 +8,7 @@ const lerEdital = require('../backend/jobs/ler-edital');
 const validades = require('../backend/jobs/validades');
 const prazos = require('../backend/jobs/prazos');
 const encerradas = require('../backend/jobs/encerradas');
+const descartarVencidas = require('../backend/jobs/descartar-vencidas');
 
 const sinal = { parar: false };
 
@@ -33,6 +34,7 @@ async function principal() {
   validades.registrarNaFila();
   prazos.registrarNaFila();
   encerradas.registrarNaFila();
+  descartarVencidas.registrarNaFila();
 
   console.log(`Worker de licitações iniciado. Driver da fila: ${cfgFila.driver}.`);
 
@@ -73,6 +75,14 @@ async function principal() {
         diaDaUltimaVarreduraDeEncerradas = hojeLocal();
         await fila.enfileirar('coletar_encerradas', {}, { prioridade: 20, chaveUnica: `encerradas:${hojeLocal()}` });
         console.log('Coleta de encerradas enfileirada para hoje.');
+      }
+
+      // Vencidas sem análise (seção 20.4): entra no mesmo relógio de hora em
+      // hora. É barato — um UPDATE filtrado — e mantém o Radar limpo sem que
+      // ninguém precise descartar na mão.
+      const vencidas = await descartarVencidas.descartarVencidas({});
+      if (vencidas.descartadas) {
+        console.log(`${vencidas.descartadas} licitação(ões) descartadas por prazo vencido sem análise.`);
       }
 
       // Validade dos documentos do cofre (seção 9.2).

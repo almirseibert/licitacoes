@@ -18,7 +18,8 @@
     "build": "npm --prefix frontend ci && npm --prefix frontend run build",
     "postinstall": "echo \"Rode: npm run migrar && npm run semear\"",
     "encerradas": "node backend/jobs/executar-encerradas.js",
-    "resultados": "node backend/jobs/executar-resultados.js"
+    "resultados": "node backend/jobs/executar-resultados.js",
+    "diagnostico": "node backend/jobs/executar-diagnostico.js"
   },
   "engines": {
     "node": ">=20"

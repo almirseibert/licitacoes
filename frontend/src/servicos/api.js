@@ -370,4 +370,9 @@ export const api = {
   },
 
   concorrente: (cnpj) => requisitar(`/concorrentes/${cnpj}`),
+
+  // ------------------------------- diagnóstico de descarte (seção 20)
+  diagnostico: (periodo = 90) => requisitar(`/diagnostico?periodo=${periodo}`),
+
+  descartarVencidas: () => requisitar('/diagnostico/descartar-vencidas', { method: 'POST' }),
 };

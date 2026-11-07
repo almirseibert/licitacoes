@@ -1283,10 +1283,10 @@ API que já está configurada no monorepo.
 - **Aceite:** gerar a proposta de uma licitação de 20 itens, conferir que o XLSX recalcula ao mudar a quantidade e que nenhuma coluna de custo aparece no PDF.
 
 ### Fase 9 — Diagnóstico de descarte (seção 20)
-- [ ] Motivos padronizados + código da exigência que barrou
-- [ ] Tela de diagnóstico com ranking de bloqueios e valor em jogo
-- [ ] Simulação "se você tivesse X"
-- [ ] Descarte automático por prazo vencido, com motivo `nao_analisada`
+- [x] Motivos padronizados + código da exigência que barrou
+- [x] Tela de diagnóstico com ranking de bloqueios e valor em jogo
+- [x] Simulação "se você tivesse X"
+- [x] Descarte automático por prazo vencido, com motivo `nao_analisada`
 - **Aceite:** com 90 dias de uso, a tela apontar o bloqueio nº 1 e o valor que ele custou.
 
 ### Fase 10 — Monitor e oportunidades (seções 21 e 22)

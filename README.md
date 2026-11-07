@@ -3,7 +3,7 @@
 CRM de captação e inscrição em licitações de órgãos públicos. A especificação completa
 está em [PAINEL_LICITACOES_INSTRUCOES.md](PAINEL_LICITACOES_INSTRUCOES.md) — 32 seções, 14 fases.
 
-**Estado: Fases 1 a 8 implementadas e validadas — as seis primeiras em 02/11/2026, as Fases 7 e 8 em 07/11/2026.**
+**Estado: Fases 1 a 9 implementadas e validadas — as seis primeiras em 02/11/2026, as Fases 7, 8 e 9 em 07/11/2026.**
 
 A primeira coleta real no PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas
 com link que abre o edital no portal. Depois, pela tela, a palavra "videomonitoramento" foi
@@ -49,6 +49,19 @@ Marca/Modelo, Unidade, Quantidade, Valor unitário e Valor total — nenhuma de 
 Fase 8. Os dois arquivos entraram no **bloco 3 de "Montar envio"** já marcados: o pacote saiu com
 9 peças, a proposta mesclada no PDF único de 47 folhas e a planilha ao lado, como manda a
 seção 17.5 para arquivo que não é PDF.
+
+A Fase 9 ligou o diagnóstico. Rodado contra a base real de 1.362 licitações, o job da seção 20.4
+fechou **235 licitações de pontuação abaixo de 30 que venceram o prazo sem ninguém olhar — R$
+725.785.370,50 estimados** — e a tela avisou o que isso quer dizer: mais venceram sem análise do
+que foram descartadas por um motivo, ou seja, volume demais chegando. O ranking de bloqueios foi
+conferido contra um agregado SQL independente, linha por linha, e bateu: mesma ordem, mesma
+contagem, mesmo valor. Com 61 licitações reais classificadas por bloqueio, a tela apontou o
+**bloqueio nº 1 — Atestado de capacidade técnica, 24 licitações, R$ 654.421.977,36 em jogo** —
+com o caminho da seção 20.3 ao lado (*fechar um contrato pequeno, inclusive por dispensa, e pedir
+o atestado ao final — custo baixo*) e a simulação ao desconto mediano do grupo: **R$
+449.201.159,78 em contratos disputáveis**. Esse é o aceite da Fase 9 na mecânica inteira; o
+número de 90 dias só vai existir com 90 dias de uso — a base hoje tem cinco dias, e a tela mostra
+o que há nela, sem completar o resto.
 
 O que existe hoje:
 
@@ -131,6 +144,17 @@ O que existe hoje:
 | Rotas da proposta | [backend/rotas/propostas.js](backend/rotas/propostas.js) |
 | Aba Proposta da licitação | [frontend/src/paginas/Proposta.jsx](frontend/src/paginas/Proposta.jsx) |
 | Proposta no bloco 3 de "Montar envio" | [backend/servicos/envio.js](backend/servicos/envio.js), [frontend/src/paginas/Envio.jsx](frontend/src/paginas/Envio.jsx) |
+
+| Item da Fase 9 | Onde |
+|---|---|
+| Motivos da seção 20.1 e tabela "como resolver" da 20.3 | [backend/regras/descarte.js](backend/regras/descarte.js) |
+| Conversão dos motivos antigos e `descartado_em` | [backend/migrations/010_diagnostico.sql](backend/migrations/010_diagnostico.sql) |
+| Ranking, valor em jogo e simulação | [backend/servicos/diagnostico.js](backend/servicos/diagnostico.js) |
+| Descarte automático por prazo vencido (20.4) | [backend/jobs/descartar-vencidas.js](backend/jobs/descartar-vencidas.js) |
+| Código que barrou cobrado na API e escolhido em lista | [backend/rotas/licitacoes.js](backend/rotas/licitacoes.js), [frontend/src/paginas/Funil.jsx](frontend/src/paginas/Funil.jsx) |
+| Rotas do diagnóstico | [backend/rotas/diagnostico.js](backend/rotas/diagnostico.js) |
+| Tela Diagnóstico | [frontend/src/paginas/Diagnostico.jsx](frontend/src/paginas/Diagnostico.jsx) |
+| Mesma conta no terminal | [backend/jobs/executar-diagnostico.js](backend/jobs/executar-diagnostico.js) |
 
 Tudo em português: código, comentários, tabelas, interface.
 
@@ -331,6 +355,28 @@ vai disputar sai da proposta pela caixa `disp`, sem perder a linha.
 **Gerar PDF e XLSX** escreve os dois no volume e eles aparecem marcados no bloco 3 de **Montar
 envio**. Custo e margem ficam na tela e **não saem em nenhum dos dois arquivos** (seção 19.4).
 
+### 12. Diagnóstico de descarte
+
+A tela **Diagnóstico** responde o que mais te barrou em 90 dias, 6 ou 12 meses, ordenado por
+quantas vezes o bloqueio apareceu, com o valor em jogo ao lado. Clicando na linha, ela abre o
+caminho de solução da seção 20.3 — e o custo dele — mais o valor disputável ao desconto mediano
+do grupo e as últimas licitações que caíram por ali.
+
+Ela se alimenta do que você responde ao soltar um card em **Descartada** no funil: motivo em
+lista fechada (seção 20.1) e, quando for exigência ou documento, **qual código do catálogo
+barrou**, escolhido numa lista, nunca digitado. Sem o código o descarte conta no total e some do
+ranking, então a API recusa: é esse campo que faz o diagnóstico existir.
+
+O botão **fechar vencidas** roda na hora o job da seção 20.4 — licitação de pontuação abaixo de
+30 que ficou em Triagem até o prazo vencer vira descartada com motivo `nao_analisada`. Ela não
+polui o ranking (nada barrou, ninguém analisou) e conta no total, onde revela o outro problema.
+O worker roda o mesmo job de hora em hora; pela linha de comando é `npm run diagnostico`, que
+fecha as vencidas e imprime o ranking inteiro no terminal.
+
+O job nunca sobrescreve decisão sua: só toca em card parado em Triagem, não favoritado e sem
+descarte. E tirar um card de "Descartada" apaga o descarte inteiro — motivo, código e data —
+para que ele não continue pesando num ranking que já foi desfeito.
+
 ---
 
 ## Arquitetura
@@ -432,6 +478,8 @@ DELETE /api/licitacoes/:id/propostas/:pid
 GET    /api/precos-referencia      POST /api/precos-referencia/recalcular
 POST   /api/precos-referencia/coletar          varre as encerradas (leva minutos)
 GET    /api/concorrentes           GET /api/concorrentes/:cnpj
+GET    /api/diagnostico?periodo=90|182|365     ranking, simulação e vencidas sem análise
+POST   /api/diagnostico/descartar-vencidas     job da seção 20.4 na mão
 GET    /api/painel/resumo          GET /api/saude
 ```
 
@@ -445,12 +493,13 @@ O perfil da empresa está com os valores do seed. Complete em **Configurações*
 social, o endereço e o representante legal com CPF: sem eles, a capa do pacote e as declarações
 saem com lacuna (`____________`), de propósito — o painel nunca inventa dado.
 
-## Próximo passo — Fase 9
+## Próximo passo — Fase 10
 
-Diagnóstico de descarte (seção 20): motivos padronizados com o código da exigência que barrou,
-tela de diagnóstico com ranking de bloqueios e valor em jogo, simulação "se você tivesse X" e
-descarte automático por prazo vencido com motivo `nao_analisada`. O aceite é, com 90 dias de uso,
-a tela apontar o bloqueio nº 1 e o valor que ele custou.
+Monitor e oportunidades (seções 21 e 22): tabelas `monitoramentos` e `eventos_licitacao` com
+detecção de edital alterado por hash, linha do tempo na licitação, captura automática de
+resultado movendo o card e alimentando preços, e `varrer_estrategicas` com a tela Oportunidades.
+O aceite é alterar à mão o hash de uma licitação e receber o alerta, e ver pelo menos 20
+oportunidades de retomada reais na tela.
 
 ### Sobre o XLSX — por que escrito à mão
 

@@ -5,6 +5,8 @@ const pool = require('../config/db');
 const fila = require('../servicos/fila');
 const servicoArquivos = require('../servicos/arquivos');
 const funil = require('../regras/funil');
+const descarte = require('../regras/descarte');
+const exigencias = require('../regras/exigencias');
 const prazos = require('../jobs/prazos');
 
 const rotas = express.Router();
@@ -150,6 +152,10 @@ rotas.get('/filtros', async (_req, res) => {
       etapas: ETAPAS,
       funil: funil.ETAPAS,
       motivos_descarte: funil.MOTIVOS_DESCARTE,
+      // O catálogo da seção 8.2 vai junto: o descarte por exigência pede o
+      // código, e código digitado à mão produz grafia solta — que é
+      // exatamente o que a lista fechada da seção 20.1 existe para evitar.
+      exigencias: exigencias.CATALOGO.map((e) => ({ codigo: e.codigo, grupo: e.grupo, rotulo: e.rotulo })),
     });
   } catch (erro) {
     res.status(500).json({ erro: 'Não foi possível carregar os filtros.', detalhe: erro.message });
@@ -232,10 +238,28 @@ rotas.patch('/:id', async (req, res) => {
           faltando,
         });
       }
-      if (corpo.motivo_descarte !== undefined && !funil.MOTIVOS_POR_CHAVE.has(corpo.motivo_descarte)) {
+      // Motivo vazio é o card saindo de "Descartada": limpar é operação válida,
+      // e só o que tem conteúdo passa pela lista fechada.
+      const motivoNovo = corpo.motivo_descarte === '' ? null : corpo.motivo_descarte;
+      if (motivoNovo !== undefined && motivoNovo !== null && !descarte.ofertado(motivoNovo)) {
         return res.status(400).json({
           erro: `Motivo de descarte inválido. Use um de: ${funil.MOTIVOS_DESCARTE.map((m) => m.chave).join(', ')}.`,
         });
+      }
+      // Exigência e documento faltando só servem à análise com o código que
+      // barrou (seção 20.1). Sem ele o descarte entra no total e desaparece do
+      // ranking — que é justamente o número que deveria produzir.
+      if (motivoNovo && descarte.pedeCodigo(motivoNovo)) {
+        const codigo = corpo.codigo_barrou !== undefined ? corpo.codigo_barrou : antes.codigo_barrou;
+        if (!codigo) {
+          return res.status(400).json({
+            erro: 'Informe qual exigência barrou — é esse código que faz o diagnóstico funcionar.',
+            faltando: ['codigo_barrou'],
+          });
+        }
+        if (!exigencias.PORCODIGO.has(codigo)) {
+          return res.status(400).json({ erro: `Código de exigência desconhecido: ${codigo}.` });
+        }
       }
     }
 
@@ -257,6 +281,17 @@ rotas.patch('/:id', async (req, res) => {
       // "Descartada" e o sinalizador de descarte andam juntos.
       if (corpo.etapa === 'Descartada' && corpo.descartada === undefined) {
         partes.push('descartada = 1');
+      }
+      // A data do descarte é o eixo do período na tela de diagnóstico, por isso
+      // é gravada aqui e zerada quando o card sai de "Descartada": licitação
+      // ressuscitada não deve continuar pesando no ranking do mês passado.
+      if (corpo.etapa === 'Descartada') {
+        partes.push('descartado_em = NOW()');
+      } else {
+        // Sair de "Descartada" apaga o descarte inteiro, não só a data. Motivo
+        // órfão num card vivo apareceria no ranking de um descarte que foi
+        // desfeito, e a tela não tem como saber que aquilo não valia mais.
+        partes.push('descartado_em = NULL', 'descartada = 0', 'motivo_descarte = NULL', 'codigo_barrou = NULL');
       }
     }
 

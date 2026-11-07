@@ -14,6 +14,7 @@ import Contagem from '../componentes/Contagem';
 export default function Funil({ aoAbrir }) {
   const [etapas, setEtapas] = useState([]);
   const [motivos, setMotivos] = useState([]);
+  const [catalogo, setCatalogo] = useState([]);
   const [cards, setCards] = useState([]);
   const [erro, setErro] = useState(null);
   const [aviso, setAviso] = useState(null);
@@ -28,6 +29,7 @@ export default function Funil({ aoAbrir }) {
       const filtros = await api.filtros();
       setEtapas(filtros.funil || []);
       setMotivos(filtros.motivos_descarte || []);
+      setCatalogo(filtros.exigencias || []);
 
       // O funil mostra o que saiu da triagem, mais a triagem recente.
       // A API entrega no máximo 200 por página; o funil busca as duas primeiras.
@@ -196,6 +198,7 @@ export default function Funil({ aoAbrir }) {
         <PedirCampos
           dados={pedindo}
           motivos={motivos}
+          catalogo={catalogo}
           aoCancelar={() => setPedindo(null)}
           aoConfirmar={(extras) => mover(pedindo.licitacao, pedindo.etapa, extras)}
         />
@@ -230,7 +233,15 @@ const ROTULOS = {
 };
 
 /** O que a etapa pede, pedido na hora de soltar o card. */
-function PedirCampos({ dados, motivos, aoConfirmar, aoCancelar }) {
+/** Agrupa o catálogo pelos grupos do checklist, para o select não virar lista corrida. */
+function porGrupo(catalogo) {
+  return catalogo.reduce((mapa, e) => {
+    (mapa[e.grupo] = mapa[e.grupo] || []).push(e);
+    return mapa;
+  }, {});
+}
+
+function PedirCampos({ dados, motivos, catalogo, aoConfirmar, aoCancelar }) {
   // "Mandei a proposta" quase sempre quer dizer agora: o campo já vem
   // preenchido com a hora corrente e você só corrige se foi outra.
   const [valores, setValores] = useState(() =>
@@ -286,12 +297,22 @@ function PedirCampos({ dados, motivos, aoConfirmar, aoCancelar }) {
               <span className="text-[11px] uppercase tracking-wide text-texto-suave">
                 Qual exigência barrou (código)
               </span>
-              <input
+              <select
                 className="campo-caixa w-full mt-1"
-                placeholder="atestado, conselho, balanco…"
                 value={valores.codigo_barrou || ''}
                 onChange={(e) => setValores({ ...valores, codigo_barrou: e.target.value })}
-              />
+              >
+                <option value="">escolha a exigência…</option>
+                {Object.entries(porGrupo(catalogo)).map(([grupo, lista]) => (
+                  <optgroup key={grupo} label={grupo}>
+                    {lista.map((e) => (
+                      <option key={e.codigo} value={e.codigo}>
+                        {e.rotulo}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
               <span className="text-[11px] text-texto-suave">
                 É isso que, lá na frente, mostra qual exigência mais te barra.
               </span>
