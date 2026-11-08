@@ -32,7 +32,12 @@ export default function AlertasELimites({ ajustes, canais, aoErro, aoAvisar, aoS
     setCampos({});
   }, [ajustes]);
 
-  const lista = (ajustes || []).filter((a) => ROTULOS[a.chave]);
+  // Na ordem em que ROTULOS declara, não na que o banco devolve: por chave,
+  // "termina às" vinha antes de "começa às", o que se lê como erro de tela.
+  const ordem = Object.keys(ROTULOS);
+  const lista = (ajustes || [])
+    .filter((a) => ROTULOS[a.chave])
+    .sort((a, b) => ordem.indexOf(a.chave) - ordem.indexOf(b.chave));
   const valorDe = (chave) => {
     if (chave in campos) return campos[chave];
     const achado = lista.find((a) => a.chave === chave);
