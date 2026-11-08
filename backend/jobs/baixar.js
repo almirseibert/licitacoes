@@ -9,7 +9,8 @@
 //     e segue, sem travar a fila;
 //   - licitação sem arquivo no portal vira `sem_arquivo`, com um `_SEM_ARQUIVOS.txt`
 //     apontando a plataforma de disputa;
-//   - acima de 300 MB o job para e pede confirmação na tela.
+//   - passando de LIMITE_MB_POR_LICITACAO (300 MB por padrão) o job para e
+//     pede confirmação na tela.
 const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
@@ -22,11 +23,24 @@ const pool = require('../config/db');
 const fila = require('../servicos/fila');
 const adaptadores = require('../adaptadores');
 const arquivos = require('../servicos/arquivos');
+const { download: cfgDownload } = require('../config/ambiente');
+const configuracoes = require('../servicos/configuracoes');
 
 const executar = promisify(execFile);
 
-const LIMITE_BYTES = 300 * 1024 * 1024; // seção 7.2, item 6
-const LIMITE_EXTRACAO_BYTES = 500 * 1024 * 1024;
+// Seção 7.2, item 6. Em variável de ambiente porque é limite de disco: o que
+// cabe na VPS de hoje não é o que cabe na de amanhã — e a tela de Configurações
+// (seção 11.13) pode apertar ou folgar sem deploy.
+const LIMITE_MB = cfgDownload.limiteMbPorLicitacao;
+const LIMITE_BYTES = LIMITE_MB * 1024 * 1024;
+
+/** O teto em MB que vale agora: a tela manda, o ambiente é o padrão. */
+async function limiteMb() {
+  return configuracoes.numero('limite_mb_por_licitacao', LIMITE_MB);
+}
+// A extração ganha folga sobre o download: um ZIP de 300 MB abre em mais que
+// isso, e barrar na extração depois de ter baixado tudo seria trabalho perdido.
+const LIMITE_EXTRACAO_BYTES = Math.round(LIMITE_BYTES * 1.67);
 
 function recortar(valor, tamanho) {
   if (valor === null || valor === undefined) return null;
@@ -86,9 +100,11 @@ async function extrair(absoluto, destino) {
  * Baixa os documentos de uma licitação.
  * @param {object} payload
  *   - licitacaoId
- *   - confirmado: segue mesmo passando de 300 MB (o usuário confirmou na tela)
+ *   - confirmado: segue mesmo passando do teto em MB (o usuário confirmou na tela)
  */
 async function baixarEdital({ licitacaoId, confirmado = false }) {
+  const tetoMb = await limiteMb();
+  const tetoBytes = tetoMb * 1024 * 1024;
   const [linhas] = await pool.query(
     `SELECT l.*, f.adaptador
        FROM licitacoes l JOIN fontes f ON f.id = l.fonte_id
@@ -168,12 +184,12 @@ async function baixarEdital({ licitacaoId, confirmado = false }) {
       resumo.baixados += 1;
       resumo.bytes += baixado.tamanho;
 
-      if (!confirmado && resumo.bytes > LIMITE_BYTES) {
+      if (!confirmado && resumo.bytes > tetoBytes) {
         await marcarLicitacao(licitacaoId, 'grande_demais');
         return {
           ...resumo,
           parou_em: 'limite',
-          mensagem: `Já passou de 300 MB nesta licitação. Confirme na tela para continuar baixando o restante.`,
+          mensagem: `Já passou de ${tetoMb} MB nesta licitação. Confirme na tela para continuar baixando o restante.`,
         };
       }
     } catch (erro) {
@@ -309,4 +325,4 @@ function registrarNaFila() {
   fila.registrar('baixar_editais', (payload) => baixarEditais(payload || {}));
 }
 
-module.exports = { baixarEdital, baixarEditais, registrarNaFila, LIMITE_BYTES };
+module.exports = { baixarEdital, baixarEditais, registrarNaFila, limiteMb, LIMITE_BYTES };

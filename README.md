@@ -5,6 +5,13 @@ está em [PAINEL_LICITACOES_INSTRUCOES.md](PAINEL_LICITACOES_INSTRUCOES.md) — 
 
 **Estado: as 14 fases implementadas e validadas — as seis primeiras em 02/11/2026, as Fases 7 a 14 em 07/11/2026.**
 
+**O que falta não é fase, é implantação:** os serviços `licitacoes-api` e
+`licitacoes-worker` ainda não existem no EasyPanel e
+`licitacoes.studiomythos.com.br` não resolve no DNS (conferido em 07/11/2026).
+O banco já está lá, com as migrações 001 a 014 aplicadas e 1.362 licitações; a 015
+é nova e ainda não rodou. Até o deploy, o painel só roda na máquina de quem
+desenvolve. O passo a passo está em [Deploy no EasyPanel](#deploy-no-easypanel).
+
 A primeira coleta real no PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas
 com link que abre o edital no portal. Depois, pela tela, a palavra "videomonitoramento" foi
 simulada (82 no portal), ativada e trouxe **57 licitações novas na coleta seguinte — sem tocar
@@ -298,6 +305,22 @@ Preencha no `.env`:
   `DB_DATABASE=licitacoes` é um **banco separado**: nunca tabelas misturadas com as do CRM (seção 2.1).
 - `AUTH_DB_DATABASE` — o banco do painel atual, lido **somente** para autenticar na tabela `usuarios`.
 - `JWT_SECRET` — o mesmo segredo do painel atual, para o token valer nos dois sistemas.
+- `URL_PUBLICA` — o endereço do painel. Entra no link do e-mail e do WhatsApp de
+  alerta; vazio, o aviso sai só com o texto.
+
+Opcionais, e cada um desligado significa desligado — nada quebra sem eles:
+
+- `GEMINI_API_KEY` liga a leitura assistida (seção 23); `IA_ATIVA=false` desliga sem
+  apagar a chave.
+- `PORTAL_TRANSPARENCIA_CHAVE` liga a consulta de CEIS/CNEP (seção 26.3).
+- `SMTP_*` liga o e-mail de alerta; `WHATSAPP_TOKEN` e `WHATSAPP_PHONE_ID` ligam o
+  WhatsApp pela Meta Cloud API (seção 14).
+- `LIMITE_MB_POR_LICITACAO` é o teto de download por licitação (padrão 300).
+
+Três variáveis têm a última palavra na **tela** de Configurações, não aqui:
+`ALERTA_PARA`, `WHATSAPP_DESTINO` e `LIMITE_MB_POR_LICITACAO`. O `.env` é o padrão de
+quem sobe o serviço; o que estiver preenchido na tela vence, e campo vazio na tela
+devolve a chave ao `.env`.
 
 Nenhuma credencial fica no código. O `.env` está no `.gitignore`.
 
@@ -346,6 +369,17 @@ npm run dev:front
 ```
 
 A API sobe na porta 4000; o Vite na 5173, com proxy de `/api` para a API.
+
+Antes de entregar qualquer coisa (seção 32):
+
+```bash
+npm run lint && npm test
+```
+
+São 30 testes, em `testes/`, sem banco e sem rede. Eles cobrem o que erra calado:
+o semáforo e o intervalo por domínio da coleta (seção 5.4), a validação da saída da
+IA (seção 23.4), a lacuna das declarações (seção 18) e a contagem de dias úteis do
+prazo de questionamento (seção 25.1).
 
 ### 4. Primeira coleta
 
@@ -693,6 +727,52 @@ Implementadas em [backend/servicos/http.js](backend/servicos/http.js), valem par
 `AbortController` com 30 s em toda requisição, 3 tentativas com espera de 2 s / 8 s / 30 s em 5xx,
 e `Retry-After` respeitado. Nunca autentica em portal de terceiro, nunca resolve CAPTCHA.
 
+Duas dessas promessas estavam **escritas e não cumpridas** até a revisão de 07/11/2026,
+e vale registrar porque nenhuma das duas dava erro em tela — só fazia o painel bater
+mais rápido do que prometeu no portal de terceiro:
+
+- **o intervalo de 1,5 s não valia entre chamadas simultâneas.** `ultimoAcesso` era
+  gravado *depois* do sono, então duas chamadas ao mesmo domínio liam o mesmo instante
+  anterior, dormiam o mesmo tanto e saíam juntas. Com quatro requisições em voo quase
+  todas no PNCP, o espaçamento era decorativo. Agora a janela é **reservada antes** de
+  dormir: quatro chamadas ao mesmo domínio saem em 0 s, 1,5 s, 3 s e 4,5 s, em fila.
+- **a concorrência podia passar de 4.** `liberarVaga` decrementava o contador e
+  acordava o próximo da fila num microtask; nesse intervalo um chamador novo passava na
+  frente, e quando o da fila acordava os dois incrementavam. Agora a vaga é entregue
+  direto ao próximo, sem voltar ao balcão.
+
+Os dois casos estão em [testes/http.test.js](testes/http.test.js), que falha se alguém
+reintroduzir qualquer um deles.
+
+### Jobs pela linha de comando
+
+Todos idempotentes, todos com a conduta acima. O worker roda os mesmos jobs sozinho; a
+linha de comando serve para rodar um agora e ver o número:
+
+| Comando | O que faz |
+|---|---|
+| `npm run coletar` | varre as fontes ativas |
+| `npm run repontuar` | recalcula a pontuação do que já está gravado, sem ir aos portais |
+| `npm run baixar` | documentação das licitações que valem a pena |
+| `npm run ler` | extrai texto e detecta exigências do que já foi baixado |
+| `npm run encerradas` | amostra de preço (contratações encerradas) |
+| `npm run resultados -- --licitacao=<id>` | resultado de uma licitação |
+| `npm run diagnostico` | fecha as vencidas sem análise e imprime o ranking de bloqueios |
+| `npm run monitorar` | uma rodada do monitor (`-- --licitacao=<id>` checa uma agora) |
+| `npm run estrategicas` | desertas, fracassadas e reaberturas — não vai à internet |
+| `npm run recorrencias` | calendário da seção 24 |
+| `npm run ia` | leitura assistida (sem `GEMINI_API_KEY`, fica desligada) |
+| `npm run prazos` | dias úteis e o limite de esclarecimento |
+| `npm run dossies` | fichas de concorrente e órgão |
+| `npm run contratos` | marcos do contrato e a faixa da LC 123 |
+| `npm run limpar` | `.tmp` com mais de 24 h e arquivos de descartada com mais de 180 dias |
+| `npm run sancoes` | CEIS/CNEP do próprio CNPJ e dos concorrentes recorrentes |
+
+O `npm run limpar` aceita `-- --dias=365` e `-- --horas=48`; o `npm run sancoes` aceita
+`-- --quantos=25`. A limpeza apaga os **arquivos** da licitação descartada, não a ficha:
+o motivo do descarte é o que alimenta a tela de diagnóstico, e uma base que se apaga a
+cada 180 dias nunca responderia "quanto esse bloqueio me custou no ano".
+
 ---
 
 ## Deploy no EasyPanel
@@ -705,8 +785,35 @@ Dois serviços a partir do **mesmo Dockerfile**, mudando só o comando:
 | `licitacoes-worker` | `npm run worker` | sem domínio, sem porta |
 
 Volume persistente em `/dados` (editais e documentos da empresa ficam fora do container).
-As variáveis do `.env` entram em **Environment** nos dois serviços. Rodar `npm run migrar`
-uma vez (pelo Shell do serviço) após o primeiro deploy.
+As variáveis do `.env` entram em **Environment** nos dois serviços.
+
+**Nada disso está feito ainda.** O que existe hoje no EasyPanel é só o MySQL, com o
+banco `licitacoes` e as migrações 001 a 014 aplicadas de fora, da máquina de quem
+desenvolve, pela porta 3302. `licitacoes.studiomythos.com.br` não resolve no DNS.
+A ordem dos passos, quando for a hora:
+
+1. **New Service → App**, nome `licitacoes-api`, apontado para este repositório
+   (`almirseibert/licitacoes`, branch `main`), build pelo `Dockerfile` da raiz.
+2. **Environment**: colar o conteúdo do `.env` de produção. `DIR_DADOS=/dados`,
+   `NODE_ENV=production` e `URL_PUBLICA=https://licitacoes.studiomythos.com.br`.
+   `DB_HOST` passa a ser o nome **interno** do serviço MySQL, não `oehpg2.easypanel.host`
+   — de dentro do projeto a porta é 3306, e nada precisa ficar exposto para a internet.
+3. **Mounts**: volume persistente em `/dados`.
+4. **Domains**: `licitacoes.studiomythos.com.br` → porta 4000, com HTTPS pelo
+   Let’s Encrypt. O registro DNS do subdomínio tem de existir **antes**, apontando
+   para a VPS (hoje o domínio está atrás do Cloudflare: o registro do subdomínio
+   precisa ser criado lá).
+5. **Deploy** e, pelo **Shell** do serviço, `npm run migrar` uma vez — é o que aplica
+   a migração 015 (tabela `configuracoes` e o estado `limpo` dos arquivos).
+6. **New Service → App** de novo, nome `licitacoes-worker`, **mesmo repositório e
+   mesmo Dockerfile**, mesmas variáveis, mesmo volume, sem domínio e sem porta,
+   trocando só o comando para `npm run worker`.
+7. Conferir: `https://licitacoes.studiomythos.com.br/api/saude` tem de responder
+   `{"ok":true}`, e o log do worker tem de dizer
+   `Worker de licitações iniciado. Driver da fila: mysql.`
+
+Enquanto o worker não subir, nada roda sozinho: coleta, download, leitura, monitor,
+alertas e limpeza são todos dele. A API funciona sem o worker — só não anda sozinha.
 
 ---
 
@@ -730,6 +837,7 @@ DELETE /api/palavras/excluidas/:id
 POST   /api/fontes                 PATCH /api/fontes/:id         DELETE /api/fontes/:id
 GET    /api/configuracoes          PATCH /api/configuracoes/pesos
 POST   /api/configuracoes/pesos/:chave/restaurar
+PATCH  /api/configuracoes/ajustes            # destino do alerta, teto de download, janela de coleta
 POST   /api/configuracoes/repontuar
 GET    /api/empresa/perfis         POST /api/empresa/perfis      PATCH /api/empresa/perfis/:id
 GET    /api/empresa/documentos     POST /api/empresa/documentos   (multipart, 25 MB)
@@ -814,9 +922,27 @@ Erro sempre no formato `{ "erro": "mensagem em português", "detalhe": "técnico
 
 ## Antes de usar para valer
 
-O perfil da empresa está com os valores do seed. Complete em **Configurações** o CNPJ, a razão
-social, o endereço e o representante legal com CPF: sem eles, a capa do pacote e as declarações
-saem com lacuna (`____________`), de propósito — o painel nunca inventa dado.
+O perfil da empresa está com os valores do seed: `razao_social`, `cnpj`, `endereco`,
+`representante` e `cpf_representante` estão **vazios** no banco. Complete-os no bloco
+**Dados da empresa**, em Configurações — a tela avisa quais faltam e diz o que acontece
+enquanto faltarem: a capa do pacote e as declarações saem com lacuna (`____________`),
+de propósito, porque o painel nunca inventa dado.
+
+Dois detalhes de formato que a tela explica e valem repetir aqui:
+
+- o CNPJ vai para o documento **exatamente** como digitado, com ou sem pontuação;
+- o endereço deve terminar em `Cidade/UF` — é de lá que sai o local da assinatura
+  ("Lajeado, 7 de novembro de 2026").
+
+E, no bloco **Alertas e limites**, quem recebe o aviso. A linha de cima diz quais canais
+estão de fato ligados: preencher o e-mail sem `SMTP_HOST` no ambiente não faz e-mail
+nenhum sair, e a tela precisa dizer isso em vez de deixar parecer configurado.
+
+Das sete fontes do seed, só o **PNCP** está ativa. O Compras.gov.br monta a lista por
+JavaScript e fica de fora de propósito (ver abaixo); as cinco `generico_html` — Portal
+de Compras Públicas, BLL, Licitanet, BNC e CELIC — vêm semeadas mas **sem o mapa de
+campos preenchido**, e cada uma precisa ser configurada e testada pela tela de Fontes
+antes de ser ativada.
 
 ## Portal novo sem API — o adaptador `generico_html`
 
@@ -855,9 +981,25 @@ problema que pode não existir. A mensagem diz as duas e quanto do seletor chego
 
 ## Próximo passo
 
-As 14 fases da especificação estão entregues. O que falta é operação, não código: rodar
-`npm run migrar` no servidor (as migrações 009 a 014 ainda não foram aplicadas lá) e completar o
-perfil da empresa em Configurações.
+As 14 fases da especificação estão entregues, e a revisão de 07/11/2026 fechou o que
+tinha ficado para trás no código: os dois defeitos do cliente HTTP, a tela que faltava
+para os dados da empresa, os jobs `limpar_temporarios` e `checar_sancoes`, a cadência de
+30 minutos do prazo e do monitor, o alerta por WhatsApp, as variáveis da seção 29 que
+estavam fixas no código, e o lint e os testes que a seção 32 pede.
+
+O que falta agora é **implantação**, não código, em três passos e nesta ordem:
+
+1. **Criar o registro DNS** de `licitacoes.studiomythos.com.br` (hoje: não existe) e os
+   serviços `licitacoes-api` e `licitacoes-worker` no EasyPanel — ver
+   [Deploy no EasyPanel](#deploy-no-easypanel).
+2. **`npm run migrar`** no servidor, para a migração 015.
+3. **Completar os dados da empresa** em Configurações, e decidir quem recebe os alertas.
+
+Fora do repositório, falta o **botão de acesso na página da Studio Mythos**: o site não
+tem nenhuma referência ao painel de licitações. O lugar natural é o menu do painel
+protegido, ao lado de CRM e Financeiro, apontando para o subdomínio — o login é o mesmo,
+com o mesmo `JWT_SECRET` e os mesmos usuários, então quem já entrou no CRM entra aqui
+com as mesmas credenciais.
 
 ### Sobre o XLSX — por que escrito à mão
 

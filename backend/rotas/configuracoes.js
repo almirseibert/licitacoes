@@ -3,6 +3,8 @@ const express = require('express');
 const pool = require('../config/db');
 const fila = require('../servicos/fila');
 const pesos = require('../regras/pesos');
+const ajustes = require('../servicos/configuracoes');
+const notificar = require('../servicos/notificar');
 
 const rotas = express.Router();
 
@@ -30,8 +32,15 @@ rotas.get('/', async (_req, res) => {
        FROM licitacoes WHERE descartada = 0`
     );
 
+    const [listaAjustes, canais] = await Promise.all([ajustes.listar(), notificar.canais()]);
+
     res.json({
       pesos: regras,
+      // Seção 11.13: destinatário do alerta e teto de download na tela, não só
+      // no ambiente. `canais` diz o que de fato está ligado — é a diferença
+      // entre "configurei" e "vai chegar".
+      ajustes: listaAjustes,
+      canais,
       perfis: perfis.map((p) => ({
         ...p,
         cnaes: typeof p.cnaes === 'string' ? JSON.parse(p.cnaes || '[]') : p.cnaes || [],
@@ -40,6 +49,38 @@ rotas.get('/', async (_req, res) => {
     });
   } catch (erro) {
     res.status(500).json({ erro: 'Não foi possível carregar as configurações.', detalhe: erro.message });
+  }
+});
+
+// PATCH /api/configuracoes/ajustes — { alerta_email_para: 'x@y.com', coleta_hora_inicio: '3' }
+// Valor vazio devolve a chave ao que está na variável de ambiente.
+rotas.patch('/ajustes', async (req, res) => {
+  try {
+    const { gravadas, recusadas } = await ajustes.salvar(req.body || {});
+    if (recusadas.length && !gravadas.length) {
+      return res.status(400).json({
+        erro: `Não reconheci ou não aceitei: ${recusadas.join(', ')}.`,
+        detalhe: `chaves válidas: ${Object.keys(ajustes.CHAVES).join(', ')}`,
+      });
+    }
+    res.json({
+      ok: true,
+      gravadas,
+      recusadas,
+      mensagem: recusadas.length
+        ? `${gravadas.length} salva(s). Recusada(s): ${recusadas.join(', ')}.`
+        : `${gravadas.length} ${gravadas.length === 1 ? 'configuração salva' : 'configurações salvas'}.`,
+    });
+  } catch (erro) {
+    // Tabela ausente é migração que falta, não falha do painel: a leitura já
+    // degrada sozinha, e a escrita precisa dizer o que fazer.
+    if (erro.code === 'ER_NO_SUCH_TABLE') {
+      return res.status(503).json({
+        erro: 'Estas configurações ainda não têm onde ser guardadas. Rode a migração do banco.',
+        detalhe: 'falta a tabela `configuracoes` (migração 015). Rode: npm run migrar',
+      });
+    }
+    res.status(500).json({ erro: 'Não foi possível salvar as configurações.', detalhe: erro.message });
   }
 });
 

@@ -13,6 +13,48 @@ const { autenticar } = require('../middlewares/autenticar');
 
 const rotas = express.Router();
 
+/**
+ * Erro de banco que, na verdade, é configuração — e que por isso merece
+ * resposta diferente de "não foi possível entrar agora".
+ *
+ * Isto existe porque a falha real foi exatamente esta: o painel estava com
+ * AUTH_DB_DATABASE apontando para o banco certo, mas o usuário do MySQL não
+ * tinha permissão de leitura nele. A mensagem genérica mandava quem instala
+ * procurar defeito no código, quando o que faltava era um GRANT de uma linha.
+ */
+function erroDeConfiguracao(erro) {
+  const usuario = process.env.DB_USER || '(DB_USER vazio)';
+  const base = process.env.AUTH_DB_DATABASE || '(AUTH_DB_DATABASE vazio)';
+
+  if (erro.code === 'ER_DBACCESS_DENIED_ERROR' || erro.code === 'ER_ACCESS_DENIED_ERROR') {
+    return {
+      erro:
+        'Login indisponível: este painel não tem permissão de leitura na base de usuários. ' +
+        'Peça ao administrador do banco para liberar o acesso.',
+      detalhe:
+        `o usuário ${usuario} não alcança o banco ${base}. ` +
+        `Libere SOMENTE LEITURA: GRANT SELECT ON ${base}.usuarios TO '${usuario}'@'%'; ` +
+        'depois FLUSH PRIVILEGES. O painel nunca escreve nessa base.',
+    };
+  }
+
+  if (erro.code === 'ER_NO_SUCH_TABLE') {
+    return {
+      erro: 'Login indisponível: a base de usuários configurada não tem a tabela esperada.',
+      detalhe: `${base} não tem a tabela usuarios. Confira AUTH_DB_DATABASE no .env.`,
+    };
+  }
+
+  if (erro.code === 'ER_BAD_DB_ERROR') {
+    return {
+      erro: 'Login indisponível: a base de usuários configurada não existe.',
+      detalhe: `não existe o banco ${base}. Confira AUTH_DB_DATABASE no .env.`,
+    };
+  }
+
+  return null;
+}
+
 rotas.post('/login', async (req, res) => {
   const { email, senha, password } = req.body || {};
   const palavraPasse = senha || password;
@@ -58,7 +100,11 @@ rotas.post('/login', async (req, res) => {
       usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email, papel: usuario.papel },
     });
   } catch (erro) {
-    console.error('Erro no login:', erro.message);
+    console.error('Erro no login:', erro.code || '', erro.message);
+
+    const configuracao = erroDeConfiguracao(erro);
+    if (configuracao) return res.status(503).json(configuracao);
+
     return res.status(500).json({ erro: 'Não foi possível entrar agora.', detalhe: erro.message });
   }
 });

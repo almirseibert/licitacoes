@@ -68,7 +68,14 @@ npm install && npm run migrar && npm run semear
 `GEMINI_API_KEY` ela fica desligada e o painel funciona inteiro sem ela),
 `npm run prazos` (dias úteis e o limite de esclarecimento), `npm run dossies`
 (fichas de concorrente e órgão), `npm run contratos` (marcos do contrato e a faixa da LC 123;
-`-- --contrato=<id>` mostra o checklist de um).
+`-- --contrato=<id>` mostra o checklist de um), `npm run limpar` (`.tmp` velho e
+arquivos de licitação descartada há mais de 180 dias — a ficha fica, porque é dela
+que o diagnóstico vive), `npm run sancoes` (CEIS/CNEP do próprio CNPJ e dos
+concorrentes recorrentes).
+
+Antes de fechar qualquer fase: `npm run lint && npm test`. São 30 testes em `testes/`,
+sem banco e sem rede, no que erra calado — a conduta da coleta (5.4), a validação da
+saída da IA (23.4), a lacuna das declarações (18) e os dias úteis do prazo (25.1).
 
 O adaptador `generico_html` (seção 5.3) é configurado pela tela de Fontes, não por código: o
 mapa de campos é um JSON na própria fonte. Ele lê HTML pronto com `cheerio` — portal que monta

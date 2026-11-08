@@ -2,9 +2,12 @@ import { useEffect, useState } from 'react';
 import { Loader2, RotateCcw, Save, RefreshCw, X } from 'lucide-react';
 import { api } from '../servicos/api';
 import { moeda } from '../servicos/formato';
+import DadosDaEmpresa from '../componentes/DadosDaEmpresa';
+import AlertasELimites from '../componentes/AlertasELimites';
 
 /**
- * Configurações (seção 11.13): pesos da pontuação e CNAEs do perfil da empresa.
+ * Configurações (seção 11.13): dados da empresa, pesos da pontuação, CNAEs,
+ * destino dos alertas, teto de download, janela de coleta e feriados.
  *
  * Mudar um peso aqui não reescreve o passado sozinho — por isso o botão
  * "Repontuar", que recalcula o que já está gravado sem ir aos portais.
@@ -13,6 +16,8 @@ export default function Configuracoes() {
   const [pesos, setPesos] = useState([]);
   const [perfil, setPerfil] = useState(null);
   const [objetoSocial, setObjetoSocial] = useState(null);
+  const [ajustes, setAjustes] = useState([]);
+  const [canais, setCanais] = useState(null);
   const [alterados, setAlterados] = useState({});
   const [erro, setErro] = useState(null);
   const [aviso, setAviso] = useState(null);
@@ -25,6 +30,8 @@ export default function Configuracoes() {
         setPesos(r.pesos);
         setPerfil(r.perfis[0] || null);
         setObjetoSocial(r.objeto_social);
+        setAjustes(r.ajustes || []);
+        setCanais(r.canais || null);
         setAlterados({});
         setErro(null);
       })
@@ -218,6 +225,16 @@ export default function Configuracoes() {
             </div>
           </div>
         </section>
+
+        <DadosDaEmpresa perfil={perfil} aoErro={setErro} aoAvisar={setAviso} aoSalvar={carregar} />
+
+        <AlertasELimites
+          ajustes={ajustes}
+          canais={canais}
+          aoErro={setErro}
+          aoAvisar={setAviso}
+          aoSalvar={carregar}
+        />
 
         <Feriados aoErro={setErro} aoAvisar={setAviso} />
       </div>

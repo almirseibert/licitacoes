@@ -6,7 +6,6 @@ const arquivos = require('../servicos/arquivos');
 const upload = require('../servicos/upload');
 const envio = require('../servicos/envio');
 const pacote = require('../servicos/pacote');
-const declaracao = require('../servicos/declaracao');
 
 const rotas = express.Router({ mergeParams: true });
 

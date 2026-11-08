@@ -7,8 +7,11 @@
 // o que é o lado certo para errar num prazo.
 const pool = require('../config/db');
 const { buscarJson } = require('./http');
+const { brasilApi } = require('../config/ambiente');
 
-const BRASILAPI = 'https://brasilapi.com.br/api/feriados/v1';
+// Endereço em variável de ambiente (BRASILAPI_URL, seção 29): serviço público
+// de terceiro muda de rota sem avisar, e um espelho interno pode ser preciso.
+const BRASILAPI = `${brasilApi.url}/feriados/v1`;
 
 function chaveDe({ data, abrangencia, uf, municipio }) {
   const dia = String(data).slice(0, 10);

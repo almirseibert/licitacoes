@@ -32,7 +32,7 @@ async function registrarEvento({ licitacaoId, tipo, descricao, dados = null, oco
  * Religar não zera o contador nem os hashes: a história do que já foi visto é
  * justamente o que permite detectar que mudou.
  */
-async function ligar({ licitacaoId, motivo = 'interesse', agora = new Date() }) {
+async function ligar({ licitacaoId, motivo = 'interesse', agora: _agora = new Date() }) {
   const [[licitacao]] = await pool.query(
     'SELECT id, etapa, fim_propostas FROM licitacoes WHERE id = ?',
     [licitacaoId]

@@ -277,7 +277,7 @@ function desenharIndice(pagina, { indice, fora, normal, negrito }) {
  * Checklist que vai dentro do ZIP (`00_CHECKLIST.pdf`, seção 9.3): o que foi,
  * a validade de cada peça e o que faltou.
  */
-async function montarChecklist({ licitacao, perfil, pecas, faltando }) {
+async function montarChecklist({ licitacao, perfil: _perfil, pecas, faltando }) {
   const documento = await PDFDocument.create();
   const normal = await documento.embedFont(StandardFonts.Helvetica);
   const negrito = await documento.embedFont(StandardFonts.HelveticaBold);

@@ -80,7 +80,12 @@ async function carregar({ semCache = false } = {}) {
     }
   }
 
+  // Duas leituras simultâneas podem preencher o cache duas vezes, com o mesmo
+  // conteúdo: é desperdício de uma consulta, não corrupção de dado. Trancar
+  // isso custaria mais do que a consulta que se evita.
+  // eslint-disable-next-line require-atomic-updates
   cache = pesos;
+  // eslint-disable-next-line require-atomic-updates
   cacheEm = Date.now();
   return pesos;
 }

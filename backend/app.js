@@ -48,7 +48,8 @@ if (fs.existsSync(dist)) {
   app.get('*', (_req, res) => res.sendFile(path.join(dist, 'index.html')));
 }
 
-// eslint-disable-next-line no-unused-vars
+// Quatro parâmetros de propósito: é a aritmética da assinatura que faz o
+// Express reconhecer isto como tratador de erro, e não como rota comum.
 app.use((erro, _req, res, _next) => {
   console.error('Erro não tratado:', erro);
   res.status(500).json({ erro: 'Erro interno no servidor.', detalhe: erro.message });

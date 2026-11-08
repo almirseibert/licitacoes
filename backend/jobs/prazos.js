@@ -5,7 +5,7 @@
 const pool = require('../config/db');
 const fila = require('../servicos/fila');
 const alertas = require('../servicos/alertas');
-const email = require('../servicos/email');
+const notificar = require('../servicos/notificar');
 
 // Marcos em horas, na ordem em que são avisados.
 const MARCOS = [
@@ -42,7 +42,7 @@ async function verificarPrazos() {
     ETAPAS_VIGIADAS
   );
 
-  const resumo = { vigiadas: linhas.length, criados: 0, email: null };
+  const resumo = { vigiadas: linhas.length, criados: 0, email: null, whatsapp: null };
   const novos = [];
 
   for (const licitacao of linhas) {
@@ -67,8 +67,13 @@ async function verificarPrazos() {
     }
   }
 
-  // O e-mail sai uma vez, com tudo o que nasceu nesta rodada.
-  if (novos.length) resumo.email = await email.enviarAvisos(novos);
+  // O aviso externo sai uma vez, com tudo o que nasceu nesta rodada, por
+  // e-mail e por WhatsApp (seção 14) — os dois opcionais.
+  if (novos.length) {
+    const enviados = await notificar.avisar(novos);
+    resumo.email = enviados.email;
+    resumo.whatsapp = enviados.whatsapp;
+  }
 
   return resumo;
 }

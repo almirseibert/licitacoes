@@ -63,14 +63,26 @@ Criar um painel web, no mesmo padrão do painel de captação de leads da Studio
 | Item | Definição |
 |---|---|
 | Subdomínio | `licitacoes.studiomythos.com.br` |
-| Repositório | **Decidido: dentro do monorepo** `almirseibert/studiomythos`, em `apps/licitacoes/` — ver 2.1 |
+| Repositório | **Revisto: repositório próprio** `almirseibert/licitacoes`, na raiz — ver 2.1 |
 | Frontend | React 18 + Vite + Tailwind (mesmo stack do painel atual) |
 | Backend | Node 20 + Express + MySQL 8 |
 | Worker | Processo Node separado (mesma imagem, comando diferente), rodando as filas de coleta e download |
 | Deploy | Docker no EasyPanel, como os outros serviços |
 | Armazenamento de arquivos | Volume persistente montado em `/dados/editais` (não dentro do container) |
 
-### 2.1 Estrutura no monorepo
+### 2.1 Estrutura do repositório
+
+> **Divergência registrada.** A decisão original era morar no monorepo
+> `almirseibert/studiomythos`, em `apps/licitacoes/`. O painel foi feito em
+> **repositório próprio**, <https://github.com/almirseibert/licitacoes>, e é lá que
+> ele vive. Por quê: o reaproveitamento que o monorepo prometia não se
+> concretizou — o login é lido direto da tabela `usuarios` do banco do CRM, com
+> o mesmo `JWT_SECRET`, sem precisar de `packages/auth`; e o Voltage Obsidian
+> entrou como `tailwind.config.js` próprio, que são trinta linhas, em vez de um
+> `packages/design-voltage` compartilhado. Sobrava o custo do monorepo sem a
+> vantagem. A estrutura abaixo vale igual, com `apps/licitacoes/` virando a raiz.
+> As duas regras do fim desta seção continuam em pé, e a primeira é a que
+> importa: **banco separado**.
 
 ```
 studiomythos/
@@ -1157,6 +1169,20 @@ GET    /api/painel/resumo                    # números do dashboard
 Padrão de resposta de erro:
 `{ "erro": "mensagem em português para o usuário", "detalhe": "técnico, só em log" }`.
 
+> **Divergências de nome registradas.** A lista acima é o desenho; o código saiu
+> com estes nomes, e são eles que valem:
+>
+> | Na seção 13 | No código | Por quê |
+> |---|---|---|
+> | `POST /licitacoes/:id/pacote` | `POST /licitacoes/:id/envio` | O recurso é o envio; o pacote é um dos arquivos que ele produz. |
+> | `GET /licitacoes/:id/eventos` | `GET /licitacoes/:id/linha-do-tempo` | É o nome que a aba usa na tela. |
+> | `GET /recorrencias` | `GET /calendario` | A tela é o Calendário, e a rota devolve o mês montado, não a tabela crua. |
+> | `GET /concorrentes/:cnpj`, `GET /orgaos` | sob `GET /dossies/...` | Ficha agregada é dossiê; `/concorrentes` continua existindo para os concorrentes **de uma licitação**, que é outra coisa. |
+> | `/licitacoes/:id/proposta` | `/licitacoes/:id/propostas` | Pode haver mais de um rascunho por licitação. |
+> | `GET /contratos/faixa-receita` | dentro de `GET /contratos` | A tela mostra os dois juntos; eram duas idas ao servidor para desenhar uma página. |
+
+A lista completa e atual das rotas está no README.
+
 ---
 
 ## 14. Jobs agendados
@@ -1181,8 +1207,22 @@ Padrão de resposta de erro:
 | `marcos_contrato` | diário, 07h | Alertas dos marcos de contrato e da faixa de receita |
 | `limpar_temporarios` | diário | Remove `.tmp` com mais de 24 h e licitações descartadas com mais de 180 dias |
 
-Alertas chegam por: painel (sino), e-mail (Resend ou SMTP) e, se quiser, WhatsApp pela Meta Cloud
-API que já está configurada no monorepo.
+Alertas chegam por: painel (sino), e-mail (SMTP) e, se quiser, WhatsApp pela Meta Cloud API.
+Os três estão implementados; e-mail e WhatsApp ficam desligados sem as variáveis da seção 29,
+e desligado significa desligado — o aviso continua no sino, que é a fonte da verdade.
+
+> **Divergência registrada em `limpar_temporarios`.** A tabela manda "remover
+> licitações descartadas com mais de 180 dias". O job remove os **arquivos**, não a
+> ficha, e marca cada um como `limpo`. Apagar a linha levaria embora o motivo do
+> descarte, e é dele que a tela de diagnóstico (seção 20) vive: o ranking de
+> bloqueios compara períodos longos, e uma base que se apaga a cada 180 dias nunca
+> responderia "quanto esse bloqueio me custou no ano". Disco é o que aperta; a ficha
+> é barata e é o aprendizado.
+
+> **Cadência real do worker.** Um relógio de 30 min toca `alertas_prazo` e
+> `monitorar`; a rodada horária se controla por carimbo de tempo dentro dele. Dois
+> relógios independentes cairiam juntos de vez em quando, e aí o monitor brigaria
+> com a coleta pelas quatro vagas de requisição da seção 5.4.
 
 ---
 
@@ -1217,69 +1257,75 @@ API que já está configurada no monorepo.
 ## 16. Roadmap — ordem de implementação
 
 ### Fase 1 — Fundação (meta: ver licitações na tela)
-- [ ] Estrutura do app, Docker, deploy no EasyPanel, subdomínio com HTTPS
-- [ ] Banco com as tabelas das seções 4.1 a 4.4 + migrations
-- [ ] Login reaproveitando o JWT do painel atual
-- [ ] Adaptador `pncp` (busca + detalhe + itens)
-- [ ] Seed de fontes e palavras-chave
-- [ ] Job `coletar_fontes` com fila simples em tabela
-- [ ] Tela Radar com filtros e tabela
+- [x] Estrutura do app e Docker
+- [ ] **Deploy no EasyPanel e subdomínio com HTTPS — PENDENTE.** O Dockerfile e o
+      banco estão prontos (as migrações 001 a 014 já rodaram no MySQL do
+      EasyPanel; a 015 é nova e ainda não), mas os
+      serviços `licitacoes-api` e `licitacoes-worker` não foram criados e
+      `licitacoes.studiomythos.com.br` não existe no DNS (conferido em 07/11/2026).
+      Até isso ser feito, o painel só roda na máquina de quem desenvolve.
+- [x] Banco com as tabelas das seções 4.1 a 4.4 + migrations
+- [x] Login reaproveitando o JWT do painel atual
+- [x] Adaptador `pncp` (busca + detalhe + itens)
+- [x] Seed de fontes e palavras-chave
+- [x] Job `coletar_fontes` com fila simples em tabela
+- [x] Tela Radar com filtros e tabela
 - **Aceite:** rodar a coleta e ver no mínimo 100 licitações abertas, sem duplicata, com link que abre o PNCP.
 
 ### Fase 2 — Editável pelo usuário
-- [ ] CRUD de Fontes com "Testar agora"
-- [ ] CRUD de Palavras-chave com "Simular"
-- [ ] Palavras excluídas
-- [ ] Motor de aderência com pesos em tabela + tela de Configurações
-- [ ] Checagem de objeto social por CNAE (seção 6.2) e sinalização dos benefícios ME/EPP (6.3)
+- [x] CRUD de Fontes com "Testar agora"
+- [x] CRUD de Palavras-chave com "Simular"
+- [x] Palavras excluídas
+- [x] Motor de aderência com pesos em tabela + tela de Configurações
+- [x] Checagem de objeto social por CNAE (seção 6.2) e sinalização dos benefícios ME/EPP (6.3)
 - **Aceite:** adicionar a palavra "videomonitoramento", simular, ativar e ver as novas licitações na coleta seguinte, sem tocar em código.
 
 ### Fase 3 — Documentação da licitação
-- [ ] `licitacao_arquivos` + job `baixar_editais` (idempotente, com extração de ZIP)
-- [ ] Tela de arquivos com visualizador de PDF e download individual
-- [ ] "Baixar tudo (.zip)"
+- [x] `licitacao_arquivos` + job `baixar_editais` (idempotente, com extração de ZIP)
+- [x] Tela de arquivos com visualizador de PDF e download individual
+- [x] "Baixar tudo (.zip)"
 - **Aceite:** baixar os arquivos de 20 licitações seguidas sem erro; rodar de novo e nada ser rebaixado.
 
 ### Fase 4 — Leitura e checklist
-- [ ] Extração de texto (PDF, DOCX, ZIP)
-- [ ] Catálogo de exigências + detecção com negação
-- [ ] Tela de checklist com trecho do edital no hover
+- [x] Extração de texto (PDF, DOCX, ZIP)
+- [x] Catálogo de exigências + detecção com negação
+- [x] Tela de checklist com trecho do edital no hover
 - **Aceite:** em 10 editais conferidos manualmente, no máximo 1 exigência marcada errada.
 
 ### Fase 5 — Cofre de documentos e envio (seções 9 e 17)
-- [ ] Perfil ME (padrão) com CNAEs, capital e regime; upload, validade, versionamento
-- [ ] Semáforo e alertas de vencimento
-- [ ] Kits (`documento_kits`) com os quatro kits do seed, perfil ME
-- [ ] Tela "Montar envio" com os três blocos e marcação automática kit × exigências
-- [ ] Saída em ZIP numerado e em PDF único com capa, índice e numeração de folhas
-- [ ] "Repetir o envio de…" com revalidação de datas
+- [x] Perfil ME (padrão) com CNAEs, capital e regime; upload, validade, versionamento
+- [x] Semáforo e alertas de vencimento
+- [x] Kits (`documento_kits`) com os quatro kits do seed, perfil ME
+- [x] Tela "Montar envio" com os três blocos e marcação automática kit × exigências
+- [x] Saída em ZIP numerado e em PDF único com capa, índice e numeração de folhas
+- [x] "Repetir o envio de…" com revalidação de datas
 - **Aceite:** montar o envio de uma licitação real em menos de 5 minutos, com documento vencido bloqueado e o PDF único saindo paginado e na ordem.
 
 ### Fase 5.1 — Gerador de declarações (seção 18) — pode sair junto da Fase 5
-- [ ] Tabela de modelos + 11 modelos do seed
-- [ ] Substituição de variáveis e geração em PDF
-- [ ] Editor de modelos com pré-visualização
-- [ ] Aviso quando o edital trouxer anexo próprio de declaração
+- [x] Tabela de modelos + 11 modelos do seed
+- [x] Substituição de variáveis e geração em PDF
+- [x] Editor de modelos com pré-visualização
+- [x] Aviso quando o edital trouxer anexo próprio de declaração
 - **Aceite:** gerar as declarações de uma licitação com número, órgão e objeto corretos, sem digitar nada.
 
 ### Fase 6 — Funil e alertas
-- [ ] Kanban com as 8 etapas, arrastar e soltar
-- [ ] Anotações, motivo de descarte
-- [ ] Alertas de prazo por e-mail e no painel
+- [x] Kanban com as 8 etapas, arrastar e soltar
+- [x] Anotações, motivo de descarte
+- [x] Alertas de prazo por e-mail e no painel
 - **Aceite:** mover um card para "Vou disputar" e receber o aviso 48 h antes.
 
 ### Fase 7 — Preço e concorrência
-- [ ] Coleta de encerradas e cálculo das medianas
-- [ ] Adaptador `comprasgov` para propostas
-- [ ] Tela de preço de referência e aba de concorrentes
+- [x] Coleta de encerradas e cálculo das medianas
+- [x] Adaptador `comprasgov` para propostas
+- [x] Tela de preço de referência e aba de concorrentes
 - **Aceite:** abrir uma licitação de site institucional e ver "fecha normalmente por X" coerente com o estudo.
 
 ### Fase 8 — Gerador de proposta (seção 19)
-- [ ] Tabelas `propostas` e `proposta_itens`, puxando os itens do edital
-- [ ] Cálculo de custo, margem e preço, com as três referências e o semáforo
-- [ ] Alerta de inexequibilidade
-- [ ] Saída em PDF (sem custo) e XLSX com fórmulas vivas
-- [ ] Integração com o bloco 3 da tela "Montar envio"
+- [x] Tabelas `propostas` e `proposta_itens`, puxando os itens do edital
+- [x] Cálculo de custo, margem e preço, com as três referências e o semáforo
+- [x] Alerta de inexequibilidade
+- [x] Saída em PDF (sem custo) e XLSX com fórmulas vivas
+- [x] Integração com o bloco 3 da tela "Montar envio"
 - **Aceite:** gerar a proposta de uma licitação de 20 itens, conferir que o XLSX recalcula ao mudar a quantidade e que nenhuma coluna de custo aparece no PDF.
 
 ### Fase 9 — Diagnóstico de descarte (seção 20)
@@ -2161,6 +2207,24 @@ WHATSAPP_TOKEN=  WHATSAPP_PHONE_ID=  WHATSAPP_DESTINO=
 
 Nenhum valor real neste arquivo nem no `.env.example`.
 
+> **Nomes reais, registrados.** O `.env.example` versionado é a lista que vale, e
+> alguns nomes saíram diferentes do desenho acima. O que mudou e por quê:
+>
+> | Na seção 29 | No código | Por quê |
+> |---|---|---|
+> | `DB_NAME` | `DB_DATABASE` | É o nome que o `mysql2` usa; dois nomes para a mesma coisa confundem na hora do incidente. |
+> | `JWT_SEGREDO` | `JWT_SECRET` | Tem de ser **igual** à do CRM, senão o token não vale nos dois. |
+> | `PORTA=3010` | `PORTA=4000` | 3010 estava ocupada; 4000 é o que o Dockerfile expõe. |
+> | `DIR_EDITAIS`, `DIR_EMPRESA`, `DIR_PACOTES` | `DIR_DADOS` | É **um** volume. Três variáveis apontando para três subpastas do mesmo lugar são três chances de errar uma. As subpastas são fixas no código. |
+> | `INTERVALO_MIN_MS`, `CONCORRENCIA_MAX`, `TIMEOUT_MS` | `HTTP_INTERVALO_DOMINIO_MS`, `HTTP_CONCORRENCIA`, `HTTP_TIMEOUT_MS` | O prefixo diz de quem é o limite; `TIMEOUT_MS` solto já foi confundido com o da fila. |
+> | `CHAVE_API_TRANSPARENCIA` | `PORTAL_TRANSPARENCIA_CHAVE` | Agrupa com o resto do assunto na leitura do arquivo. |
+> | `SMTP_USER`, `SMTP_SENHA`, `EMAIL_ALERTAS` | `SMTP_USUARIO`, `SMTP_SENHA`, `ALERTA_PARA` | Tudo em português, como manda o CLAUDE.md. |
+
+Três destas têm a última palavra na **tela** de Configurações (seção 11.13), não no
+ambiente: `ALERTA_PARA`, `WHATSAPP_DESTINO` e `LIMITE_MB_POR_LICITACAO`. O ambiente
+é o padrão de quem sobe o serviço; o que estiver preenchido na tela vence. Campo
+vazio na tela devolve a chave ao ambiente.
+
 ---
 
 ## 30. Pontos de atenção (aprendidos na prática)
@@ -2217,7 +2281,10 @@ Nenhum valor real neste arquivo nem no `.env.example`.
 
 ## 32. Checklist de qualidade antes de cada entrega
 
-- [ ] `npm run lint` e `npm test` passam
+- [x] `npm run lint` e `npm test` passam — `eslint.config.js` e `testes/`, 30 testes
+      cobrindo o semáforo e o intervalo da coleta (seção 5.4), a validação da saída
+      da IA (seção 23.4), a lacuna das declarações (seção 18) e os dias úteis do
+      prazo de questionamento (seção 25.1)
 - [ ] Nenhuma credencial, e-mail fixo ou token no código
 - [ ] Toda mensagem de erro visível ao usuário está em português e é compreensível
 - [ ] Coleta roda duas vezes seguidas sem criar duplicata

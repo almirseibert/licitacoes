@@ -20,8 +20,10 @@ const { ia: cfg } = require('../config/ambiente');
 const schema = require('../regras/ia-schema');
 
 // Teto de texto enviado (seção 23.3). Edital inteiro não cabe nem compensa: o
-// que interessa está em quatro seções, e é delas que o recorte sai.
-const MAX_CARACTERES = 60000;
+// que interessa está em quatro seções, e é delas que o recorte sai. Em variável
+// de ambiente (seção 29) porque o teto que vale a pena muda com o preço do
+// token e com o modelo.
+const MAX_CARACTERES = cfg.maxCaracteres;
 
 /**
  * Títulos que delimitam as seções que importam (seção 23.3). A ordem é a de
@@ -38,9 +40,13 @@ function sha256(texto) {
   return crypto.createHash('sha256').update(String(texto), 'utf8').digest('hex');
 }
 
-/** A IA está ligada? Sem chave, o painel segue sem ela. */
+/**
+ * A IA está ligada? Sem chave, o painel segue sem ela. `IA_ATIVA=false`
+ * desliga sem apagar a chave — serve para cortar gasto por uns dias sem perder
+ * a configuração.
+ */
 function disponivel() {
-  return Boolean(cfg.chave);
+  return Boolean(cfg.chave) && cfg.ativa;
 }
 
 /**

@@ -6,6 +6,8 @@
   "main": "backend/server.js",
   "scripts": {
     "api": "node backend/server.js",
+    "lint": "eslint .",
+    "test": "node --test testes/",
     "worker": "node worker/index.js",
     "dev:api": "node --watch backend/server.js",
     "dev:front": "npm --prefix frontend run dev",
@@ -26,7 +28,9 @@
     "ia": "node backend/jobs/executar-ia.js",
     "dossies": "node backend/jobs/executar-dossies.js",
     "prazos": "node backend/jobs/executar-prazos.js",
-    "contratos": "node backend/jobs/executar-contratos.js"
+    "contratos": "node backend/jobs/executar-contratos.js",
+    "limpar": "node backend/jobs/executar-limpeza.js",
+    "sancoes": "node backend/jobs/executar-sancoes.js"
   },
   "engines": {
     "node": ">=20"
@@ -46,5 +50,11 @@
     "nodemailer": "^10.3.1",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5"
+  },
+  "devDependencies": {
+    "eslint": "^9.17.0",
+    "eslint-plugin-react": "^7.37.3",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "globals": "^15.14.0"
   }
 }

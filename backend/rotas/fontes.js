@@ -48,7 +48,7 @@ function limpar(corpo, { exigirTudo }) {
     if (typeof campos.config === 'string') {
       try {
         campos.config = JSON.parse(campos.config || '{}');
-      } catch (erro) {
+      } catch {
         throw new Error('A configuração precisa ser um JSON válido.');
       }
     }

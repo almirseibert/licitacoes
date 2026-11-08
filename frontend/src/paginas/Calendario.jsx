@@ -13,7 +13,7 @@ import { moeda, data as formatarData, resumir } from '../servicos/formato';
  * A confiança aparece em todas as linhas, sem eufemismo: 0,5 é "aconteceu duas
  * vezes", não é promessa. Esconder isso faria a tela parecer um oráculo.
  */
-export default function Calendario({ aoAbrir }) {
+export default function Calendario() {
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState(null);
   const [aviso, setAviso] = useState(null);

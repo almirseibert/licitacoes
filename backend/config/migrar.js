@@ -25,13 +25,13 @@ async function principal() {
     await conexao.query(
       `CREATE DATABASE IF NOT EXISTS \`${BANCO}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
     );
-  } catch (erro) {
+  } catch {
     console.warn(`· sem permissão para criar o banco \`${BANCO}\` — usando o que já existir.`);
   }
 
   try {
     await conexao.changeUser({ database: BANCO });
-  } catch (erro) {
+  } catch {
     throw new Error(
       `o usuário \`${process.env.DB_USER}\` não alcança o banco \`${BANCO}\`. ` +
         `Crie o banco e libere o acesso:\n` +

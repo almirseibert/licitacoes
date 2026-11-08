@@ -17,26 +17,41 @@ function dormir(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+// Quem chega só pega vaga se não houver ninguém na fila. Deixar o recém-chegado
+// passar na frente parecia inofensivo e não era: entre o `liberarVaga` e o
+// instante em que o da fila acordava, os dois contavam como um só e o total em
+// voo passava de HTTP_CONCORRENCIA. A vaga agora é entregue direto ao próximo,
+// sem voltar ao balcão — `emVoo` é o número de vagas concedidas e não passa do
+// teto da seção 5.4.
 async function obterVaga() {
-  if (emVoo < cfg.concorrencia) {
+  if (emVoo < cfg.concorrencia && aguardando.length === 0) {
     emVoo += 1;
     return;
   }
   await new Promise((resolver) => aguardando.push(resolver));
-  emVoo += 1;
 }
 
 function liberarVaga() {
-  emVoo -= 1;
   const proximo = aguardando.shift();
-  if (proximo) proximo();
+  if (proximo) {
+    proximo(); // a vaga troca de mão: `emVoo` continua igual
+    return;
+  }
+  emVoo -= 1;
 }
 
+// A janela de cada domínio é RESERVADA antes de dormir. Gravar `ultimoAcesso`
+// só depois do sono deixava duas chamadas concorrentes lerem o mesmo instante
+// anterior, dormirem o mesmo tanto e baterem no portal juntas — com quatro
+// requisições simultâneas quase todas no mesmo domínio, o intervalo de 1,5 s da
+// seção 5.4 virava decoração. Reservando antes, quatro chamadas ao mesmo
+// domínio saem em 0 s, 1,5 s, 3 s e 4,5 s, em fila.
 async function respeitarIntervalo(dominio) {
+  const agora = Date.now();
   const anterior = ultimoAcesso.get(dominio) || 0;
-  const espera = cfg.intervaloDominioMs - (Date.now() - anterior);
-  if (espera > 0) await dormir(espera);
-  ultimoAcesso.set(dominio, Date.now());
+  const quando = Math.max(agora, anterior + cfg.intervaloDominioMs);
+  ultimoAcesso.set(dominio, quando);
+  if (quando > agora) await dormir(quando - agora);
 }
 
 class ErroHttp extends Error {
@@ -143,4 +158,13 @@ async function buscarTexto(url, opcoes = {}) {
   return resposta.text();
 }
 
-module.exports = { buscar, buscarJson, buscarTexto, ErroHttp, dormir };
+// `internos` existe para os testes: o semáforo e o intervalo por domínio são
+// invisíveis de fora e foram justamente onde moraram dois defeitos.
+module.exports = {
+  buscar,
+  buscarJson,
+  buscarTexto,
+  ErroHttp,
+  dormir,
+  internos: { obterVaga, liberarVaga, respeitarIntervalo, emVoo: () => emVoo, ultimoAcesso },
+};

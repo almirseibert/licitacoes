@@ -22,13 +22,6 @@ function comoDataHora(valor) {
   });
 }
 
-function comoDia(valor) {
-  if (!valor) return null;
-  const d = valor instanceof Date ? valor : new Date(valor);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('pt-BR');
-}
-
 /** Nome de arquivo sem acento nem caractere que o navegador recuse. */
 function nomeDeArquivo(base) {
   const agora = new Date();

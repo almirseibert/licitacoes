@@ -7,13 +7,22 @@
 //
 // Nenhuma senha fica no código: tudo vem de SMTP_HOST, SMTP_PORTA, SMTP_USUARIO,
 // SMTP_SENHA, SMTP_DE e ALERTA_PARA.
-const { smtp } = require('../config/ambiente');
+const { smtp, urlPublica } = require('../config/ambiente');
+const configuracoes = require('./configuracoes');
 
 let transporte;
 let avisouDesligado = false;
 
-function configurado() {
-  return Boolean(smtp.host && smtp.de && smtp.para);
+/**
+ * Para quem o aviso vai. A tela manda (seção 11.13); vazia lá, vale o
+ * ALERTA_PARA do ambiente.
+ */
+async function destinatario() {
+  return configuracoes.texto('alerta_email_para', smtp.para);
+}
+
+async function configurado() {
+  return Boolean(smtp.host && smtp.de && (await destinatario()));
 }
 
 function obterTransporte() {
@@ -39,6 +48,8 @@ function montarCorpo(avisos) {
     '',
     linhas.join('\n\n'),
     '',
+    // Sem URL_PUBLICA o aviso sai só com o texto: melhor do que um link quebrado.
+    ...(urlPublica ? [urlPublica, ''] : []),
     '—',
     'Painel de Licitações — Studio Mythos',
   ].join('\n');
@@ -56,9 +67,12 @@ function montarAssunto(avisos) {
 async function enviarAvisos(avisos) {
   if (!avisos || !avisos.length) return { enviado: false, motivo: 'nada a enviar' };
 
-  if (!configurado()) {
+  const para = await destinatario();
+  if (!smtp.host || !smtp.de || !para) {
     if (!avisouDesligado) {
-      console.log('E-mail de alerta desligado: defina SMTP_HOST, SMTP_DE e ALERTA_PARA no .env para ligar.');
+      console.log(
+        'E-mail de alerta desligado: defina SMTP_HOST e SMTP_DE no .env, e o destinatário em Configurações (ou ALERTA_PARA).'
+      );
       avisouDesligado = true;
     }
     return { enviado: false, motivo: 'smtp não configurado' };
@@ -68,7 +82,7 @@ async function enviarAvisos(avisos) {
   try {
     await obterTransporte().sendMail({
       from: smtp.de,
-      to: smtp.para,
+      to: para,
       subject: assunto,
       text: montarCorpo(avisos),
     });
@@ -80,4 +94,4 @@ async function enviarAvisos(avisos) {
   }
 }
 
-module.exports = { enviarAvisos, configurado, montarCorpo, montarAssunto };
+module.exports = { enviarAvisos, configurado, destinatario, montarCorpo, montarAssunto };

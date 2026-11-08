@@ -218,7 +218,6 @@ async function registrarResultados({ licitacaoId }) {
       const cnpj = String(r.niFornecedor || '').replace(/\D/g, '') || null;
       const porte = String(r.porteFornecedorNome || '').toLowerCase();
       const unitario = Number(r.valorUnitarioHomologado) || null;
-      const total = Number(r.valorTotalHomologado) || null;
 
       await pool.query(
         `INSERT INTO propostas_concorrentes

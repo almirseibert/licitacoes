@@ -213,6 +213,11 @@ export const api = {
 
   repontuar: () => requisitar('/configuracoes/repontuar', { method: 'POST' }),
 
+  // Destinatário do alerta, teto de download e janela de coleta (seção 11.13).
+  // Campo vazio devolve a chave à variável de ambiente.
+  salvarAjustes: (campos) =>
+    requisitar('/configuracoes/ajustes', { method: 'PATCH', body: JSON.stringify(campos) }),
+
   salvarPerfil: (id, campos) =>
     requisitar(`/empresa/perfis/${id}`, { method: 'PATCH', body: JSON.stringify(campos) }),
 
