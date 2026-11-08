@@ -1264,11 +1264,17 @@ e desligado significa desligado — o aviso continua no sino, que é a fonte da 
 
 ### Fase 1 — Fundação (meta: ver licitações na tela)
 - [x] Estrutura do app e Docker
-- [ ] **Deploy no EasyPanel e subdomínio com HTTPS — PENDENTE.** O Dockerfile e o
-      banco estão prontos (as 15 migrações já rodaram no MySQL do EasyPanel),
-      mas os serviços `licitacoes-api` e `licitacoes-worker` não foram criados e
-      `licitacoes.studiomythos.com.br` não existe no DNS (conferido em 07/11/2026).
-      Até isso ser feito, o painel só roda na máquina de quem desenvolve.
+- [ ] **Deploy no EasyPanel e subdomínio com HTTPS — PENDENTE.** Atualizado em
+      08/11/2026: os serviços `licitacoes-api` e `licitacoes-worker` **já foram
+      criados**, com GitHub ligado, build testado com sucesso (o container chegou a
+      subir e falhou exatamente onde devia, por `DB_PASSWORD` ausente — prova de que
+      o resto do caminho está certo), variáveis não sensíveis preenchidas e volume
+      `/dados` compartilhado entre os dois. Falta só o que exige uma pessoa: o `GRANT`
+      no MySQL, colar os dois segredos obrigatórios (`DB_PASSWORD`, `JWT_SECRET`) nas
+      telas de Ambiente, e o registro DNS de `licitacoes.studiomythos.com.br` no
+      Cloudflare. Detalhe completo, com os valores exatos, em
+      [IMPLANTACAO.md](IMPLANTACAO.md). Até esses três passos, o painel só roda na
+      máquina de quem desenvolve.
 - [x] Banco com as tabelas das seções 4.1 a 4.4 + migrations
 - [x] Login reaproveitando o JWT do painel atual
 - [x] Adaptador `pncp` (busca + detalhe + itens)

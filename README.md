@@ -6,12 +6,17 @@ está em [PAINEL_LICITACOES_INSTRUCOES.md](PAINEL_LICITACOES_INSTRUCOES.md) — 
 **Estado: as 14 fases implementadas e validadas — as seis primeiras em 02/11/2026, as Fases 7 a 14 em 07/11/2026.**
 
 **O que falta não é fase, é implantação:** os serviços `licitacoes-api` e
-`licitacoes-worker` ainda não existem no EasyPanel e
-`licitacoes.studiomythos.com.br` não resolve no DNS (conferido em 07/11/2026).
-O banco já está lá, com as 15 migrações aplicadas (a 015 rodou em 07/11/2026,
-depois da coleta de 1.362 licitações) e os dados de produção intactos. Até o
-deploy, o painel só roda na máquina de quem desenvolve. O passo a passo está em
-[Deploy no EasyPanel](#deploy-no-easypanel).
+`licitacoes-worker` já existem no EasyPanel (08/11/2026) — GitHub ligado, build
+testado com sucesso, variáveis não sensíveis preenchidas, volume `/dados`
+compartilhado, domínio cadastrado. Falta colar 2 segredos obrigatórios
+(`DB_PASSWORD`, `JWT_SECRET`), rodar um `GRANT` no MySQL e criar o registro DNS
+no Cloudflare — os três são ações que só uma pessoa pode fazer, detalhadas com
+os valores exatos em [IMPLANTACAO.md](IMPLANTACAO.md). O banco já está lá, com
+as 15 migrações aplicadas (a 015 rodou em 07/11/2026, depois da coleta de 1.362
+licitações) e os dados de produção intactos. Até esses três passos, o painel só
+roda na máquina de quem desenvolve. O passo a passo original está em
+[Deploy no EasyPanel](#deploy-no-easypanel); o estado de hoje está em
+[IMPLANTACAO.md](IMPLANTACAO.md).
 
 A primeira coleta real no PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas
 com link que abre o edital no portal. Depois, pela tela, a palavra "videomonitoramento" foi
@@ -788,10 +793,11 @@ Dois serviços a partir do **mesmo Dockerfile**, mudando só o comando:
 Volume persistente em `/dados` (editais e documentos da empresa ficam fora do container).
 As variáveis do `.env` entram em **Environment** nos dois serviços.
 
-**Nada disso está feito ainda.** O que existe hoje no EasyPanel é só o MySQL, com o
-banco `licitacoes` e as 15 migrações aplicadas de fora, da máquina de quem
-desenvolve, pela porta 3302. `licitacoes.studiomythos.com.br` não resolve no DNS.
-A ordem dos passos, quando for a hora:
+**Atualizado em 08/11/2026: os dois serviços já existem**, criados e testados —
+veja o estado exato, com os valores já preenchidos e o que falta colar, em
+[IMPLANTACAO.md](IMPLANTACAO.md). O roteiro abaixo é o original, para quem for
+recriar do zero ou entender a ordem; `licitacoes.studiomythos.com.br` ainda não
+resolve no DNS, que é o passo 4.
 
 1. **New Service → App**, nome `licitacoes-api`, apontado para este repositório
    (`almirseibert/licitacoes`, branch `main`), build pelo `Dockerfile` da raiz.
@@ -989,14 +995,25 @@ para os dados da empresa, os jobs `limpar_temporarios` e `checar_sancoes`, a cad
 30 minutos do prazo e do monitor, o alerta por WhatsApp, as variáveis da seção 29 que
 estavam fixas no código, e o lint e os testes que a seção 32 pede.
 
-O que falta agora é **implantação**, não código, em dois passos e nesta ordem:
+**Atualizado em 08/11/2026.** Os serviços `licitacoes-api` e `licitacoes-worker` já
+existem no EasyPanel, com GitHub ligado, build testado (o container chegou a subir e
+falhou exatamente onde devia — `DB_PASSWORD` ausente, prova de que o resto do caminho
+está certo), variáveis não sensíveis preenchidas e volume `/dados` compartilhado. O
+que falta agora é **implantação**, não código, em três passos e nesta ordem — os três
+exigem uma pessoa, porque nenhum é algo que se faça colando segredo de produção num
+formulário sem ser o dono dele:
 
-1. **Criar o registro DNS** de `licitacoes.studiomythos.com.br` (hoje: não existe) e os
-   serviços `licitacoes-api` e `licitacoes-worker` no EasyPanel — ver
-   [Deploy no EasyPanel](#deploy-no-easypanel). A migração 015 já rodou; `npm run migrar`
-   no servidor não terá o que aplicar, mas continua sendo o passo certo, por ser
-   idempotente.
-2. **Completar os dados da empresa** em Configurações, e decidir quem recebe os alertas.
+1. **O `GRANT` no MySQL** — sem ele ninguém loga, nem antes nem depois do deploy.
+2. **Colar `DB_PASSWORD` e `JWT_SECRET`** (e os quatro opcionais, se quiser os canais
+   ligados) nas telas de Ambiente dos dois serviços, e implantar de novo.
+3. **Criar o registro DNS** de `licitacoes.studiomythos.com.br` no Cloudflare.
+
+Os valores exatos — IP do servidor, nome interno do MySQL, a lista completa do que já
+está preenchido — estão em [IMPLANTACAO.md](IMPLANTACAO.md), para não ter de reabrir o
+EasyPanel para descobrir onde isso parou.
+
+**Completar os dados da empresa** em Configurações, e decidir quem recebe os alertas,
+continua pendente também — mas isso já dá para fazer hoje, local, sem esperar o deploy.
 
 O **botão de acesso na página da Studio Mythos** também já está no lugar: no menu do
 painel protegido, ao lado de CRM e Financeiro, apontando para o subdomínio — o login é o
