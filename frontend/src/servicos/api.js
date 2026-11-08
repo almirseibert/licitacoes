@@ -456,4 +456,24 @@ export const api = {
   criarFeriado: (campos) => requisitar('/feriados', { method: 'POST', body: JSON.stringify(campos) }),
 
   apagarFeriado: (id) => requisitar(`/feriados/${id}`, { method: 'DELETE' }),
+
+  // ------------- contratos e marcos (seção 28)
+  contratos: (situacao) => requisitar(`/contratos${situacao ? `?situacao=${situacao}` : ''}`),
+
+  contrato: (id) => requisitar(`/contratos/${id}`),
+
+  abrirContrato: (campos) => requisitar('/contratos', { method: 'POST', body: JSON.stringify(campos) }),
+
+  salvarContrato: (id, campos) =>
+    requisitar(`/contratos/${id}`, { method: 'PATCH', body: JSON.stringify(campos) }),
+
+  criarMarco: (id, campos) =>
+    requisitar(`/contratos/${id}/marcos`, { method: 'POST', body: JSON.stringify(campos) }),
+
+  salvarMarco: (id, marcoId, campos) =>
+    requisitar(`/contratos/${id}/marcos/${marcoId}`, { method: 'PATCH', body: JSON.stringify(campos) }),
+
+  apagarMarco: (id, marcoId) => requisitar(`/contratos/${id}/marcos/${marcoId}`, { method: 'DELETE' }),
+
+  rodarAvisosContrato: () => requisitar('/contratos/avisos/rodar', { method: 'POST' }),
 };

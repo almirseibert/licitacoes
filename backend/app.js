@@ -35,6 +35,7 @@ app.use('/api/calendario', autenticar, require('./rotas/calendario'));
 app.use('/api/ia', autenticar, require('./rotas/ia'));
 app.use('/api/dossies', autenticar, require('./rotas/dossies'));
 app.use('/api/feriados', autenticar, require('./rotas/feriados'));
+app.use('/api/contratos', autenticar, require('./rotas/contratos'));
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ erro: 'Rota não encontrada.' });

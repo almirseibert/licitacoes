@@ -48,6 +48,9 @@ const ETAPAS = [
     descricao: 'Adjudicada para a Studio Mythos',
     cor: 'ok',
     pede: ['valor_final'],
+    // Abre o contrato com o checklist da seção 28.3. Ganhar é metade: a outra
+    // metade tem prazos com multa, e é aqui que eles passam a ser vigiados.
+    aoEntrar: 'abrir_contrato',
   },
   {
     chave: 'Perdemos',

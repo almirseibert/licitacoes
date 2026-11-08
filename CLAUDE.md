@@ -67,5 +67,6 @@ npm install && npm run migrar && npm run semear
 `npm run recorrencias` (calendário da seção 24), `npm run ia` (leitura assistida; sem
 `GEMINI_API_KEY` ela fica desligada e o painel funciona inteiro sem ela),
 `npm run prazos` (dias úteis e o limite de esclarecimento), `npm run dossies`
-(fichas de concorrente e órgão).
+(fichas de concorrente e órgão), `npm run contratos` (marcos do contrato e a faixa da LC 123;
+`-- --contrato=<id>` mostra o checklist de um).
 O README tem o detalhe de cada um.

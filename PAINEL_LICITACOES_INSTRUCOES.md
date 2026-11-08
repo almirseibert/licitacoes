@@ -1312,9 +1312,9 @@ API que já está configurada no monorepo.
 - **Aceite:** o painel acertar a data limite de esclarecimento em 10 licitações conferidas no edital; e a ficha de um concorrente bater com a contagem manual.
 
 ### Fase 13 — Pós-vitória (seção 28)
-- [ ] `contratos` e `contrato_marcos` com checklist automático
-- [ ] Alertas de marco e tela de contratos
-- [ ] Faturado em 12 meses, faixa atual e quanto falta para a próxima
+- [x] `contratos` e `contrato_marcos` com checklist automático
+- [x] Alertas de marco e tela de contratos
+- [x] Faturado em 12 meses, faixa atual e quanto falta para a próxima
 - **Aceite:** registrar um contrato real e receber o alerta do primeiro marco.
 
 ### Fase 14 — Extras

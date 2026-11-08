@@ -8,6 +8,7 @@ const funil = require('../regras/funil');
 const descarte = require('../regras/descarte');
 const exigencias = require('../regras/exigencias');
 const prazos = require('../jobs/prazos');
+const contrato = require('../servicos/contrato');
 const servicoMonitor = require('../servicos/monitor');
 const monitorar = require('../jobs/monitorar');
 const servicoIa = require('../servicos/ia');
@@ -320,6 +321,25 @@ rotas.patch('/:id', async (req, res) => {
         );
         await pool.query("UPDATE licitacoes SET arquivos_status = 'na_fila' WHERE id = ?", [req.params.id]);
         avisos.push('Download da documentação entrou na fila.');
+      }
+
+      // Entrar em "Ganhamos" abre o contrato com o checklist da seção 28.3.
+      // Idempotente: o card pode entrar, sair e voltar sem duplicar contrato,
+      // e nada do que você já preencheu é sobrescrito.
+      if (definicao.aoEntrar === 'abrir_contrato') {
+        try {
+          const r = await contrato.abrir(Number(req.params.id));
+          avisos.push(
+            r.criado
+              ? `Contrato aberto com ${r.marcos_criados} marco(s) no checklist. Confira as datas contra o edital.`
+              : 'Esta licitação já tinha contrato registrado.'
+          );
+        } catch (erro) {
+          // Falhar aqui não pode desfazer a mudança de etapa: ganhar a licitação
+          // é o fato, e o contrato é o que se monta a partir dele.
+          console.error('Erro ao abrir o contrato:', erro.message);
+          avisos.push('A etapa mudou, mas o contrato não pôde ser aberto agora. Abra-o na tela Contratos.');
+        }
       }
 
       // Entrar em "Vou disputar" cria os alertas de 48 h e 2 h.

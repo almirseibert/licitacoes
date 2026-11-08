@@ -3,7 +3,7 @@
 CRM de captação e inscrição em licitações de órgãos públicos. A especificação completa
 está em [PAINEL_LICITACOES_INSTRUCOES.md](PAINEL_LICITACOES_INSTRUCOES.md) — 32 seções, 14 fases.
 
-**Estado: Fases 1 a 12 implementadas e validadas — as seis primeiras em 02/11/2026, as Fases 7 a 12 em 07/11/2026.**
+**Estado: Fases 1 a 13 implementadas e validadas — as seis primeiras em 02/11/2026, as Fases 7 a 13 em 07/11/2026.**
 
 A primeira coleta real no PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas
 com link que abre o edital no portal. Depois, pela tela, a palavra "videomonitoramento" foi
@@ -103,6 +103,21 @@ Garanhuns, o prazo daquela licitação andou de 19/10 para 16/10 e o de uma lici
 as fichas de **quatro concorrentes bateram com a contagem manual** em todos os campos, incluindo
 o desconto mediano na quarta casa decimal. Os dossiês saíram em **1,2 s para 22 concorrentes e
 1.007 órgãos**.
+
+A Fase 13 fechou o pós-vitória. O aceite foi feito com um contrato real: o **Pregão Eletrônico
+61/2026 de Orleans/SC** (processo 183/2026, solução de BI municipal, R$ 47.800,00). Mover o card
+para "Ganhamos" abriu o contrato sozinho com **5 marcos** no checklist — garantia e renovação de
+fora, porque a cláusula 10.1 do contrato dispensa garantia e a vigência ainda não estava
+informada. A **assinatura caiu em 13/11**, 5 dias úteis da convocação; o edital, no item 10.1,
+dá **3 dias**, e corrigida a data para 10/11 o **alerta do primeiro marco saiu em vermelho**, com
+o objeto e o órgão na mensagem — o aceite da fase. Informada a vigência de 12 meses da cláusula
+2.1, o marco de **renovação entrou em 11/08/2027**, 90 dias antes do fim; marcada a garantia como
+exigida, o marco dela nasceu com **R$ 2.390,00 — 5% exatos do valor — em 25/11**, 10 dias úteis
+da assinatura, **pulando o feriado de 20/11**. O marco atrasado voltou a avisar, em vermelho e com
+chave própria. Na faixa da LC 123: com R$ 300.000,00 do contador, o painel acusou **83% do teto de
+ME e R$ 60.000,00 para a EPP**; com R$ 1.200.000,00, acusou em vermelho que o perfil declara ME e
+a receita já é de EPP. O contrato de teste foi removido da base e o card voltou para a Triagem:
+a licitação 582 não foi ganha de verdade.
 
 O que existe hoje:
 
@@ -231,6 +246,16 @@ O que existe hoje:
 | Rotas dos dossiês e dos feriados | [backend/rotas/dossies.js](backend/rotas/dossies.js), [backend/rotas/feriados.js](backend/rotas/feriados.js) |
 | Aba Questionar e tela Órgãos | [frontend/src/paginas/Questionamentos.jsx](frontend/src/paginas/Questionamentos.jsx), [frontend/src/paginas/Orgaos.jsx](frontend/src/paginas/Orgaos.jsx) |
 | Os mesmos jobs no terminal | [backend/jobs/executar-prazos.js](backend/jobs/executar-prazos.js), [backend/jobs/executar-dossies.js](backend/jobs/executar-dossies.js) |
+
+| Item da Fase 13 | Onde |
+|---|---|
+| `contratos` e `contrato_marcos` | [backend/migrations/014_contratos.sql](backend/migrations/014_contratos.sql) |
+| Os sete marcos da seção 28.3 e as faixas da LC 123 | [backend/regras/contrato.js](backend/regras/contrato.js) |
+| Checklist automático ao entrar em "Ganhamos" | [backend/servicos/contrato.js](backend/servicos/contrato.js), [backend/regras/funil.js](backend/regras/funil.js) |
+| Job `alertas_contrato` e o aviso de 80% da faixa | [backend/jobs/contratos.js](backend/jobs/contratos.js) |
+| Rotas do contrato e dos marcos | [backend/rotas/contratos.js](backend/rotas/contratos.js) |
+| Tela Contratos | [frontend/src/paginas/Contratos.jsx](frontend/src/paginas/Contratos.jsx) |
+| O mesmo job no terminal | [backend/jobs/executar-contratos.js](backend/jobs/executar-contratos.js) |
 
 Tudo em português: código, comentários, tabelas, interface.
 
@@ -591,6 +616,35 @@ ou pelo botão **recalcular**.
 
 ---
 
+### 19. Depois de ganhar
+
+Ganhar é metade. A outra metade tem prazos com multa, e perder prazo contratual custa mais caro
+do que perder a licitação — ainda gera sanção que atrapalha as próximas. Por isso, mover um card
+para **"Ganhamos"** abre o contrato sozinho, com o **checklist da Lei 14.133** montado: assinar
+ou retirar o empenho, apresentar a garantia quando exigida, entregar, aceite, nota fiscal com os
+dados do empenho corretos, pagamento e a decisão de renovação, 90 dias antes do fim da vigência.
+
+As datas que o painel calcula são **prazo típico, e a tela diz que são**: 5 dias úteis da
+convocação para assinar, 10 para a garantia, 30 dias do aceite para o pagamento. O edital pode
+fixar outro — o de Orleans dá 3 dias para assinar — e aí o número do edital ganha: a data é um
+campo, não um fato. Marco que depende de data que o painel não tem nasce **sem data**, em vez de
+com data chutada, porque alerta errado só ensina a ignorar alerta. Quando a data de que ele
+depende aparece, o marco a recebe; o que você já preencheu nunca é sobrescrito.
+
+Cada marco vira alerta datado — assinatura e garantia em **vermelho**, porque inabilitam —, e
+marco atrasado volta a avisar, com chave própria, enquanto estiver atrasado.
+
+No topo da tela: **faturado em 12 meses**, **faixa atual** e **quanto falta para a próxima**,
+pelas faixas da LC 123 — ME até R$ 360 mil, EPP até R$ 4,8 milhões. ME e EPP mantêm os mesmos
+benefícios em licitação, então cruzar de uma para a outra não tira nada; o que muda é o
+enquadramento declarado, e a declaração vai em cada proposta. O painel avisa ao passar de 80% da
+faixa, e em vermelho quando o perfil declara ME e a receita já é de EPP. São **dois números, e a
+tela mostra os dois**: o que passou pelo painel e o que o contador informou em Configurações. A
+faixa usa o do contador quando ele existe, porque é ele que vale para a declaração — o painel só
+soma o que passou por ele, e diz isso.
+
+---
+
 ## Arquitetura
 
 ```
@@ -718,6 +772,14 @@ POST   /api/dossies/agregar                    recalcula as fichas
 GET    /api/feriados?ano=2026                  POST /api/feriados  (estadual/municipal)
 POST   /api/feriados/importar                  baixa os nacionais da BrasilAPI
 DELETE /api/feriados/:id                       so os cadastrados a mao
+GET    /api/contratos                          lista, faturado em 12m e faixa
+GET    /api/contratos/:id                      contrato com o checklist
+POST   /api/contratos                          abre o contrato de uma licitacao ganha
+PATCH  /api/contratos/:id                      datas, valores, gestor e situacao
+POST   /api/contratos/:id/marcos               marco a mao (medicao, por exemplo)
+PATCH  /api/contratos/:id/marcos/:marcoId      data prevista e conclusao
+DELETE /api/contratos/:id/marcos/:marcoId      so os acrescentados a mao
+POST   /api/contratos/avisos/rodar             roda os alertas de marco agora
 GET    /api/painel/resumo          GET /api/saude
 ```
 
@@ -731,11 +793,11 @@ O perfil da empresa está com os valores do seed. Complete em **Configurações*
 social, o endereço e o representante legal com CPF: sem eles, a capa do pacote e as declarações
 saem com lacuna (`____________`), de propósito — o painel nunca inventa dado.
 
-## Próximo passo — Fase 13
+## Próximo passo — Fase 14
 
-Pós-vitória (seção 28): `contratos` e `contrato_marcos` com checklist automático, alertas de
-marco e tela de contratos, e o faturado em 12 meses com a faixa atual e quanto falta para a
-próxima. O aceite é registrar um contrato real e receber o alerta do primeiro marco.
+Extras: adaptador `generico_html` configurável, exportar o Radar para Excel, relatório mensal
+(quantas disputei, quantas ganhei, desconto médio das minhas propostas) e conversão de imagem
+de certidão para PDF na montagem do envio.
 
 ### Sobre o XLSX — por que escrito à mão
 

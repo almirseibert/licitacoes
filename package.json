@@ -25,7 +25,8 @@
     "recorrencias": "node backend/jobs/executar-recorrencias.js",
     "ia": "node backend/jobs/executar-ia.js",
     "dossies": "node backend/jobs/executar-dossies.js",
-    "prazos": "node backend/jobs/executar-prazos.js"
+    "prazos": "node backend/jobs/executar-prazos.js",
+    "contratos": "node backend/jobs/executar-contratos.js"
   },
   "engines": {
     "node": ">=20"

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, LogOut } from 'lucide-react';
+import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, LogOut } from 'lucide-react';
 import { obterToken, obterUsuario, encerrarSessao } from './servicos/api';
 import Login from './paginas/Login';
 import Radar from './paginas/Radar';
@@ -14,6 +14,7 @@ import Diagnostico from './paginas/Diagnostico';
 import Oportunidades from './paginas/Oportunidades';
 import Calendario from './paginas/Calendario';
 import Orgaos from './paginas/Orgaos';
+import Contratos from './paginas/Contratos';
 import Alertas from './componentes/Alertas';
 
 const TELAS = [
@@ -24,6 +25,7 @@ const TELAS = [
   { chave: 'precos', rotulo: 'Preço de referência', icone: TrendingDown },
   { chave: 'oportunidades', rotulo: 'Oportunidades', icone: Sparkles },
   { chave: 'calendario', rotulo: 'Calendário', icone: CalendarRange },
+  { chave: 'contratos', rotulo: 'Contratos', icone: FileCheck2 },
   { chave: 'orgaos', rotulo: 'Órgãos', icone: Landmark },
   { chave: 'diagnostico', rotulo: 'Diagnóstico', icone: Stethoscope },
   { chave: 'cofre', rotulo: 'Documentos', icone: FolderLock },
@@ -97,6 +99,9 @@ export default function App() {
         )}
         {tela === 'calendario' && (
           <Calendario aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />
+        )}
+        {tela === 'contratos' && (
+          <Contratos aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />
         )}
         {tela === 'orgaos' && (
           <Orgaos aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />

@@ -15,6 +15,7 @@ const recorrencias = require('../backend/jobs/recorrencias');
 const iaResumos = require('../backend/jobs/ia-resumos');
 const questionamentos = require('../backend/jobs/questionamentos');
 const dossies = require('../backend/jobs/dossies');
+const contratos = require('../backend/jobs/contratos');
 
 const sinal = { parar: false };
 
@@ -43,6 +44,7 @@ const HORA_DAS_RECORRENCIAS = 8;
 let diaDoUltimoCalculoDePrazos = null;
 let mesDaUltimaAgregacao = null;
 let diaDoUltimoAvisoDeRecorrencia = null;
+let diaDoUltimoAvisoDeContrato = null;
 let semanaDaUltimaDeteccao = null;
 
 function semanaAtual() {
@@ -69,6 +71,7 @@ async function principal() {
   iaResumos.registrarNaFila();
   questionamentos.registrarNaFila();
   dossies.registrarNaFila();
+  contratos.registrarNaFila();
 
   console.log(`Worker de licitações iniciado. Driver da fila: ${cfgFila.driver}.`);
 
@@ -165,6 +168,21 @@ async function principal() {
           `Prazos de questionamento: ${prazos.calculados} calculados` +
             (prazos.criados ? `, ${prazos.criados} alerta(s) de último dia` : '') + '.'
         );
+      }
+
+      // Marcos de contrato (seção 28), diário às 08h. Perder prazo contratual
+      // custa mais caro do que perder a licitação: o aviso sai com antecedência
+      // e volta a sair enquanto o marco estiver atrasado.
+      if (agora.getHours() >= HORA_DAS_RECORRENCIAS && diaDoUltimoAvisoDeContrato !== hojeLocal()) {
+        diaDoUltimoAvisoDeContrato = hojeLocal();
+        const marcos = await contratos.rodar({});
+        if (marcos.criados || marcos.viraram_vigentes || marcos.encerrados) {
+          console.log(
+            `Contratos: ${marcos.criados} alerta(s) de marco` +
+              (marcos.atrasados ? ` (${marcos.atrasados} atrasado(s))` : '') +
+              `, ${marcos.viraram_vigentes} vigente(s), ${marcos.encerrados} encerrado(s).`
+          );
+        }
       }
 
       // Dossiês de concorrente e órgão (seções 26 e 27), mensal no dia 1.
