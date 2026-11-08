@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ExternalLink, Gavel, LayoutGrid, List, Loader2, RefreshCw, Star, Download,
+  ExternalLink, Gavel, LayoutGrid, List, Loader2, RefreshCw, Star, Download, FileSpreadsheet,
 } from 'lucide-react';
 import { api } from '../servicos/api';
 import { moeda, dataHora, resumir, faixaPontuacao } from '../servicos/formato';
@@ -53,6 +53,7 @@ export default function Radar({ abrir = null, aoAbrir = null }) {
     if (abrir) setAberta(abrir);
   }, [abrir]);
   const [coletando, setColetando] = useState(false);
+  const [exportando, setExportando] = useState(false);
   const [aviso, setAviso] = useState(null);
 
   useEffect(() => {
@@ -100,6 +101,21 @@ export default function Radar({ abrir = null, aoAbrir = null }) {
     }
   };
 
+  // Exporta exatamente o que está na tela: os mesmos filtros, a mesma
+  // ordenação. Exportar coisa diferente do que se vê seria a pior armadilha
+  // possível aqui.
+  const exportar = useCallback(async () => {
+    setExportando(true);
+    setAviso(null);
+    try {
+      await api.exportarRadar({ ...filtros, pagina: undefined, por_pagina: undefined });
+    } catch (e) {
+      setAviso(e.message);
+    } finally {
+      setExportando(false);
+    }
+  }, [filtros]);
+
   const coletarAgora = async () => {
     setColetando(true);
     setAviso(null);
@@ -145,6 +161,14 @@ export default function Radar({ abrir = null, aoAbrir = null }) {
             <RefreshCw size={14} className={carregando ? 'animate-spin' : ''} />
           </button>
           <button
+            onClick={exportar}
+            disabled={exportando}
+            className="p-1.5 rounded border border-borda text-texto-suave hover:text-texto disabled:opacity-60"
+            title="Baixar esta lista em Excel, com os filtros que estão aplicados"
+          >
+            {exportando ? <Loader2 size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />}
+          </button>
+          <button
             onClick={coletarAgora}
             disabled={coletando}
             className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded bg-voltagem text-obsidiana font-medium hover:brightness-110 disabled:opacity-60"
@@ -155,7 +179,7 @@ export default function Radar({ abrir = null, aoAbrir = null }) {
         </div>
       </div>
     ),
-    [resumo, visao, carregando, coletando, carregar]
+    [resumo, visao, carregando, coletando, carregar, exportar, exportando]
   );
 
   return (

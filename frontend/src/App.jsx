@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, LogOut } from 'lucide-react';
+import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut } from 'lucide-react';
 import { obterToken, obterUsuario, encerrarSessao } from './servicos/api';
 import Login from './paginas/Login';
 import Radar from './paginas/Radar';
@@ -15,6 +15,7 @@ import Oportunidades from './paginas/Oportunidades';
 import Calendario from './paginas/Calendario';
 import Orgaos from './paginas/Orgaos';
 import Contratos from './paginas/Contratos';
+import Relatorio from './paginas/Relatorio';
 import Alertas from './componentes/Alertas';
 
 const TELAS = [
@@ -28,6 +29,7 @@ const TELAS = [
   { chave: 'contratos', rotulo: 'Contratos', icone: FileCheck2 },
   { chave: 'orgaos', rotulo: 'Órgãos', icone: Landmark },
   { chave: 'diagnostico', rotulo: 'Diagnóstico', icone: Stethoscope },
+  { chave: 'relatorio', rotulo: 'Relatório mensal', icone: BarChart3 },
   { chave: 'cofre', rotulo: 'Documentos', icone: FolderLock },
   { chave: 'modelos', rotulo: 'Declarações', icone: FileSignature },
   { chave: 'configuracoes', rotulo: 'Configurações', icone: SlidersHorizontal },
@@ -109,6 +111,7 @@ export default function App() {
         {tela === 'diagnostico' && (
           <Diagnostico aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />
         )}
+        {tela === 'relatorio' && <Relatorio />}
         {tela === 'configuracoes' && <Configuracoes />}
       </main>
     </div>

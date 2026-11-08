@@ -40,7 +40,8 @@ const FONTES = [
     ativa: 0,
     intervalo_horas: 12,
     prioridade: 10,
-    observacao: 'Muitos municípios do RS e SC. Adaptador genérico entra na Fase 14.',
+    observacao:
+      'Muitos municípios do RS e SC. O adaptador existe desde a Fase 14; a fonte só coleta depois de você configurar o mapa de campos na própria tela (seção 5.3).',
   },
   {
     nome: 'BLL Compras',

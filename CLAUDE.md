@@ -69,4 +69,9 @@ npm install && npm run migrar && npm run semear
 `npm run prazos` (dias úteis e o limite de esclarecimento), `npm run dossies`
 (fichas de concorrente e órgão), `npm run contratos` (marcos do contrato e a faixa da LC 123;
 `-- --contrato=<id>` mostra o checklist de um).
+
+O adaptador `generico_html` (seção 5.3) é configurado pela tela de Fontes, não por código: o
+mapa de campos é um JSON na própria fonte. Ele lê HTML pronto com `cheerio` — portal que monta
+a lista por JavaScript não é forçado com navegador headless; a mensagem diz as duas causas
+possíveis do zero resultados e deixa a escolha com quem configura.
 O README tem o detalhe de cada um.

@@ -2,8 +2,13 @@
 // e cadastrar a fonte na tela (seção 5).
 const pncp = require('./pncp');
 const comprasgov = require('./comprasgov');
+const genericoHtml = require('./generico_html');
 
-const adaptadores = { [pncp.chave]: pncp, [comprasgov.chave]: comprasgov };
+const adaptadores = {
+  [pncp.chave]: pncp,
+  [comprasgov.chave]: comprasgov,
+  [genericoHtml.chave]: genericoHtml,
+};
 
 function obter(chave) {
   const adaptador = adaptadores[chave];

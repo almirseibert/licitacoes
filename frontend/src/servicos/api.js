@@ -476,4 +476,21 @@ export const api = {
   apagarMarco: (id, marcoId) => requisitar(`/contratos/${id}/marcos/${marcoId}`, { method: 'DELETE' }),
 
   rodarAvisosContrato: () => requisitar('/contratos/avisos/rodar', { method: 'POST' }),
+
+  // ------------- exportações e relatório (Fase 14)
+  exportarRadar: (parametros = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(parametros).forEach(([k, v]) => {
+      if (v !== '' && v !== null && v !== undefined && v !== false) q.set(k, v);
+    });
+    const dia = new Date().toISOString().slice(0, 10);
+    return salvarComo(`/licitacoes/exportar?${q.toString()}`, `radar-licitacoes-${dia}.xlsx`);
+  },
+
+  relatorioMensal: (meses = 12) => requisitar(`/licitacoes/relatorio?meses=${meses}`),
+
+  exportarRelatorio: (meses = 12) => {
+    const dia = new Date().toISOString().slice(0, 10);
+    return salvarComo(`/licitacoes/relatorio?meses=${meses}&formato=xlsx`, `relatorio-mensal-${dia}.xlsx`);
+  },
 };

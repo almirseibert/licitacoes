@@ -8,6 +8,7 @@ const fs = require('fs');
 const fsp = require('fs/promises');
 const path = require('path');
 const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
+const imagemPdf = require('./imagem-pdf');
 
 const arquivos = require('./arquivos');
 
@@ -88,6 +89,34 @@ async function montarPdfUnico({ licitacao, perfil, pecas }) {
   const fora = [];
 
   for (const peca of pecas) {
+    // Certidão que chegou como foto ou print (Fase 14): vira página do PDF
+    // aqui mesmo, em vez de sobrar na lista "fora do PDF" para você converter
+    // à mão. A nota de procedência vai no alto da página — quem folheia precisa
+    // saber que aquilo é imagem de documento, não o documento emitido.
+    if (imagemPdf.ehImagem(peca.extensao)) {
+      const paginaInicial = documento.getPageCount() + 1;
+      try {
+        const bytes = await fsp.readFile(peca.caminhoAbsoluto);
+        await imagemPdf.desenharEm(documento, bytes, {
+          rotulo: `${peca.rotulo} — imagem convertida em página`,
+          fonte: normal,
+        });
+      } catch (erro) {
+        fora.push({ ...peca, erro: `imagem não convertida: ${erro.message}` });
+        continue;
+      }
+
+      indice.push({
+        ordem: peca.ordem,
+        rotulo: peca.rotulo,
+        pagina: paginaInicial,
+        folhas: 1,
+        validade: peca.validade || null,
+        de_imagem: true,
+      });
+      continue;
+    }
+
     if (peca.extensao !== '.pdf') {
       fora.push(peca);
       continue;
@@ -217,8 +246,11 @@ function desenharIndice(pagina, { indice, fora, normal, negrito }) {
     });
     y -= 16;
 
-    if (item.validade) {
-      pagina.drawText(cortar(item.validade, normal, 8, 300), {
+    // Peça que veio de imagem é dita no índice: a legibilidade dela é a da
+    // foto, e quem confere o pacote antes de enviar precisa saber onde olhar.
+    const nota = [item.validade, item.de_imagem ? 'convertida de imagem' : null].filter(Boolean).join(' - ');
+    if (nota) {
+      pagina.drawText(cortar(nota, normal, 8, 300), {
         x: margem + 28, y: y + 4, size: 8, font: normal, color: rgb(0.45, 0.5, 0.57),
       });
       y -= 8;

@@ -9,6 +9,7 @@ const descarte = require('../regras/descarte');
 const exigencias = require('../regras/exigencias');
 const prazos = require('../jobs/prazos');
 const contrato = require('../servicos/contrato');
+const exportar = require('../servicos/exportar');
 const servicoMonitor = require('../servicos/monitor');
 const monitorar = require('../jobs/monitorar');
 const servicoIa = require('../servicos/ia');
@@ -133,6 +134,47 @@ rotas.get('/', async (req, res) => {
   } catch (erro) {
     console.error('Erro ao listar licitações:', erro.message);
     res.status(500).json({ erro: 'Não foi possível carregar as licitações.', detalhe: erro.message });
+  }
+});
+
+// GET /api/licitacoes/exportar — o Radar em Excel, com os filtros da tela
+// (Fase 14). Vem antes de `/:id` porque "exportar" casaria com o parâmetro.
+//
+// Por que Excel e não CSV: o Radar tem objeto longo, valor em real e data com
+// hora, e o CSV entrega os três errados — o Excel quebra a linha no ponto e
+// vírgula do objeto, lê 1.234,56 como texto e inverte dia com mês.
+rotas.get('/exportar', async (req, res) => {
+  try {
+    const { onde, valores } = montarFiltros(req.query);
+    const ordem = ORDENACOES[req.query.ordem] || ORDENACOES.relevancia;
+
+    const r = await exportar.radarEmExcel({ onde, valores, ordem });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${r.arquivo}"`);
+    res.setHeader('X-Linhas', String(r.linhas));
+    res.send(r.buffer);
+  } catch (erro) {
+    console.error('Erro ao exportar o Radar:', erro.message);
+    res.status(500).json({ erro: 'Não foi possível gerar a planilha do Radar.', detalhe: erro.message });
+  }
+});
+
+// GET /api/licitacoes/relatorio — quantas disputei, quantas ganhei e o desconto
+// médio das minhas propostas (Fase 14). `?formato=xlsx` baixa a planilha.
+rotas.get('/relatorio', async (req, res) => {
+  const meses = Math.min(Math.max(Number(req.query.meses || 12), 1), 60);
+
+  try {
+    if (req.query.formato === 'xlsx') {
+      const r = await exportar.relatorioEmExcel({ meses });
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${r.arquivo}"`);
+      return res.send(r.buffer);
+    }
+    res.json(await exportar.relatorioMensal({ meses }));
+  } catch (erro) {
+    console.error('Erro no relatório mensal:', erro.message);
+    res.status(500).json({ erro: 'Não foi possível montar o relatório.', detalhe: erro.message });
   }
 });
 

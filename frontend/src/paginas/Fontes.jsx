@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Play, FlaskConical, Plus, Trash2, X } from 'lucide-react';
+import { Loader2, Play, FlaskConical, Plus, Trash2, X, Settings2 } from 'lucide-react';
 import { api } from '../servicos/api';
 import { dataHora, moeda, faixaPontuacao } from '../servicos/formato';
 import Chave from '../componentes/Chave';
@@ -17,6 +17,8 @@ export default function Fontes() {
   const [ocupada, setOcupada] = useState(null);
   const [teste, setTeste] = useState(null);
   const [nova, setNova] = useState(null);
+  // Qual fonte está com a configuração aberta (seção 5.3).
+  const [configurando, setConfigurando] = useState(null);
 
   const carregar = () =>
     api
@@ -183,6 +185,13 @@ export default function Fontes() {
                     )}
                   </button>
                   <button
+                    onClick={() => setConfigurando(configurando === f.id ? null : f.id)}
+                    title="Configuração do adaptador — o mapa de campos da seção 5.3"
+                    className={configurando === f.id ? 'text-texto' : 'text-texto-suave hover:text-texto'}
+                  >
+                    <Settings2 size={14} />
+                  </button>
+                  <button
                     onClick={() => executar(() => api.apagarFonte(f.id), `Fonte ${f.nome} apagada.`)}
                     title="Apagar fonte"
                     className="text-texto-suave hover:text-erro"
@@ -196,7 +205,124 @@ export default function Fontes() {
         </tbody>
       </table>
 
+      {configurando && (
+        <Configuracao
+          fonte={fontes.find((f) => f.id === configurando)}
+          adaptador={adaptadores.find(
+            (a) => a.chave === (fontes.find((f) => f.id === configurando) || {}).adaptador
+          )}
+          aoFechar={() => setConfigurando(null)}
+          aoSalvar={async (config) => {
+            await executar(() => api.salvarFonte(configurando, { config }), 'Configuração salva.');
+            setConfigurando(null);
+          }}
+        />
+      )}
+
       {teste && <ResultadoTeste dados={teste} aoFechar={() => setTeste(null)} />}
+    </div>
+  );
+}
+
+/**
+ * A configuração do adaptador (seção 5.3) — o que torna o `generico_html`
+ * utilizável sem tocar em código.
+ *
+ * O JSON é editado como texto, de propósito: o mapa de campos é aninhado, e um
+ * formulário de seletor CSS por campo seria mais trabalhoso de usar do que o
+ * próprio JSON. O que a tela dá é o modelo pronto e a validação antes de
+ * salvar — configuração com JSON quebrado só apareceria como "0 resultados" na
+ * próxima coleta, e aí ninguém saberia por quê.
+ */
+const MODELO_GENERICO = {
+  url_busca: 'https://portal.exemplo.gov.br/licitacoes?busca={termo}&pagina={pagina}',
+  seletor_lista: 'table.licitacoes tbody tr',
+  campos: {
+    identificador: { seletor: 'td:nth-child(1)' },
+    orgao: { seletor: 'td:nth-child(2)' },
+    objeto: { seletor: 'td:nth-child(3)' },
+    valor: { seletor: 'td:nth-child(4)' },
+    fim: { seletor: 'td:nth-child(5)', formato_data: 'DD/MM/YYYY HH:mm' },
+    link: { seletor: 'a', atributo: 'href' },
+  },
+  paginas_max: 5,
+  uf_padrao: '',
+  municipio_padrao: '',
+};
+
+function Configuracao({ fonte, adaptador, aoFechar, aoSalvar }) {
+  const [texto, setTexto] = useState(() => JSON.stringify(fonte.config || {}, null, 2));
+  const [erro, setErro] = useState(null);
+
+  if (!fonte) return null;
+
+  const salvar = () => {
+    try {
+      const objeto = JSON.parse(texto || '{}');
+      setErro(null);
+      aoSalvar(objeto);
+    } catch (e) {
+      setErro(`O JSON está inválido: ${e.message}`);
+    }
+  };
+
+  return (
+    <div className="mx-4 my-3 border border-borda rounded bg-superficie p-3">
+      <div className="flex items-baseline gap-3 mb-2">
+        <p className="text-sm">
+          Configuração de <span className="font-mono">{fonte.nome}</span>
+        </p>
+        <span className="text-[11px] font-mono text-texto-suave">{fonte.adaptador}</span>
+        {fonte.adaptador === 'generico_html' && (
+          <button
+            className="text-[11px] text-texto-suave hover:text-texto underline"
+            onClick={() => setTexto(JSON.stringify(MODELO_GENERICO, null, 2))}
+          >
+            usar o modelo da seção 5.3
+          </button>
+        )}
+        <button className="ml-auto text-texto-suave hover:text-texto" onClick={aoFechar}>
+          <X size={14} />
+        </button>
+      </div>
+
+      <textarea
+        className="campo-caixa w-full font-mono text-xs"
+        rows={14}
+        spellCheck={false}
+        value={texto}
+        onChange={(e) => setTexto(e.target.value)}
+      />
+
+      {erro && <p className="mt-1 text-xs text-erro">{erro}</p>}
+
+      {adaptador && adaptador.camposConfig && adaptador.camposConfig.length > 0 && (
+        <div className="mt-2 text-[11px] text-texto-suave">
+          <p className="mb-1">Campos que este adaptador entende:</p>
+          <ul className="grid md:grid-cols-2 gap-x-6">
+            {adaptador.camposConfig.map((c) => (
+              <li key={c.campo}>
+                <span className="font-mono text-texto">{c.campo}</span> — {c.rotulo}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="mt-2 flex items-center gap-3">
+        <button className="botao-primario" onClick={salvar}>
+          Salvar configuração
+        </button>
+        <button className="botao" onClick={aoFechar}>
+          Cancelar
+        </button>
+        {fonte.adaptador === 'generico_html' && (
+          <p className="text-[11px] text-texto-suave">
+            Depois de salvar, use “Testar agora” — ele busca de verdade e mostra o que o seletor pegou, sem
+            gravar nada.
+          </p>
+        )}
+      </div>
     </div>
   );
 }

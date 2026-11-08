@@ -3,7 +3,7 @@
 CRM de captação e inscrição em licitações de órgãos públicos. A especificação completa
 está em [PAINEL_LICITACOES_INSTRUCOES.md](PAINEL_LICITACOES_INSTRUCOES.md) — 32 seções, 14 fases.
 
-**Estado: Fases 1 a 13 implementadas e validadas — as seis primeiras em 02/11/2026, as Fases 7 a 13 em 07/11/2026.**
+**Estado: as 14 fases implementadas e validadas — as seis primeiras em 02/11/2026, as Fases 7 a 14 em 07/11/2026.**
 
 A primeira coleta real no PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas
 com link que abre o edital no portal. Depois, pela tela, a palavra "videomonitoramento" foi
@@ -118,6 +118,21 @@ chave própria. Na faixa da LC 123: com R$ 300.000,00 do contador, o painel acus
 ME e R$ 60.000,00 para a EPP**; com R$ 1.200.000,00, acusou em vermelho que o perfil declara ME e
 a receita já é de EPP. O contrato de teste foi removido da base e o card voltou para a Triagem:
 a licitação 582 não foi ganha de verdade.
+
+A Fase 14 fechou os extras, cada um medido contra coisa real. O adaptador `generico_html` foi
+configurado pela tela, sem uma linha de código, contra o **portal da Prefeitura de Mairiporã/SP**
+— um município que já está na base — e trouxe **as 10 licitações que a página publica**, com
+link, objeto e situação. Contra o **Portal de Compras Públicas**, que monta a lista no navegador,
+ele não devolve zero calado: diz que o seletor não casou com nada e que a página carrega scripts,
+sem afirmar qual das duas causas é — as duas produzem o mesmo HTML, e escolher uma mandaria você
+caçar um problema que pode não existir. O Radar em Excel saiu com **184 linhas e 18 colunas**, e
+as **184 linhas e os 21 campos conferidos bateram com o banco**, um a um. O relatório mensal foi
+medido com 8 licitações reais espalhadas em 4 meses: os **32 números dos 4 meses bateram com a
+contagem manual**, inclusive o desconto médio na quarta casa. A conversão de imagem pegou a
+página de um documento real do Pregão 61/2026 de Orleans em JPG e a **embutiu como folha 24 de um
+pacote de 24 folhas**, com o índice dizendo "convertida de imagem" e **nenhuma peça sobrando fora
+do PDF** — antes, aquela peça ficava de fora. O cenário do relatório foi desfeito e o funil voltou
+ao que era.
 
 O que existe hoje:
 
@@ -256,6 +271,14 @@ O que existe hoje:
 | Rotas do contrato e dos marcos | [backend/rotas/contratos.js](backend/rotas/contratos.js) |
 | Tela Contratos | [frontend/src/paginas/Contratos.jsx](frontend/src/paginas/Contratos.jsx) |
 | O mesmo job no terminal | [backend/jobs/executar-contratos.js](backend/jobs/executar-contratos.js) |
+
+| Item da Fase 14 | Onde |
+|---|---|
+| Adaptador `generico_html`, com robots.txt lido de verdade | [backend/adaptadores/generico_html.js](backend/adaptadores/generico_html.js) |
+| Radar em Excel e relatório mensal | [backend/servicos/exportar.js](backend/servicos/exportar.js) |
+| Imagem de certidão virando página do PDF | [backend/servicos/imagem-pdf.js](backend/servicos/imagem-pdf.js), [backend/servicos/pacote.js](backend/servicos/pacote.js) |
+| Configuração da fonte pela tela | [frontend/src/paginas/Fontes.jsx](frontend/src/paginas/Fontes.jsx) |
+| Tela Relatório mensal e o botão de exportar do Radar | [frontend/src/paginas/Relatorio.jsx](frontend/src/paginas/Relatorio.jsx), [frontend/src/paginas/Radar.jsx](frontend/src/paginas/Radar.jsx) |
 
 Tudo em português: código, comentários, tabelas, interface.
 
@@ -780,6 +803,8 @@ POST   /api/contratos/:id/marcos               marco a mao (medicao, por exemplo
 PATCH  /api/contratos/:id/marcos/:marcoId      data prevista e conclusao
 DELETE /api/contratos/:id/marcos/:marcoId      so os acrescentados a mao
 POST   /api/contratos/avisos/rodar             roda os alertas de marco agora
+GET    /api/licitacoes/exportar                o Radar em Excel, com os filtros da tela
+GET    /api/licitacoes/relatorio?meses=12      relatorio mensal (&formato=xlsx baixa)
 GET    /api/painel/resumo          GET /api/saude
 ```
 
@@ -793,11 +818,46 @@ O perfil da empresa está com os valores do seed. Complete em **Configurações*
 social, o endereço e o representante legal com CPF: sem eles, a capa do pacote e as declarações
 saem com lacuna (`____________`), de propósito — o painel nunca inventa dado.
 
-## Próximo passo — Fase 14
+## Portal novo sem API — o adaptador `generico_html`
 
-Extras: adaptador `generico_html` configurável, exportar o Radar para Excel, relatório mensal
-(quantas disputei, quantas ganhei, desconto médio das minhas propostas) e conversão de imagem
-de certidão para PDF na montagem do envio.
+Boa parte dos portais municipais não tem API, mas publica a lista de licitações em HTML. Em vez
+de um arquivo de código por portal, a fonte é configurada na própria tela: o botão de engrenagem
+em **Fontes** abre a configuração, e o modelo da seção 5.3 entra pronto.
+
+O exemplo que foi usado para validar, contra o portal real da Prefeitura de Mairiporã/SP:
+
+```json
+{
+  "url_busca": "https://www.mairipora.sp.gov.br/licitacoes",
+  "seletor_lista": ".list-item",
+  "campos": {
+    "identificador": { "seletor": ".list-item__link", "atributo": "href" },
+    "objeto":        { "seletor": ".list-item__description" },
+    "situacao":      { "seletor": ".list-item__label" },
+    "link":          { "seletor": ".list-item__link", "atributo": "href" }
+  },
+  "uf_padrao": "SP",
+  "municipio_padrao": "Mairiporã"
+}
+```
+
+Depois de salvar, **Testar agora** busca de verdade e mostra o que o seletor pegou, sem gravar.
+O `robots.txt` do domínio é lido antes da primeira busca e respeitado; regra que o painel não
+entende vale como proibição, porque errar para o lado de não buscar é o lado certo de errar.
+
+Duas coisas que ele não faz, de propósito. Não usa navegador headless: portal que monta a lista
+por JavaScript fica de fora, como o Compras.gov.br, em vez de 300 MB de Chromium na imagem. E,
+quando o seletor não casa com nada, ele **não afirma qual é a causa** — seletor errado e lista
+por JavaScript produzem o mesmo HTML daqui, e dizer "é JavaScript" mandaria você caçar um
+problema que pode não existir. A mensagem diz as duas e quanto do seletor chegou a casar.
+
+---
+
+## Próximo passo
+
+As 14 fases da especificação estão entregues. O que falta é operação, não código: rodar
+`npm run migrar` no servidor (as migrações 009 a 014 ainda não foram aplicadas lá) e completar o
+perfil da empresa em Configurações.
 
 ### Sobre o XLSX — por que escrito à mão
 

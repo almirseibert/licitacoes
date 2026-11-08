@@ -1318,10 +1318,10 @@ API que já está configurada no monorepo.
 - **Aceite:** registrar um contrato real e receber o alerta do primeiro marco.
 
 ### Fase 14 — Extras
-- [ ] Adaptador `generico_html` configurável
-- [ ] Exportar o Radar para Excel
-- [ ] Relatório mensal: quantas disputei, quantas ganhei, desconto médio das minhas propostas
-- [ ] Conversão de imagem (JPG/PNG de certidão) para PDF na montagem do envio
+- [x] Adaptador `generico_html` configurável
+- [x] Exportar o Radar para Excel
+- [x] Relatório mensal: quantas disputei, quantas ganhei, desconto médio das minhas propostas
+- [x] Conversão de imagem (JPG/PNG de certidão) para PDF na montagem do envio
 
 ---
 
