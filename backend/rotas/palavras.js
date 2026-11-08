@@ -1,6 +1,7 @@
 // /api/palavras — CRUD das palavras-chave e das excluídas (seções 4.2 e 11.4),
 // mais o "Simular", que testa um termo antes de ativá-lo.
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const { coletarFonte } = require('../jobs/coletar');
 
@@ -28,7 +29,7 @@ rotas.get('/', async (_req, res) => {
       grupos: [...new Set([...grupos.map((g) => g.grupo), ...GRUPOS_SUGERIDOS])],
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível carregar as palavras-chave.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar as palavras-chave.', erro);
   }
 });
 
@@ -105,7 +106,7 @@ rotas.delete('/:id', async (req, res) => {
     // a palavra excluída, não a remoção do termo de busca.
     res.json({ ok: true });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível apagar a palavra-chave.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível apagar a palavra-chave.', erro);
   }
 });
 
@@ -153,7 +154,7 @@ rotas.delete('/excluidas/:id', async (req, res) => {
     if (!r.affectedRows) return res.status(404).json({ erro: 'Palavra não encontrada.' });
     res.json({ ok: true });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível apagar a palavra.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível apagar a palavra.', erro);
   }
 });
 

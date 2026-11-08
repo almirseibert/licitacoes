@@ -3,6 +3,7 @@
 // Serve para planejar o ano: em que mês vale ter certidão em dia e caixa para
 // garantia.
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const recorrencias = require('../jobs/recorrencias');
 const alertas = require('../servicos/alertas');
@@ -80,7 +81,7 @@ rotas.get('/', async (req, res) => {
     });
   } catch (erro) {
     console.error('Erro no calendário:', erro.message);
-    res.status(500).json({ erro: 'Não foi possível carregar o calendário.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar o calendário.', erro);
   }
 });
 
@@ -98,7 +99,7 @@ rotas.post('/detectar', async (_req, res) => {
     });
   } catch (erro) {
     console.error('Erro ao detectar recorrências:', erro.message);
-    res.status(500).json({ erro: 'Não foi possível recalcular as recorrências.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível recalcular as recorrências.', erro);
   }
 });
 
@@ -143,7 +144,7 @@ rotas.post('/:id/preparar', async (req, res) => {
     });
   } catch (erro) {
     console.error('Erro ao preparar recorrência:', erro.message);
-    res.status(500).json({ erro: 'Não foi possível criar o lembrete.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível criar o lembrete.', erro);
   }
 });
 

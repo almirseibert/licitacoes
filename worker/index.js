@@ -57,6 +57,7 @@ const ultimaVez = {
   deteccaoSemanal: null,
   agregacaoMensal: null,
   sancoesMensais: null,
+  sugestaoPalavras: null,
 };
 
 function hojeLocal() {
@@ -295,6 +296,22 @@ async function rodarDeHoraEmHora() {
               ? `, com registro: ${checadas.sancionados.join(', ')}`
               : ', nenhum registro') + '.'
         );
+      }
+    }
+
+    // Sugestão mensal de palavras-chave (seção 23.5), mensal no dia 1. Ficou
+    // sem agendamento na revisão anterior: a função e a fila já existiam
+    // (jobs/ia-resumos.js), mas nada no worker a disparava — só rodava se
+    // alguém chamasse a rota à mão.
+    if (agora.getDate() === 1 && ultimaVez.sugestaoPalavras !== mesAtual()) {
+      ultimaVez.sugestaoPalavras = mesAtual();
+      const sugeridas = await iaResumos.sugerirPalavras({});
+      if (sugeridas.desligada) {
+        console.log(`Sugestão de palavras: desligada (${sugeridas.motivo}).`);
+      } else if (sugeridas.ok === false) {
+        console.log(`Sugestão de palavras: ${sugeridas.motivo || 'não gerou.'}`);
+      } else {
+        console.log(`Sugestão de palavras: ${sugeridas.gravadas} nova(s) para revisar.`);
       }
     }
   } catch (erro) {

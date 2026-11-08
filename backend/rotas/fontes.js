@@ -1,5 +1,6 @@
 // /api/fontes — CRUD, "Testar agora" e disparo de coleta (seções 4.1 e 13).
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const fila = require('../servicos/fila');
 const adaptadores = require('../adaptadores');
@@ -20,7 +21,7 @@ rotas.get('/', async (_req, res) => {
       adaptadores: adaptadores.listar(),
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível carregar as fontes.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar as fontes.', erro);
   }
 });
 
@@ -114,7 +115,7 @@ rotas.delete('/:id', async (req, res) => {
     if (!r.affectedRows) return res.status(404).json({ erro: 'Fonte não encontrada.' });
     res.json({ ok: true });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível apagar a fonte.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível apagar a fonte.', erro);
   }
 });
 
@@ -146,7 +147,7 @@ rotas.post('/:id/coletar', async (req, res) => {
     );
     res.status(202).json({ ok: true, mensagem: `Coleta da fonte ${linhas[0].nome} está na fila.` });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível enfileirar a coleta.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível enfileirar a coleta.', erro);
   }
 });
 
@@ -160,7 +161,7 @@ rotas.post('/coletar-todas', async (req, res) => {
     );
     res.status(202).json({ ok: true, mensagem: 'Varredura geral está na fila.' });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível enfileirar a varredura.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível enfileirar a varredura.', erro);
   }
 });
 
@@ -173,7 +174,7 @@ rotas.get('/execucoes', async (_req, res) => {
     );
     res.json({ dados: linhas });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível carregar o histórico de coleta.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar o histórico de coleta.', erro);
   }
 });
 

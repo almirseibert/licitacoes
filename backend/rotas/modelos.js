@@ -1,5 +1,6 @@
 // /api/modelos-declaracao — modelos e pré-visualização (seções 18.1 e 18.3).
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const declaracao = require('../servicos/declaracao');
 const { PORCODIGO } = require('../regras/exigencias');
@@ -48,7 +49,7 @@ rotas.get('/', async (_req, res) => {
       variaveis: VARIAVEIS.map(([nome, descricao]) => ({ nome, descricao })),
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível carregar os modelos.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar os modelos.', erro);
   }
 });
 
@@ -124,7 +125,7 @@ rotas.delete('/:id', async (req, res) => {
     await pool.query('DELETE FROM modelos_declaracao WHERE id = ?', [req.params.id]);
     res.json({ ok: true });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível apagar o modelo.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível apagar o modelo.', erro);
   }
 });
 

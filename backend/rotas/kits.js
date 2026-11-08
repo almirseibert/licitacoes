@@ -1,5 +1,6 @@
 // /api/kits — conjuntos salvos de documentos (seção 17.3).
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const { PORCODIGO } = require('../regras/exigencias');
 const { tituloPadrao } = require('../regras/validades');
@@ -38,7 +39,7 @@ rotas.get('/', async (req, res) => {
       })),
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível carregar os kits.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar os kits.', erro);
   }
 });
 
@@ -103,7 +104,7 @@ rotas.delete('/:id', async (req, res) => {
     await pool.query('DELETE FROM documento_kits WHERE id = ?', [req.params.id]);
     res.json({ ok: true });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível apagar o kit.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível apagar o kit.', erro);
   }
 });
 

@@ -1,5 +1,6 @@
 // /api/licitacoes/:id/preco e /api/licitacoes/:id/concorrentes — seção 12.
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const servico = require('../servicos/preco');
 const encerradas = require('../jobs/encerradas');
@@ -14,7 +15,7 @@ rotas.get('/preco', async (req, res) => {
     if (!resumo) return res.status(404).json({ erro: 'Licitação não encontrada.' });
     res.json(resumo);
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível montar o preço de referência.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível montar o preço de referência.', erro);
   }
 });
 
@@ -39,7 +40,7 @@ rotas.patch('/preco', async (req, res) => {
 
     res.json(await servico.resumoDaLicitacao(Number(req.params.id)));
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível salvar o custo.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível salvar o custo.', erro);
   }
 });
 
@@ -68,7 +69,7 @@ rotas.get('/concorrentes', async (req, res) => {
         : 'Nenhum resultado publicado ainda. Quando o órgão homologar, o botão abaixo busca o vencedor de cada item.',
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível carregar os concorrentes.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar os concorrentes.', erro);
   }
 });
 

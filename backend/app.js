@@ -1,14 +1,24 @@
 // Aplicação Express: rotas da API e, em produção, o frontend compilado.
-// Padrão de erro da seção 13: { erro: "mensagem em português", detalhe: "técnico" }.
+// Padrão de erro da seção 13: { "erro": "mensagem em português", "detalhe": "técnico,
+// só em log" } — o `detalhe` nunca sai no corpo da resposta em produção; só o
+// `console.error` do serviço o recebe. Ver backend/middlewares/responder-erro.js.
 const path = require('path');
 const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
 const { autenticar } = require('./middlewares/autenticar');
+const { responderErro } = require('./middlewares/responder-erro');
+const { ambiente, urlPublica } = require('./config/ambiente');
 
 const app = express();
 
-app.use(cors());
+// Em produção, só a origem do próprio painel (URL_PUBLICA) pode chamar a API do
+// navegador — o token vai no cabeçalho Authorization, não em cookie, então não
+// há roubo de sessão por CSRF; mas sem isto qualquer página na internet que
+// obtivesse o token poderia chamar a API pelo navegador de quem está logado,
+// e não há razão para permitir isso num painel interno. Em desenvolvimento (ou
+// sem URL_PUBLICA definida) segue aberto, porque o Vite serve noutra porta.
+app.use(cors(ambiente === 'production' && urlPublica ? { origin: urlPublica } : undefined));
 app.use(express.json({ limit: '2mb' }));
 
 app.get('/api/saude', (_req, res) => {
@@ -51,8 +61,7 @@ if (fs.existsSync(dist)) {
 // Quatro parâmetros de propósito: é a aritmética da assinatura que faz o
 // Express reconhecer isto como tratador de erro, e não como rota comum.
 app.use((erro, _req, res, _next) => {
-  console.error('Erro não tratado:', erro);
-  res.status(500).json({ erro: 'Erro interno no servidor.', detalhe: erro.message });
+  responderErro(res, 500, 'Erro interno no servidor.', erro);
 });
 
 module.exports = app;

@@ -1,5 +1,6 @@
 // Contratos e marcos de execução (seção 28).
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const servico = require('../servicos/contrato');
 const job = require('../jobs/contratos');
 const regras = require('../regras/contrato');
@@ -21,7 +22,7 @@ rotas.get('/', async (req, res) => {
     });
   } catch (erro) {
     console.error('Erro ao listar contratos:', erro.message);
-    res.status(500).json({ erro: 'Não foi possível listar os contratos.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível listar os contratos.', erro);
   }
 });
 
@@ -32,7 +33,7 @@ rotas.get('/:id', async (req, res) => {
     if (!r) return res.status(404).json({ erro: 'Contrato não encontrado.' });
     res.json(r);
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível abrir o contrato.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível abrir o contrato.', erro);
   }
 });
 
@@ -109,7 +110,7 @@ rotas.delete('/:id/marcos/:marcoId', async (req, res) => {
     }
     res.json({ ok: true });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível remover o marco.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível remover o marco.', erro);
   }
 });
 
@@ -124,7 +125,7 @@ rotas.post('/avisos/rodar', async (_req, res) => {
         (r.atrasados ? `, ${r.atrasados} atrasado(s)` : '') + '.',
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível rodar os avisos.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível rodar os avisos.', erro);
   }
 });
 

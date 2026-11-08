@@ -1,5 +1,6 @@
 // Leitura assistida (seção 23) — o que a IA sugeriu e o que você faz com isso.
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const ia = require('../servicos/ia');
 const job = require('../jobs/ia-resumos');
@@ -11,7 +12,7 @@ rotas.get('/', async (req, res) => {
   try {
     res.json(await ia.gasto({ dias: Number(req.query.dias) || 30 }));
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível ler o gasto com IA.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível ler o gasto com IA.', erro);
   }
 });
 
@@ -23,7 +24,7 @@ rotas.get('/palavras-sugeridas', async (_req, res) => {
     );
     res.json({ dados, disponivel: ia.disponivel() });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível carregar as sugestões.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar as sugestões.', erro);
   }
 });
 
@@ -34,7 +35,7 @@ rotas.post('/palavras-sugeridas', async (req, res) => {
     if (!r.ok) return res.status(r.desligada ? 409 : 422).json({ erro: r.motivo });
     res.json({ ...r, mensagem: `${r.gravadas} termo(s) novo(s) sugeridos.` });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível pedir sugestões.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível pedir sugestões.', erro);
   }
 });
 
@@ -76,7 +77,7 @@ rotas.patch('/palavras-sugeridas/:id', async (req, res) => {
           : 'Sugestão recusada.',
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível salvar a sugestão.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível salvar a sugestão.', erro);
   }
 });
 

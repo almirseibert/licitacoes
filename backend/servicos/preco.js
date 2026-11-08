@@ -108,7 +108,13 @@ function numero(valor) {
 
 /**
  * Recalcula `precos_referencia` a partir de `historico_precos`.
- * Job `recalcular_precos` (mensal, dia 1) da seção 14.
+ *
+ * DIVERGÊNCIA DA SPEC, registrada como o CLAUDE.md pede: a seção 14 chama este
+ * job `recalcular_precos` e manda "mensal, dia 1". Na prática ele roda **todo
+ * dia**, de carona na coleta diária de encerradas (`jobs/encerradas.js`, 03h) —
+ * chamado direto, sem passar pela fila com esse nome. Diário é estritamente
+ * melhor: mediana mais fresca, pelo mesmo custo de uma consulta que já ia
+ * rodar de qualquer forma. Não há `recalcular_precos` separado no worker.
  *
  * As linhas do estudo nunca são apagadas: elas são o chão quando a amostra
  * própria ainda é pequena. O cálculo grava com `origem = 'calculado'`, numa

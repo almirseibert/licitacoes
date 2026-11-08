@@ -2,6 +2,7 @@
 // A ficha completa (sanções, órgãos, taxa de vitória) é o dossiê da seção 26,
 // que fecha na fase 12; aqui vem o que já dá para medir com o que está no banco.
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const servico = require('../servicos/preco');
 
 const rotas = express.Router();
@@ -15,7 +16,7 @@ rotas.get('/', async (req, res) => {
       }),
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível listar os concorrentes.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível listar os concorrentes.', erro);
   }
 });
 
@@ -29,7 +30,7 @@ rotas.get('/:cnpj', async (req, res) => {
     }
     res.json(ficha);
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível abrir a ficha.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível abrir a ficha.', erro);
   }
 });
 

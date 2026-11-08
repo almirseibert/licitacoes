@@ -10,6 +10,7 @@ const jwt = require('jsonwebtoken');
 const poolAuth = require('../config/db-auth');
 const { jwt: cfgJwt } = require('../config/ambiente');
 const { autenticar } = require('../middlewares/autenticar');
+const { responderErro } = require('../middlewares/responder-erro');
 
 const rotas = express.Router();
 
@@ -21,6 +22,14 @@ const rotas = express.Router();
  * AUTH_DB_DATABASE apontando para o banco certo, mas o usuário do MySQL não
  * tinha permissão de leitura nele. A mensagem genérica mandava quem instala
  * procurar defeito no código, quando o que faltava era um GRANT de uma linha.
+ *
+ * O `detalhe` devolvido aqui — nome do usuário do MySQL, nome do banco do CRM,
+ * o GRANT exato — é ouro para quem está instalando e veneno para quem só está
+ * tentando entrar: esta rota não exige token (é o login), então qualquer um
+ * que chamá-la o receberia. Por isso `detalhe` nunca vai no corpo da resposta
+ * (seção 13, CLAUDE.md) — só no log do serviço, via `responderErro`. Quem
+ * instala lê o log; quem está na tela de login só precisa saber que o
+ * administrador tem de liberar o acesso.
  */
 function erroDeConfiguracao(erro) {
   const usuario = process.env.DB_USER || '(DB_USER vazio)';
@@ -64,10 +73,13 @@ rotas.post('/login', async (req, res) => {
   }
 
   if (!poolAuth) {
-    return res.status(503).json({
-      erro: 'Login indisponível: a base de usuários do painel não está configurada.',
-      detalhe: 'Defina AUTH_DB_DATABASE no .env.',
-    });
+    return responderErro(
+      res,
+      503,
+      'Login indisponível: a base de usuários do painel não está configurada.',
+      null,
+      'Defina AUTH_DB_DATABASE no .env.'
+    );
   }
 
   try {
@@ -100,12 +112,12 @@ rotas.post('/login', async (req, res) => {
       usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email, papel: usuario.papel },
     });
   } catch (erro) {
-    console.error('Erro no login:', erro.code || '', erro.message);
-
     const configuracao = erroDeConfiguracao(erro);
-    if (configuracao) return res.status(503).json(configuracao);
+    if (configuracao) {
+      return responderErro(res, 503, configuracao.erro, erro, configuracao.detalhe);
+    }
 
-    return res.status(500).json({ erro: 'Não foi possível entrar agora.', detalhe: erro.message });
+    return responderErro(res, 500, 'Não foi possível entrar agora.', erro);
   }
 });
 

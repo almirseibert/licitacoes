@@ -1,5 +1,6 @@
 // GET /api/painel/resumo — números do topo do Radar (seção 13).
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const fila = require('../servicos/fila');
 
@@ -39,7 +40,7 @@ rotas.get('/resumo', async (_req, res) => {
     });
   } catch (erro) {
     console.error('Erro no resumo do painel:', erro.message);
-    res.status(500).json({ erro: 'Não foi possível carregar o resumo.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar o resumo.', erro);
   }
 });
 

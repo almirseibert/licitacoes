@@ -1,5 +1,6 @@
 // Dossiês de concorrente e de órgão (seções 26 e 27), e a consulta de sanções.
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const sancoes = require('../servicos/sancoes');
 const dossies = require('../jobs/dossies');
@@ -24,7 +25,7 @@ rotas.post('/agregar', async (_req, res) => {
     res.json({ ...r, mensagem: `${r.concorrentes} concorrente(s) e ${r.orgaos} órgão(s) recalculados.` });
   } catch (erro) {
     console.error('Erro ao agregar dossiês:', erro.message);
-    res.status(500).json({ erro: 'Não foi possível recalcular os dossiês.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível recalcular os dossiês.', erro);
   }
 });
 
@@ -61,7 +62,7 @@ rotas.get('/orgaos', async (req, res) => {
       })),
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível listar os órgãos.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível listar os órgãos.', erro);
   }
 });
 
@@ -96,7 +97,7 @@ rotas.get('/orgaos/:cnpj', async (req, res) => {
       recorrencias,
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível abrir a ficha do órgão.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível abrir a ficha do órgão.', erro);
   }
 });
 
@@ -135,7 +136,7 @@ rotas.get('/concorrentes/:cnpj', async (req, res) => {
       sancoes_disponivel: sancoes.disponivel(),
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível abrir a ficha.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível abrir a ficha.', erro);
   }
 });
 
@@ -147,7 +148,7 @@ rotas.post('/concorrentes/:cnpj/sancoes', async (req, res) => {
     res.json(r);
   } catch (erro) {
     console.error('Erro ao consultar sanções:', erro.message);
-    res.status(500).json({ erro: 'Não foi possível consultar as sanções.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível consultar as sanções.', erro);
   }
 });
 
@@ -159,7 +160,7 @@ rotas.post('/minhas-sancoes', async (_req, res) => {
     if (!r.disponivel) return res.status(409).json({ erro: r.motivo });
     res.json(r);
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível consultar as sanções da empresa.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível consultar as sanções da empresa.', erro);
   }
 });
 

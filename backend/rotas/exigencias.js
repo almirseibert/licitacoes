@@ -4,6 +4,7 @@
 // gerou a decisão) e o que a empresa tem. A terceira coluna só responde o que
 // dá para saber hoje — o cofre de documentos entra na Fase 5.
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const fila = require('../servicos/fila');
 const { CATALOGO, PORCODIGO } = require('../regras/exigencias');
@@ -101,7 +102,7 @@ rotas.get('/', async (req, res) => {
       dados,
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível montar o checklist.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível montar o checklist.', erro);
   }
 });
 
@@ -125,7 +126,7 @@ rotas.post('/:codigo', async (req, res) => {
     );
     res.json({ ok: true, mensagem: 'Anotado. A leitura automática não mexe mais nesta linha.' });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível salvar a correção.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível salvar a correção.', erro);
   }
 });
 
@@ -138,7 +139,7 @@ rotas.post('/:codigo/soltar', async (req, res) => {
     );
     res.json({ ok: true, mensagem: 'Linha volta a seguir a leitura do edital.' });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível soltar a linha.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível soltar a linha.', erro);
   }
 });
 

@@ -1,5 +1,6 @@
 // Feriados (seção 25.1) — os nacionais vêm da BrasilAPI, os outros são seus.
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const servico = require('../servicos/feriados');
 
 const rotas = express.Router();
@@ -12,7 +13,7 @@ rotas.get('/', async (req, res) => {
       dados: await servico.listar({ de: `${ano}-01-01`, ate: `${ano}-12-31` }),
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível listar os feriados.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível listar os feriados.', erro);
   }
 });
 
@@ -28,7 +29,7 @@ rotas.post('/importar', async (_req, res) => {
         : `Feriados nacionais em dia: ${r.map((x) => `${x.ano} com ${x.baixados || x.ja} dias`).join(', ')}.`,
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível importar os feriados.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível importar os feriados.', erro);
   }
 });
 
@@ -56,7 +57,7 @@ rotas.delete('/:id', async (req, res) => {
     }
     res.json({ ok: true });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível remover.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível remover.', erro);
   }
 });
 

@@ -1,6 +1,7 @@
 // Tela "Oportunidades" (seção 22.4) — desertas, fracassadas e baixa
 // concorrência.
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const estrategicas = require('../jobs/estrategicas');
 const monitor = require('../servicos/monitor');
@@ -34,6 +35,7 @@ rotas.get('/', async (req, res) => {
     );
 
     const baixa = await estrategicas.baixaConcorrencia({ dias });
+    const urgentes = await estrategicas.iminencia({});
 
     const desertas = retomada.filter((o) => o.tipo === 'deserta');
     const fracassadas = retomada.filter((o) => o.tipo === 'fracassada');
@@ -48,10 +50,19 @@ rotas.get('/', async (req, res) => {
           ? Math.round((Date.now() - new Date(l.encerrada_em).getTime()) / 86400000)
           : null,
       })),
+      // Iminência (seção 22.2): aberta, prazo acabando em menos de 24 h.
+      // Prioridade máxima — vem ordenada pelo prazo mais curto primeiro.
+      iminencia: urgentes.map((l) => ({
+        ...l,
+        horas_restantes: l.fim_propostas
+          ? Math.max(0, Math.round((new Date(l.fim_propostas).getTime() - Date.now()) / 3600000))
+          : null,
+      })),
       resumo: {
         desertas: desertas.length,
         fracassadas: fracassadas.length,
         baixa_concorrencia: baixa.length,
+        iminencia: urgentes.length,
         valor_desertas: desertas.reduce((s, o) => s + Number(o.valor_estimado || 0), 0),
         reabertas: retomada.filter((o) => o.situacao === 'reaberta').length,
       },
@@ -66,11 +77,14 @@ rotas.get('/', async (req, res) => {
         baixa_concorrencia:
           'Inferida pelo desconto, não por contagem de propostas: contratação que fechou no 1º quartil de ' +
           'desconto do grupo quase não teve com quem disputar. A contagem real de propostas é do Compras.gov.br, que hoje bloqueia.',
+        iminencia:
+          'É "o prazo está acabando", não "ninguém disputou ainda": o painel não tem a contagem de ' +
+          'propostas de licitação aberta para a maioria das fontes. Abra o link de disputa para confirmar.',
       },
     });
   } catch (erro) {
     console.error('Erro ao listar oportunidades:', erro.message);
-    res.status(500).json({ erro: 'Não foi possível carregar as oportunidades.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar as oportunidades.', erro);
   }
 });
 
@@ -87,7 +101,7 @@ rotas.post('/varrer', async (_req, res) => {
     });
   } catch (erro) {
     console.error('Erro na varredura de estratégicas:', erro.message);
-    res.status(500).json({ erro: 'Não foi possível varrer as estratégicas.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível varrer as estratégicas.', erro);
   }
 });
 
@@ -117,7 +131,7 @@ rotas.patch('/:id', async (req, res) => {
     if (!r.affectedRows) return res.status(404).json({ erro: 'Oportunidade não encontrada.' });
     res.json({ ok: true });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível salvar a oportunidade.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível salvar a oportunidade.', erro);
   }
 });
 
@@ -162,7 +176,7 @@ rotas.post('/:id/acompanhar', async (req, res) => {
     });
   } catch (erro) {
     console.error('Erro ao acompanhar órgão:', erro.message);
-    res.status(500).json({ erro: 'Não foi possível acompanhar este órgão.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível acompanhar este órgão.', erro);
   }
 });
 

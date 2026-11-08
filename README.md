@@ -8,9 +8,10 @@ está em [PAINEL_LICITACOES_INSTRUCOES.md](PAINEL_LICITACOES_INSTRUCOES.md) — 
 **O que falta não é fase, é implantação:** os serviços `licitacoes-api` e
 `licitacoes-worker` ainda não existem no EasyPanel e
 `licitacoes.studiomythos.com.br` não resolve no DNS (conferido em 07/11/2026).
-O banco já está lá, com as migrações 001 a 014 aplicadas e 1.362 licitações; a 015
-é nova e ainda não rodou. Até o deploy, o painel só roda na máquina de quem
-desenvolve. O passo a passo está em [Deploy no EasyPanel](#deploy-no-easypanel).
+O banco já está lá, com as 15 migrações aplicadas (a 015 rodou em 07/11/2026,
+depois da coleta de 1.362 licitações) e os dados de produção intactos. Até o
+deploy, o painel só roda na máquina de quem desenvolve. O passo a passo está em
+[Deploy no EasyPanel](#deploy-no-easypanel).
 
 A primeira coleta real no PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas
 com link que abre o edital no portal. Depois, pela tela, a palavra "videomonitoramento" foi
@@ -788,7 +789,7 @@ Volume persistente em `/dados` (editais e documentos da empresa ficam fora do co
 As variáveis do `.env` entram em **Environment** nos dois serviços.
 
 **Nada disso está feito ainda.** O que existe hoje no EasyPanel é só o MySQL, com o
-banco `licitacoes` e as migrações 001 a 014 aplicadas de fora, da máquina de quem
+banco `licitacoes` e as 15 migrações aplicadas de fora, da máquina de quem
 desenvolve, pela porta 3302. `licitacoes.studiomythos.com.br` não resolve no DNS.
 A ordem dos passos, quando for a hora:
 
@@ -803,8 +804,9 @@ A ordem dos passos, quando for a hora:
    Let’s Encrypt. O registro DNS do subdomínio tem de existir **antes**, apontando
    para a VPS (hoje o domínio está atrás do Cloudflare: o registro do subdomínio
    precisa ser criado lá).
-5. **Deploy** e, pelo **Shell** do serviço, `npm run migrar` uma vez — é o que aplica
-   a migração 015 (tabela `configuracoes` e o estado `limpo` dos arquivos).
+5. **Deploy** e, pelo **Shell** do serviço, `npm run migrar` uma vez — é idempotente
+   e garante o estado das 15 migrações num banco novo; no banco de hoje não tem o
+   que aplicar, porque todas já rodaram da máquina de quem desenvolve.
 6. **New Service → App** de novo, nome `licitacoes-worker`, **mesmo repositório e
    mesmo Dockerfile**, mesmas variáveis, mesmo volume, sem domínio e sem porta,
    trocando só o comando para `npm run worker`.
@@ -987,18 +989,18 @@ para os dados da empresa, os jobs `limpar_temporarios` e `checar_sancoes`, a cad
 30 minutos do prazo e do monitor, o alerta por WhatsApp, as variáveis da seção 29 que
 estavam fixas no código, e o lint e os testes que a seção 32 pede.
 
-O que falta agora é **implantação**, não código, em três passos e nesta ordem:
+O que falta agora é **implantação**, não código, em dois passos e nesta ordem:
 
 1. **Criar o registro DNS** de `licitacoes.studiomythos.com.br` (hoje: não existe) e os
    serviços `licitacoes-api` e `licitacoes-worker` no EasyPanel — ver
-   [Deploy no EasyPanel](#deploy-no-easypanel).
-2. **`npm run migrar`** no servidor, para a migração 015.
-3. **Completar os dados da empresa** em Configurações, e decidir quem recebe os alertas.
+   [Deploy no EasyPanel](#deploy-no-easypanel). A migração 015 já rodou; `npm run migrar`
+   no servidor não terá o que aplicar, mas continua sendo o passo certo, por ser
+   idempotente.
+2. **Completar os dados da empresa** em Configurações, e decidir quem recebe os alertas.
 
-Fora do repositório, falta o **botão de acesso na página da Studio Mythos**: o site não
-tem nenhuma referência ao painel de licitações. O lugar natural é o menu do painel
-protegido, ao lado de CRM e Financeiro, apontando para o subdomínio — o login é o mesmo,
-com o mesmo `JWT_SECRET` e os mesmos usuários, então quem já entrou no CRM entra aqui
+O **botão de acesso na página da Studio Mythos** também já está no lugar: no menu do
+painel protegido, ao lado de CRM e Financeiro, apontando para o subdomínio — o login é o
+mesmo, com o mesmo `JWT_SECRET` e os mesmos usuários, então quem já entrou no CRM entra aqui
 com as mesmas credenciais.
 
 ### Sobre o XLSX — por que escrito à mão

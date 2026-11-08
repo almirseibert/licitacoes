@@ -1224,6 +1224,12 @@ e desligado significa desligado — o aviso continua no sino, que é a fonte da 
 > relógios independentes cairiam juntos de vez em quando, e aí o monitor brigaria
 > com a coleta pelas quatro vagas de requisição da seção 5.4.
 
+> **Divergência registrada em `recalcular_precos`.** A tabela manda "mensal, dia
+> 1". Na prática ele roda **todo dia**, de carona na coleta diária de encerradas
+> (03h) — não existe um `recalcular_precos` separado no worker. Diário é
+> estritamente melhor (mediana mais fresca, mesmo custo, porque a consulta já ia
+> rodar de qualquer forma); ver o comentário em `backend/servicos/preco.js`.
+
 ---
 
 ## 15. Interface — Voltage Obsidian
@@ -1259,9 +1265,8 @@ e desligado significa desligado — o aviso continua no sino, que é a fonte da 
 ### Fase 1 — Fundação (meta: ver licitações na tela)
 - [x] Estrutura do app e Docker
 - [ ] **Deploy no EasyPanel e subdomínio com HTTPS — PENDENTE.** O Dockerfile e o
-      banco estão prontos (as migrações 001 a 014 já rodaram no MySQL do
-      EasyPanel; a 015 é nova e ainda não), mas os
-      serviços `licitacoes-api` e `licitacoes-worker` não foram criados e
+      banco estão prontos (as 15 migrações já rodaram no MySQL do EasyPanel),
+      mas os serviços `licitacoes-api` e `licitacoes-worker` não foram criados e
       `licitacoes.studiomythos.com.br` não existe no DNS (conferido em 07/11/2026).
       Até isso ser feito, o painel só roda na máquina de quem desenvolve.
 - [x] Banco com as tabelas das seções 4.1 a 4.4 + migrations
@@ -2281,22 +2286,42 @@ vazio na tela devolve a chave ao ambiente.
 
 ## 32. Checklist de qualidade antes de cada entrega
 
-- [x] `npm run lint` e `npm test` passam — `eslint.config.js` e `testes/`, 30 testes
-      cobrindo o semáforo e o intervalo da coleta (seção 5.4), a validação da saída
-      da IA (seção 23.4), a lacuna das declarações (seção 18) e os dias úteis do
-      prazo de questionamento (seção 25.1)
-- [ ] Nenhuma credencial, e-mail fixo ou token no código
-- [ ] Toda mensagem de erro visível ao usuário está em português e é compreensível
-- [ ] Coleta roda duas vezes seguidas sem criar duplicata
-- [ ] Download roda duas vezes seguidas sem rebaixar arquivo
+- [x] `npm run lint` e `npm test` passam — `eslint.config.js` e `testes/`, 33 testes
+      cobrindo o semáforo e o intervalo da coleta (seção 5.4), o padrão de erro da
+      seção 13, a validação da saída da IA (seção 23.4), a lacuna das declarações
+      (seção 18) e os dias úteis do prazo de questionamento (seção 25.1)
+- [x] Nenhuma credencial, e-mail fixo ou token no código — conferido por busca em
+      todo o repositório; `.env` e `/dados/` fora do git
+- [x] Toda mensagem de erro visível ao usuário está em português e é compreensível —
+      e, desde a revisão de 08/11/2026, o `detalhe` técnico nunca mais vai no corpo
+      da resposta (seção 13; ver `backend/middlewares/responder-erro.js`)
+- [x] Coleta roda duas vezes seguidas sem criar duplicata — garantido por
+      `UNIQUE KEY uq_fonte_chave (fonte_id, chave_externa)` e
+      `ON DUPLICATE KEY UPDATE` em `backend/jobs/coletar.js`, não só por teste manual
+- [x] Download roda duas vezes seguidas sem rebaixar arquivo — medido na Fase 3: 57
+      arquivos baixados, rodando de novo, nada foi rebaixado (README)
 - [ ] Tela funciona em 390 px de largura
 - [ ] Contraste do texto sobre `#0A0E1A` em no mínimo 4.5:1
-- [ ] Nenhuma requisição a portal externo sem timeout e sem intervalo mínimo
-- [ ] Nenhuma tentativa de resolver CAPTCHA ou de autenticar em portal de terceiros
-- [ ] Documento vencido nunca entra no pacote sem confirmação explícita
-- [ ] Coluna de custo e margem não aparece em nenhum arquivo entregue ao órgão
-- [ ] PDF único sai paginado, na ordem da seleção, com índice correto
-- [ ] Nenhuma saída de IA altera sozinha pontuação, etapa, preço ou documento
-- [ ] Conteúdo de edital é tratado como dado, nunca como instrução ao modelo
-- [ ] Arquivo de edital alterado nunca sobrescreve a versão anterior
-- [ ] Consultas ao Portal da Transparência respeitam o limite por minuto e usam cache
+- [x] Nenhuma requisição a portal externo sem timeout e sem intervalo mínimo —
+      `AbortController` e `HTTP_TIMEOUT_MS`/`HTTP_INTERVALO_DOMINIO_MS` em
+      `backend/servicos/http.js`, único cliente usado por todos os adaptadores
+- [x] Nenhuma tentativa de resolver CAPTCHA ou de autenticar em portal de terceiros —
+      conferido por busca; onde há CAPTCHA (Compras.gov.br) o painel entrega o link
+      e não força
+- [x] Documento vencido nunca entra no pacote sem confirmação explícita — medido na
+      Fase 5: certidão vencida bloqueada no envio real (README)
+- [x] Coluna de custo e margem não aparece em nenhum arquivo entregue ao órgão —
+      medido na Fase 8: PDF sem valor de custo e sem a palavra "margem" (README)
+- [x] PDF único sai paginado, na ordem da seleção, com índice correto — medido na
+      Fase 5: 42 folhas, capa, índice e numeração contínua (README)
+- [x] Nenhuma saída de IA altera sozinha pontuação, etapa, preço ou documento —
+      `backend/jobs/ia-resumos.js` só grava `ia_resumo`, `ia_em` e `ia_situacao`;
+      nenhum job de IA escreve em `pontuacao`, `etapa`, `preco` ou documento do cofre
+- [x] Conteúdo de edital é tratado como dado, nunca como instrução ao modelo —
+      delimitador aleatório por chamada e regra de segurança explícita no prompt
+      (`backend/servicos/ia.js`)
+- [x] Arquivo de edital alterado nunca sobrescreve a versão anterior — medido na
+      Fase 10: `..._EDITAL_v2.pdf` salvo ao lado do original, sem apagá-lo (README)
+- [x] Consultas ao Portal da Transparência respeitam o limite por minuto e usam
+      cache — 429 nunca é gravado como "sem sanção" e o cache é de 30 dias
+      (`backend/servicos/sancoes.js`)

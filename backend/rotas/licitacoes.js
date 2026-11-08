@@ -1,6 +1,7 @@
 // GET/PATCH /api/licitacoes — alimenta a tela Radar (seções 11.1 e 13).
 const fs = require('fs');
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const fila = require('../servicos/fila');
 const servicoArquivos = require('../servicos/arquivos');
@@ -15,6 +16,7 @@ const monitorar = require('../jobs/monitorar');
 const servicoIa = require('../servicos/ia');
 const jobIa = require('../jobs/ia-resumos');
 const questionamento = require('../servicos/questionamento');
+const jobBaixar = require('../jobs/baixar');
 
 const rotas = express.Router();
 
@@ -133,7 +135,7 @@ rotas.get('/', async (req, res) => {
     res.json({ dados: linhas, total: Number(total), pagina, por_pagina: porPagina });
   } catch (erro) {
     console.error('Erro ao listar licitações:', erro.message);
-    res.status(500).json({ erro: 'Não foi possível carregar as licitações.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar as licitações.', erro);
   }
 });
 
@@ -155,7 +157,7 @@ rotas.get('/exportar', async (req, res) => {
     res.send(r.buffer);
   } catch (erro) {
     console.error('Erro ao exportar o Radar:', erro.message);
-    res.status(500).json({ erro: 'Não foi possível gerar a planilha do Radar.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível gerar a planilha do Radar.', erro);
   }
 });
 
@@ -174,7 +176,7 @@ rotas.get('/relatorio', async (req, res) => {
     res.json(await exportar.relatorioMensal({ meses }));
   } catch (erro) {
     console.error('Erro no relatório mensal:', erro.message);
-    res.status(500).json({ erro: 'Não foi possível montar o relatório.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível montar o relatório.', erro);
   }
 });
 
@@ -206,7 +208,7 @@ rotas.get('/filtros', async (_req, res) => {
       exigencias: exigencias.CATALOGO.map((e) => ({ codigo: e.codigo, grupo: e.grupo, rotulo: e.rotulo })),
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível carregar os filtros.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar os filtros.', erro);
   }
 });
 
@@ -231,7 +233,7 @@ rotas.get('/:id', async (req, res) => {
 
     res.json({ ...licitacao, itens });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível abrir a licitação.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível abrir a licitação.', erro);
   }
 });
 
@@ -244,7 +246,7 @@ rotas.get('/:id/itens', async (req, res) => {
     );
     res.json({ dados: itens });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível carregar os itens.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar os itens.', erro);
   }
 });
 
@@ -399,7 +401,7 @@ rotas.patch('/:id', async (req, res) => {
 
     res.json({ ok: true, avisos, mensagem: avisos.join(' ') || null });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível salvar a alteração.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível salvar a alteração.', erro);
   }
 });
 
@@ -412,7 +414,7 @@ rotas.get('/:id/anotacoes', async (req, res) => {
     );
     res.json({ dados });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível carregar o histórico.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar o histórico.', erro);
   }
 });
 
@@ -441,7 +443,7 @@ rotas.post('/:id/detalhar', async (req, res) => {
     );
     res.status(202).json({ ok: true, mensagem: 'Detalhamento na fila.' });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível enfileirar o detalhamento.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível enfileirar o detalhamento.', erro);
   }
 });
 
@@ -466,11 +468,11 @@ rotas.post('/:id/baixar', async (req, res) => {
     res.status(202).json({
       ok: true,
       mensagem: confirmado
-        ? 'Download na fila, sem o limite de 300 MB.'
+        ? `Download na fila, sem o limite de ${await jobBaixar.limiteMb()} MB.`
         : 'Download dos documentos na fila.',
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível enfileirar o download.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível enfileirar o download.', erro);
   }
 });
 
@@ -496,7 +498,7 @@ rotas.get('/:id/arquivos', async (req, res) => {
       dados,
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível carregar os arquivos.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar os arquivos.', erro);
   }
 });
 
@@ -530,7 +532,7 @@ rotas.get('/:id/arquivos/:arqId', async (req, res) => {
     );
     fs.createReadStream(absoluto).pipe(res);
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível entregar o arquivo.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível entregar o arquivo.', erro);
   }
 });
 
@@ -563,7 +565,7 @@ rotas.get('/:id/zip', async (req, res) => {
     zip.directory(absoluta, false);
     await zip.finalize();
   } catch (erro) {
-    if (!res.headersSent) res.status(500).json({ erro: 'Não foi possível montar o zip.', detalhe: erro.message });
+    if (!res.headersSent) responderErro(res, 500, 'Não foi possível montar o zip.', erro);
   }
 });
 
@@ -605,7 +607,7 @@ rotas.post('/:id/ler', async (req, res) => {
     );
     res.status(202).json({ ok: true, mensagem: 'Leitura do edital na fila.' });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível enfileirar a leitura.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível enfileirar a leitura.', erro);
   }
 });
 
@@ -626,7 +628,7 @@ rotas.get('/:id/linha-do-tempo', async (req, res) => {
     res.json({ licitacao, eventos, monitoramento });
   } catch (erro) {
     console.error('Erro na linha do tempo:', erro.message);
-    res.status(500).json({ erro: 'Não foi possível carregar a linha do tempo.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar a linha do tempo.', erro);
   }
 });
 
@@ -670,7 +672,7 @@ rotas.post('/:id/monitorar', async (req, res) => {
     });
   } catch (erro) {
     console.error('Erro no monitoramento:', erro.message);
-    res.status(500).json({ erro: 'Não foi possível falar com o portal agora.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível falar com o portal agora.', erro);
   }
 });
 
@@ -690,7 +692,7 @@ rotas.get('/:id/ia', async (req, res) => {
       dados: typeof l.ia_resumo === 'string' ? JSON.parse(l.ia_resumo || 'null') : l.ia_resumo,
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível carregar a leitura assistida.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar a leitura assistida.', erro);
   }
 });
 
@@ -711,7 +713,7 @@ rotas.post('/:id/ia', async (req, res) => {
     });
   } catch (erro) {
     console.error('Erro na leitura assistida:', erro.message);
-    res.status(500).json({ erro: 'Não foi possível ler o edital com a IA.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível ler o edital com a IA.', erro);
   }
 });
 
@@ -727,7 +729,7 @@ rotas.patch('/:id/ia', async (req, res) => {
     if (!r.affectedRows) return res.status(404).json({ erro: 'Licitação não encontrada.' });
     res.json({ ok: true });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível salvar.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível salvar.', erro);
   }
 });
 
@@ -746,7 +748,7 @@ rotas.get('/:id/questionamentos', async (req, res) => {
     });
   } catch (erro) {
     console.error('Erro nos questionamentos:', erro.message);
-    res.status(500).json({ erro: 'Não foi possível carregar os questionamentos.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar os questionamentos.', erro);
   }
 });
 
@@ -773,7 +775,7 @@ rotas.post('/:id/questionamentos', async (req, res) => {
     const r = await questionamento.criar({ licitacaoId: Number(req.params.id), tipo, assunto, texto });
     res.status(201).json(r);
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível registrar o pedido.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível registrar o pedido.', erro);
   }
 });
 
@@ -801,7 +803,7 @@ rotas.patch('/:id/questionamentos/:qid', async (req, res) => {
     if (!r.affectedRows) return res.status(404).json({ erro: 'Pedido não encontrado.' });
     res.json({ ok: true });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível salvar.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível salvar.', erro);
   }
 });
 

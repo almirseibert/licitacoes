@@ -1,6 +1,7 @@
 // /api/licitacoes/:id/envio — montar e gerar o pacote (seções 9.3 e 17).
 const fs = require('fs');
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const arquivos = require('../servicos/arquivos');
 const upload = require('../servicos/upload');
@@ -176,7 +177,7 @@ rotas.post('/repetir/:pacoteId', async (req, res) => {
         : 'Seleção recuperada com as versões atuais do cofre.',
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível repetir o envio.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível repetir o envio.', erro);
   }
 });
 
@@ -200,7 +201,7 @@ rotas.get('/pacotes/:pacoteId/arquivo', async (req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(registro.nome_arquivo)}"`);
     fs.createReadStream(absoluto).pipe(res);
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível entregar o pacote.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível entregar o pacote.', erro);
   }
 });
 
@@ -233,7 +234,7 @@ rotas.delete('/anexos/:anexoId', async (req, res) => {
     if (!r.affectedRows) return res.status(404).json({ erro: 'Anexo não encontrado.' });
     res.json({ ok: true });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível remover o anexo.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível remover o anexo.', erro);
   }
 });
 

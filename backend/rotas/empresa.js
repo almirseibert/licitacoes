@@ -2,6 +2,7 @@
 // que alimenta a checagem de objeto social da seção 6.2.
 // Os documentos do cofre (seções 9 e 17) ficam em rotas/cofre.js.
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 
 const rotas = express.Router();
@@ -60,7 +61,7 @@ rotas.get('/perfis', async (_req, res) => {
       })),
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível carregar os perfis da empresa.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar os perfis da empresa.', erro);
   }
 });
 

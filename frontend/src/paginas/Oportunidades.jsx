@@ -13,14 +13,18 @@ import { moeda, resumir } from '../servicos/formato';
  * se escolhe onde investir o dia, não se lê notícia.
  */
 
+// A quarta aba, "Iminência" (seção 22.2), é um acréscimo ao desenho original
+// da seção 22.4, que previa só as três primeiras. Prazo acabando é a
+// prioridade mais alta das quatro, por isso a aba fica à frente das outras.
 const ABAS = [
+  { chave: 'iminencia', rotulo: 'Iminência' },
   { chave: 'desertas', rotulo: 'Desertas' },
   { chave: 'fracassadas', rotulo: 'Fracassadas' },
   { chave: 'baixa_concorrencia', rotulo: 'Baixa concorrência' },
 ];
 
 export default function Oportunidades({ aoAbrir }) {
-  const [aba, setAba] = useState('desertas');
+  const [aba, setAba] = useState('iminencia');
   const [dias, setDias] = useState(90);
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState(null);
@@ -140,6 +144,8 @@ export default function Oportunidades({ aoAbrir }) {
           </p>
         ) : aba === 'baixa_concorrencia' ? (
           <TabelaBaixaConcorrencia linhas={lista} />
+        ) : aba === 'iminencia' ? (
+          <TabelaIminencia linhas={lista} aoAbrir={aoAbrir} />
         ) : (
           <ul className="space-y-2">
             {lista.map((o) => (
@@ -219,7 +225,9 @@ function Ressalva({ aba, ressalvas }) {
       ? ressalvas.fracassada
       : aba === 'baixa_concorrencia'
         ? ressalvas.baixa_concorrencia
-        : ressalvas.amostra;
+        : aba === 'iminencia'
+          ? ressalvas.iminencia
+          : ressalvas.amostra;
 
   return (
     <p className="flex items-start gap-2 text-xs text-texto-suave max-w-4xl">
@@ -261,6 +269,59 @@ function TabelaBaixaConcorrencia({ linhas }) {
             <td className="py-1.5 text-right font-mono text-voltagem">{pct(l.desconto)}</td>
             <td className="py-1.5 text-right font-mono text-texto-suave">{pct(l.desconto_q1)}</td>
             <td className="py-1.5 text-right font-mono text-texto-suave pl-3">{l.dias_desde}d</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+    </div>
+  );
+}
+
+/** Fila "Iminência" (seção 22.2) — prazo acabando em menos de 24 h. */
+function TabelaIminencia({ linhas, aoAbrir }) {
+  return (
+    <div className="overflow-x-auto -mx-1 px-1">
+    <table className="w-full text-sm min-w-[52rem]">
+      <thead className="text-xs uppercase tracking-wide text-texto-suave border-b border-borda">
+        <tr>
+          <th className="text-left py-2 font-normal">Órgão</th>
+          <th className="text-left py-2 font-normal">Objeto</th>
+          <th className="text-left py-2 font-normal">UF</th>
+          <th className="text-right py-2 font-normal">Estimado</th>
+          <th className="text-right py-2 font-normal">Prazo acaba em</th>
+          <th className="text-right py-2 font-normal pl-3"> </th>
+        </tr>
+      </thead>
+      <tbody>
+        {linhas.map((l) => (
+          <tr key={l.id} className="border-b border-borda/40">
+            <td className="py-1.5">{resumir(l.orgao_nome, 40)}</td>
+            <td className="py-1.5">{resumir(l.objeto, 70)}</td>
+            <td className="py-1.5 text-xs text-texto-suave">{l.uf || '—'}</td>
+            <td className="py-1.5 text-right font-mono">{moeda(l.valor_estimado)}</td>
+            <td className="py-1.5 text-right font-mono text-erro">
+              {l.horas_restantes === null ? '—' : `${l.horas_restantes} h`}
+            </td>
+            <td className="py-1.5 text-right pl-3">
+              <span className="flex items-center justify-end gap-2">
+                {aoAbrir && (
+                  <button className="flex items-center gap-1 hover:text-texto" onClick={() => aoAbrir(l.id)}>
+                    <ExternalLink size={10} /> abrir
+                  </button>
+                )}
+                {l.link_disputa && (
+                  <a
+                    href={l.link_disputa}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1 hover:text-texto"
+                    title="Abre o portal de disputa para confirmar se já há proposta"
+                  >
+                    disputa
+                  </a>
+                )}
+              </span>
+            </td>
           </tr>
         ))}
       </tbody>

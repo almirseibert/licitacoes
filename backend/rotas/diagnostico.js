@@ -1,5 +1,6 @@
 // GET /api/diagnostico — a tela da seção 20.2.
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const servico = require('../servicos/diagnostico');
 const descarte = require('../regras/descarte');
 const exigencias = require('../regras/exigencias');
@@ -24,7 +25,7 @@ rotas.get('/', async (req, res) => {
     });
   } catch (erro) {
     console.error('Erro no diagnóstico de descarte:', erro.message);
-    res.status(500).json({ erro: 'Não foi possível montar o diagnóstico.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível montar o diagnóstico.', erro);
   }
 });
 
@@ -41,7 +42,7 @@ rotas.post('/descartar-vencidas', async (_req, res) => {
     });
   } catch (erro) {
     console.error('Erro ao descartar vencidas:', erro.message);
-    res.status(500).json({ erro: 'Não foi possível descartar as vencidas.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível descartar as vencidas.', erro);
   }
 });
 

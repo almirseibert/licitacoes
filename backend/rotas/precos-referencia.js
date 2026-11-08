@@ -1,6 +1,7 @@
 // /api/precos-referencia e /api/concorrentes — a tela de preço e concorrência
 // (seções 12, 13 e 26).
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const servico = require('../servicos/preco');
 const encerradas = require('../jobs/encerradas');
 
@@ -11,7 +12,7 @@ rotas.get('/', async (_req, res) => {
   try {
     res.json(await servico.listarReferencias());
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível carregar o preço de referência.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar o preço de referência.', erro);
   }
 });
 
@@ -28,7 +29,7 @@ rotas.post('/recalcular', async (_req, res) => {
         : 'A amostra de encerradas ainda está vazia: rode a coleta de encerradas primeiro.',
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível recalcular.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível recalcular.', erro);
   }
 });
 
@@ -48,7 +49,7 @@ rotas.post('/coletar', async (req, res) => {
         `${r.referencias_gravadas} linha(s) de referência recalculada(s).`,
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível coletar as encerradas.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível coletar as encerradas.', erro);
   }
 });
 

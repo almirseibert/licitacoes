@@ -294,6 +294,42 @@ async function baixaConcorrencia({ dias = DIAS } = {}) {
   return linhas;
 }
 
+// Janela da fila "Iminência" (seção 22.2): prazo acabando em menos disto.
+const HORAS_IMINENCIA = 24;
+
+/**
+ * Iminência (seção 22.2).
+ *
+ * DIVERGÊNCIA DA SPEC, registrada como o CLAUDE.md pede: a seção define
+ * iminência como licitação aberta, prazo acabando em menos de 24 h, "e
+ * nenhuma proposta registrada" — e a própria seção admite que isso só se vê
+ * onde a plataforma publica, hoje só no Compras.gov.br, que está atrás de
+ * CAPTCHA (seção 5.2, adaptadores/comprasgov.js). O painel não tem contagem de
+ * proposta de licitação ainda aberta para a maioria das fontes, e inventar um
+ * "zero propostas" seria dado falso — a regra de ouro da seção 1 (lacuna
+ * visível, nunca valor inventado).
+ *
+ * O que dá para fazer sem inventar nada: listar o que é urgente de verdade —
+ * aberta, não descartada, prazo dentro de 24 h — e deixar claro na tela que é
+ * "está acabando", não "ninguém disputou ainda". Quem quiser saber se há
+ * proposta abre o link do portal de disputa (seção 30, item 2) e confere.
+ */
+async function iminencia({ horas = HORAS_IMINENCIA } = {}) {
+  const [linhas] = await pool.query(
+    `SELECT id, numero_controle, objeto, orgao_nome, orgao_cnpj, uf, municipio,
+            modalidade, valor_estimado, fim_propostas, pontuacao, link_portal,
+            link_disputa
+       FROM licitacoes
+      WHERE descartada = 0
+        AND fim_propostas IS NOT NULL
+        AND fim_propostas BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL ? HOUR)
+      ORDER BY fim_propostas ASC
+      LIMIT 200`,
+    [horas]
+  );
+  return linhas;
+}
+
 /** A varredura inteira. Diária, 05h (seção 14). */
 async function varrerEstrategicas({ dias = DIAS } = {}) {
   const assinaturas = await calcularAssinaturas({});
@@ -332,6 +368,7 @@ module.exports = {
   daAmostra,
   ligarReaberturas,
   baixaConcorrencia,
+  iminencia,
   registrarNaFila,
   DIAS,
 };

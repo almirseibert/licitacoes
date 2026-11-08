@@ -1,5 +1,6 @@
 // /api/configuracoes — pesos da pontuação e perfil da empresa (seções 6, 6.2 e 11.13).
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const fila = require('../servicos/fila');
 const pesos = require('../regras/pesos');
@@ -48,7 +49,7 @@ rotas.get('/', async (_req, res) => {
       objeto_social: { cobertura, ranking },
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível carregar as configurações.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar as configurações.', erro);
   }
 });
 
@@ -80,7 +81,7 @@ rotas.patch('/ajustes', async (req, res) => {
         detalhe: 'falta a tabela `configuracoes` (migração 015). Rode: npm run migrar',
       });
     }
-    res.status(500).json({ erro: 'Não foi possível salvar as configurações.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível salvar as configurações.', erro);
   }
 });
 
@@ -115,7 +116,7 @@ rotas.post('/repontuar', async (_req, res) => {
       mensagem: 'Repontuação na fila. O Radar se reorganiza assim que o worker processar.',
     });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível enfileirar a repontuação.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível enfileirar a repontuação.', erro);
   }
 });
 

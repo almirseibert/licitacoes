@@ -4,6 +4,7 @@
 // XLSX com as fórmulas vivas, para o edital que exige planilha editável.
 const fs = require('fs');
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const servico = require('../servicos/proposta');
 const arquivos = require('../servicos/arquivos');
 
@@ -19,7 +20,7 @@ rotas.get('/', async (req, res) => {
   try {
     res.json({ dados: await servico.listar(Number(req.params.id)) });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível carregar as propostas.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar as propostas.', erro);
   }
 });
 
@@ -50,7 +51,7 @@ rotas.get('/:propostaId', async (req, res) => {
     if (!completa) return res.status(404).json({ erro: 'Proposta não encontrada.' });
     res.json(completa);
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível carregar a proposta.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível carregar a proposta.', erro);
   }
 });
 
@@ -134,7 +135,7 @@ rotas.get('/:propostaId/arquivo/:formato', async (req, res) => {
     );
     fs.createReadStream(absoluto).pipe(res);
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível entregar o arquivo.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível entregar o arquivo.', erro);
   }
 });
 

@@ -5,6 +5,7 @@
 // o pregoeiro questionar, qual certidão foi enviada em cada disputa.
 const fs = require('fs');
 const express = require('express');
+const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const arquivos = require('../servicos/arquivos');
 const upload = require('../servicos/upload');
@@ -156,7 +157,7 @@ rotas.delete('/:id', async (req, res) => {
     if (!r.affectedRows) return res.status(404).json({ erro: 'Documento não encontrado.' });
     res.json({ ok: true, mensagem: 'Documento saiu do cofre, mas continua no histórico.' });
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível remover o documento.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível remover o documento.', erro);
   }
 });
 
@@ -181,7 +182,7 @@ rotas.get('/:id/arquivo', async (req, res) => {
     );
     fs.createReadStream(absoluto).pipe(res);
   } catch (erro) {
-    res.status(500).json({ erro: 'Não foi possível entregar o documento.', detalhe: erro.message });
+    responderErro(res, 500, 'Não foi possível entregar o documento.', erro);
   }
 });
 
