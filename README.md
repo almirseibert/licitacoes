@@ -18,6 +18,41 @@ roda na máquina de quem desenvolve. O passo a passo original está em
 [Deploy no EasyPanel](#deploy-no-easypanel); o estado de hoje está em
 [IMPLANTACAO.md](IMPLANTACAO.md).
 
+## Fase 15 — Base multiempresa (SaaS)
+
+O painel vira produto vendável com login: cada cliente é uma **organização**, com usuários e
+senha próprios (não mais lidos do banco do CRM) e dados isolados. O plano completo está em
+[PLANO_SAAS_CONLICITACAO.md](PLANO_SAAS_CONLICITACAO.md); esta é a Seção 1 (base multiempresa),
+**parcialmente entregue em 12/11/2026**:
+
+- **Pronto e verificado contra MariAB 10.11 real** (migrações, não mock): login, cadastro de
+  organização, convite por e-mail/link, aceite de convite e troca entre organizações sem digitar
+  senha de novo. Migrações `016_organizacoes.sql` e `017_organizacao_escopo.sql` acrescentam
+  `organizacao_id` a 16 tabelas de dado próprio do cliente (palavras-chave, perfil da empresa,
+  cofre, kits, pacotes, anotações, propostas, monitoramentos, alertas, contratos,
+  questionamentos, modelos de declaração, palavras sugeridas) e deixam de fora, de propósito, o
+  catálogo compartilhado (fontes, licitações, preços, órgãos, feriados), a infraestrutura
+  (`tarefas`) e o cache (`ia_execucoes`, `recorrencias`, `sancoes_consultas`) — são fato público
+  ou operação do sistema, não dado do cliente.
+- **Aceite medido**: duas organizações criadas pela API real (`/api/auth/cadastro`), cada uma
+  com sua própria palavra-chave cadastrada em `/api/palavras` — a organização 2 não via a palavra
+  da organização 1 nem conseguia editar ou apagar pelo id (404, não 200). Convite por link criado,
+  aceito uma vez, recusado na segunda tentativa (409) e vencido após 72 h (410). Troca de
+  organização recusada para quem não é membro (403). Papel insuficiente bloqueado antes de chegar
+  ao banco (403 em `/api/auth/convites` para quem não é admin/dono).
+- **O que ainda não mudou** (Seção 1b, deliberadamente adiada): o motor de pontuação, o funil, o
+  diagnóstico e as licitações estratégicas continuam lendo/escrevendo as colunas de `licitacoes`
+  (pontuação, etapa, favorito, descartada) em vez da nova `org_licitacoes` — mover isso exige
+  decidir, rota a rota, com banco real, sem arriscar o comportamento de quem já usa o painel hoje.
+  As demais ~19 rotas que passam a ler tabelas com `organizacao_id` (fontes compartilhadas à
+  parte) ainda não filtram por organização — só `/api/palavras` foi atualizada, como referência
+  do padrão (`WHERE organizacao_id = ?` em toda consulta, `req.organizacaoId` no `WHERE` de todo
+  `UPDATE`/`DELETE`, nunca no corpo do `SET`). Tela de cadastro, convite e troca de organização no
+  frontend também ficam para a continuação — o login atual funciona sem mudança nenhuma porque o
+  formato da resposta não mudou.
+- `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
+  ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
+
 A primeira coleta real no PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas
 com link que abre o edital no portal. Depois, pela tela, a palavra "videomonitoramento" foi
 simulada (82 no portal), ativada e trouxe **57 licitações novas na coleta seguinte — sem tocar

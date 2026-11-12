@@ -1,7 +1,13 @@
-// Verificação do JWT. É o mesmo token do painel atual: mesmo segredo
-// (JWT_SECRET), mesmo formato de payload — por isso quem já está logado no CRM
-// entra aqui sem novo login. A permissão vem SEMPRE do backend; o frontend
-// nunca decide por e-mail fixo (regra da seção 2.3).
+// Verificação do JWT (seção 1 do PLANO_SAAS_CONLICITACAO.md).
+//
+// Até a Fase 15, isto reaproveitava o login do CRM atual. A partir daqui o
+// painel tem login próprio e multiempresa: o token carrega quem é o usuário
+// E em qual organização ele está entrando agora — um usuário pode pertencer
+// a mais de uma (seção `organizacao_membros`), e o token vale para uma por
+// vez. `req.usuario` guarda o payload inteiro; `req.organizacaoId` e
+// `req.papel` são os dois campos que toda rota escopada por organização usa,
+// nomeados à parte para não repetir `req.usuario.organizacao_id` em cada
+// arquivo de rotas.
 const jwt = require('jsonwebtoken');
 const { jwt: cfgJwt } = require('../config/ambiente');
 
@@ -14,18 +20,43 @@ function autenticar(req, res, next) {
   }
 
   try {
-    req.usuario = jwt.verify(token, cfgJwt.segredo);
+    const payload = jwt.verify(token, cfgJwt.segredo);
+    if (!payload.organizacao_id || !payload.papel) {
+      // Token de um formato antigo (pré-multiempresa) ou corrompido: pedir
+      // login de novo é mais seguro do que adivinhar a organização.
+      return res.status(401).json({ erro: 'Sessão inválida. Entre novamente.' });
+    }
+    req.usuario = payload;
+    req.organizacaoId = payload.organizacao_id;
+    req.papel = payload.papel;
     return next();
   } catch {
     return res.status(401).json({ erro: 'Sessão expirada. Entre novamente.' });
   }
 }
 
-function apenasAdmin(req, res, next) {
-  if (!req.usuario || req.usuario.papel !== 'admin') {
-    return res.status(403).json({ erro: 'Esta ação é restrita ao administrador.' });
-  }
-  return next();
+// Papéis em ordem crescente de poder — 'admin' cobre o que 'membro' cobre,
+// e assim por diante. 'dono' é o único que pode apagar a organização ou
+// trocar o plano; os outros três participam do dia a dia.
+const NIVEL_PAPEL = { leitor: 0, membro: 1, admin: 2, dono: 3 };
+
+/**
+ * Exige um papel mínimo dentro da organização do token. Uso:
+ *   router.delete('/:id', autenticar, exigirPapel('admin'), handler)
+ */
+function exigirPapel(papelMinimo) {
+  const minimo = NIVEL_PAPEL[papelMinimo] ?? 99;
+  return (req, res, next) => {
+    const nivel = NIVEL_PAPEL[req.papel] ?? -1;
+    if (nivel < minimo) {
+      return res.status(403).json({ erro: 'Esta ação exige um papel maior na organização.' });
+    }
+    return next();
+  };
 }
 
-module.exports = { autenticar, apenasAdmin };
+function apenasAdmin(req, res, next) {
+  return exigirPapel('admin')(req, res, next);
+}
+
+module.exports = { autenticar, apenasAdmin, exigirPapel, NIVEL_PAPEL };

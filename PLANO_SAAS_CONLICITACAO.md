@@ -32,30 +32,59 @@ já existentes. Quando terminar uma seção, risque o `[ ]` e registre a data.
 ---
 
 ## Seção 1 — Base multiempresa (pré-requisito de todas as seguintes)
-- [ ] Migração `016_organizacoes.sql`: `organizacoes`, `usuarios` (próprios, bcrypt),
-      `organizacao_membros` (papel: dono/admin/membro/leitor), `convites`.
-- [ ] Nova `org_licitacoes` (organizacao_id, licitacao_id, pontuação, etapa_funil,
-      favorito, descartado, motivo) — separa decisão do usuário do catálogo coletado.
-- [ ] `organizacao_id` + índice em: `palavras_chave`, `palavras_excluidas`,
-      `regras_pontuacao`, `empresa_perfis`, `empresa_documentos`, kits, `pacotes`, anexos,
-      `modelos_declaracao`, `anotacoes`, `propostas`, `monitoramentos`, `alertas`,
-      `tarefas`, `contratos`, `questionamentos`, `configuracoes`, `ia_execucoes`,
-      `recorrencias`, `palavras_sugeridas`, `sancoes_consultas`.
-- [ ] `fontes`, `licitacoes`, `licitacao_itens`, `licitacao_arquivos`, `historico_precos`,
-      `precos_referencia`, `propostas_concorrentes`, `orgaos`, `concorrentes`, `feriados`,
-      `eventos_licitacao` continuam **sem** `organizacao_id` (catálogo compartilhado).
-- [ ] `backend/rotas/auth.js`: cadastro, login, troca de organização, convite, recuperação
-      de senha. JWT passa a levar `usuario_id`, `organizacao_id`, `papel`.
-- [ ] Remover `backend/config/db-auth.js` (login deixa de vir do banco do CRM).
-- [ ] `autenticar.js` ganha `exigirPapel(...)`; helper em `backend/config/db.js` que exige
-      `organizacao_id` em toda consulta por organização; teste que falha se achar rota sem esse filtro.
-- [ ] `regras/aderencia.js` e `executar-repontuar.js` pontuam o catálogo por organização.
-- [ ] Cofre em `/dados/orgs/<id>/...`.
-- [ ] Frontend: telas de login, cadastro, convite, troca de organização, "Equipe".
-- [ ] Registrar divergência nas seções 2/2.1 da spec e no CLAUDE.md (login sai do CRM).
 
-**Aceite:** duas organizações de teste, cada uma só vendo seus próprios dados em
-`org_licitacoes`, `alertas`, cofre e funil; o catálogo (`licitacoes`) é visível para as duas.
+**Seção 1a — entregue em 12/11/2026, verificada contra MariaDB 10.11 real (migrar + API de
+ponta a ponta, não mock):**
+- [x] Migração `016_organizacoes.sql`: `organizacoes`, `usuarios` (próprios, bcrypt),
+      `organizacao_membros` (papel: dono/admin/membro/leitor), `convites`, e `org_licitacoes`
+      já criada (ainda vazia — ver Seção 1b).
+- [x] Migração `017_organizacao_escopo.sql`: `organizacao_id` + índice em 16 tabelas de dado
+      próprio do cliente — `palavras_chave`, `palavras_excluidas`, `palavras_sugeridas`,
+      `regras_pontuacao`, `empresa_perfis`, `empresa_documentos`, `documento_kits`, `pacotes`,
+      `licitacao_anexos`, `modelos_declaracao` (nulo = padrão do sistema), `anotacoes`,
+      `propostas`, `monitoramentos`, `alertas`, `contratos`, `questionamentos`.
+- [x] Revisão da lista original do plano contra o schema real: `fontes`, `licitacoes` e o
+      resto do catálogo ficam sem `organizacao_id` (combinado); `tarefas` (fila do worker),
+      `ia_execucoes` (cache por hash), `recorrencias` (padrão do órgão) e `sancoes_consultas`
+      (fato do CNPJ) também ficam de fora — são infraestrutura ou fato público, não decisão do
+      cliente. `configuracoes` mistura os dois e fica pendente de uma decisão de produto
+      (Seção 1b).
+- [x] `backend/rotas/auth.js`: cadastro, login, troca de organização, convite e aceite de
+      convite. JWT passa a levar `id`, `organizacao_id` e `papel` (recuperação de senha fica
+      para depois — hoje a saída é convidar de novo).
+- [x] Removido `backend/config/db-auth.js` (login não vem mais do banco do CRM).
+- [x] `autenticar.js` ganha `exigirPapel(...)` com a ordem leitor < membro < admin < dono;
+      token no formato antigo (sem `organizacao_id`) é recusado.
+- [x] `backend/rotas/palavras.js` escopada por `organizacao_id` como referência do padrão —
+      toda consulta com `WHERE organizacao_id = ?`, todo `UPDATE`/`DELETE` com a organização no
+      `WHERE` (nunca no `SET`). Testado: organização 2 não vê, não edita e não apaga palavra da
+      organização 1.
+- [x] Testes sem banco: `testes/autenticar.test.js` (7 casos) e `testes/organizacao.test.js`
+      (4 casos) — `npm test` (com `node --test "testes/**/*.test.js"` nesta sessão; `node --test
+      testes/` sozinho já falhava antes desta fase, é do ambiente, não desta mudança).
+- [x] Registrada a divergência na migração 016 (comentário) — a seção 2/13 da spec vira
+      multiempresa.
+
+**Seção 1b — pendente, cada item exige banco real antes de fechar:**
+- [ ] Mover pontuação/etapa/favorito/descartada de `licitacoes` para `org_licitacoes`, rota a
+      rota (Radar, Funil, Diagnóstico, Estratégicas, `executar-repontuar.js`), sem quebrar quem
+      já usa o painel hoje.
+- [ ] Escopar por `organizacao_id` as ~15 rotas restantes que leem as tabelas da migração 017
+      (Configurações/perfil, Cofre, Kits, Modelos, Funil, Alertas, Contratos, Questionamentos).
+- [ ] Decidir o que fazer com `configuracoes` (separar ajuste de operação de preferência do
+      cliente) antes de lhe dar `organizacao_id`.
+- [ ] Cofre em disco por organização: hoje o caminho em `DIR_DADOS` não leva `organizacao_id` —
+      a tabela já isola a referência no banco, mas o arquivo físico ainda não.
+- [ ] Frontend: telas de cadastro de organização, convite, aceitar convite, trocar de
+      organização e "Equipe" — o login atual continua funcionando sem nenhuma mudança porque o
+      formato da resposta de `/api/auth/login` não mudou.
+- [ ] Recuperação de senha.
+
+**Aceite da Seção 1a (medido):** duas organizações criadas por `/api/auth/cadastro`; a
+organização 2 só viu sua própria palavra-chave em `/api/palavras`, recebeu 404 ao tentar editar
+ou apagar uma da organização 1; convite aceito uma vez (200), recusado na segunda tentativa
+(409); troca para organização de que não é membro recusada (403); convite por quem não é
+admin/dono recusado (403) antes de qualquer escrita no banco.
 
 ---
 

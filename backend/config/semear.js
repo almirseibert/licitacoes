@@ -3,6 +3,7 @@
 // Idempotente — roda quantas vezes quiser, não duplica e não sobrescreve o que
 // o usuário já editou na tela (só insere o que falta).
 //   npm run semear
+const bcrypt = require('bcrypt');
 const pool = require('../config/db');
 const perfilPadrao = require('./dados/perfil-padrao');
 const kitsPadrao = require('./dados/kits-padrao');
@@ -266,7 +267,42 @@ async function semearModelos() {
   return criados;
 }
 
+// Login próprio (Fase 15). Só cria se não houver NENHUM usuário — depois
+// disso é a tela de "Equipe" que manda, o seed nunca mais toca em senha.
+// Sem ADMIN_SENHA_PADRAO no .env, o seed avisa e não cria ninguém: subir um
+// painel sem um primeiro login não serve, mas uma senha padrão fixa no
+// código seria pior.
+async function semearAdmin() {
+  const [existentes] = await pool.query('SELECT id FROM usuarios LIMIT 1');
+  if (existentes.length) return null;
+
+  const emailAdmin = process.env.ADMIN_EMAIL_PADRAO;
+  const senhaAdmin = process.env.ADMIN_SENHA_PADRAO;
+  if (!emailAdmin || !senhaAdmin) {
+    console.warn(
+      '· nenhum usuário ainda, e ADMIN_EMAIL_PADRAO/ADMIN_SENHA_PADRAO não estão no .env — ' +
+        'sem eles o seed não cria o primeiro login. Defina os dois e rode `npm run semear` de novo, ' +
+        'ou cadastre a organização pela tela (/api/auth/cadastro).'
+    );
+    return null;
+  }
+
+  const senhaHash = await bcrypt.hash(senhaAdmin, 12);
+  const [usuario] = await pool.query(
+    'INSERT INTO usuarios (nome, email, senha_hash) VALUES (?, ?, ?)',
+    ['Administrador', emailAdmin, senhaHash]
+  );
+  // A organização 1 (Studio Mythos) já existe desde a migração 016.
+  await pool.query(
+    `INSERT INTO organizacao_membros (organizacao_id, usuario_id, papel) VALUES (1, ?, 'dono')
+     ON DUPLICATE KEY UPDATE papel = papel`,
+    [usuario.insertId]
+  );
+  return emailAdmin;
+}
+
 async function principal() {
+  const admin = await semearAdmin();
   const fontes = await semearFontes();
   const palavras = await semearPalavras();
   const excluidas = await semearExcluidas();
@@ -275,6 +311,11 @@ async function principal() {
   const modelos = await semearModelos();
   const precos = await encerradas.semearEstudo();
 
+  console.log(
+    admin
+      ? `Usuário administrador criado: ${admin} (organização Studio Mythos, papel dono).`
+      : 'Usuário administrador: nenhum criado (já existia alguém, ou faltam as variáveis).'
+  );
   console.log(`Fontes inseridas: ${fontes} (de ${FONTES.length}).`);
   console.log(`Palavras-chave inseridas: ${palavras} (de ${PALAVRAS.length}).`);
   console.log(`Palavras excluídas inseridas: ${excluidas} (de ${EXCLUIDAS.length}).`);

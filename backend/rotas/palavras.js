@@ -9,16 +9,25 @@ const rotas = express.Router();
 
 const GRUPOS_SUGERIDOS = ['Serviços digitais', 'Frota e rastreamento', 'Informática e itens'];
 
-rotas.get('/', async (_req, res) => {
+rotas.get('/', async (req, res) => {
   try {
+    const org = req.organizacaoId;
     const [palavras] = await pool.query(
       `SELECT p.*,
               (SELECT COUNT(*) FROM licitacoes l WHERE l.palavra_casada = p.termo AND l.descartada = 0) AS licitacoes
          FROM palavras_chave p
-        ORDER BY p.grupo ASC, p.peso DESC, p.termo ASC`
+        WHERE p.organizacao_id = ?
+        ORDER BY p.grupo ASC, p.peso DESC, p.termo ASC`,
+      [org]
     );
-    const [excluidas] = await pool.query('SELECT * FROM palavras_excluidas ORDER BY termo');
-    const [grupos] = await pool.query('SELECT DISTINCT grupo FROM palavras_chave ORDER BY grupo');
+    const [excluidas] = await pool.query(
+      'SELECT * FROM palavras_excluidas WHERE organizacao_id = ? ORDER BY termo',
+      [org]
+    );
+    const [grupos] = await pool.query(
+      'SELECT DISTINCT grupo FROM palavras_chave WHERE organizacao_id = ? ORDER BY grupo',
+      [org]
+    );
 
     res.json({
       dados: palavras.map((p) => ({
@@ -68,6 +77,7 @@ function limpar(corpo, { exigirTudo }) {
 rotas.post('/', async (req, res) => {
   try {
     const campos = limpar(req.body || {}, { exigirTudo: true });
+    campos.organizacao_id = req.organizacaoId;
     const colunas = Object.keys(campos);
     const [r] = await pool.query(
       `INSERT INTO palavras_chave (${colunas.join(', ')}) VALUES (${colunas.map(() => '?').join(', ')})`,
@@ -86,9 +96,11 @@ rotas.patch('/:id', async (req, res) => {
     const colunas = Object.keys(campos);
     if (!colunas.length) return res.status(400).json({ erro: 'Nada para alterar.' });
 
+    // organizacao_id entra sempre no WHERE, nunca no SET: ninguém altera uma
+    // palavra de outra organização, mesmo sabendo o id da linha.
     const [r] = await pool.query(
-      `UPDATE palavras_chave SET ${colunas.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`,
-      [...colunas.map((c) => campos[c]), req.params.id]
+      `UPDATE palavras_chave SET ${colunas.map((c) => `${c} = ?`).join(', ')} WHERE id = ? AND organizacao_id = ?`,
+      [...colunas.map((c) => campos[c]), req.params.id, req.organizacaoId]
     );
     if (!r.affectedRows) return res.status(404).json({ erro: 'Palavra-chave não encontrada.' });
     res.json({ ok: true });
@@ -100,7 +112,10 @@ rotas.patch('/:id', async (req, res) => {
 
 rotas.delete('/:id', async (req, res) => {
   try {
-    const [r] = await pool.query('DELETE FROM palavras_chave WHERE id = ?', [req.params.id]);
+    const [r] = await pool.query(
+      'DELETE FROM palavras_chave WHERE id = ? AND organizacao_id = ?',
+      [req.params.id, req.organizacaoId]
+    );
     if (!r.affectedRows) return res.status(404).json({ erro: 'Palavra-chave não encontrada.' });
     // As licitações que ela trouxe continuam no Radar: quem decide o que sai é
     // a palavra excluída, não a remoção do termo de busca.
@@ -116,7 +131,10 @@ rotas.post('/excluidas', async (req, res) => {
     const termo = String((req.body && req.body.termo) || '').trim().slice(0, 160);
     if (!termo) return res.status(400).json({ erro: 'Informe o termo a ignorar.' });
 
-    const [r] = await pool.query('INSERT INTO palavras_excluidas (termo, ativa) VALUES (?, 1)', [termo]);
+    const [r] = await pool.query(
+      'INSERT INTO palavras_excluidas (organizacao_id, termo, ativa) VALUES (?, ?, 1)',
+      [req.organizacaoId, termo]
+    );
     res.status(201).json({
       ok: true,
       id: r.insertId,
@@ -137,8 +155,8 @@ rotas.patch('/excluidas/:id', async (req, res) => {
     if (!colunas.length) return res.status(400).json({ erro: 'Nada para alterar.' });
 
     const [r] = await pool.query(
-      `UPDATE palavras_excluidas SET ${colunas.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`,
-      [...colunas.map((c) => campos[c]), req.params.id]
+      `UPDATE palavras_excluidas SET ${colunas.map((c) => `${c} = ?`).join(', ')} WHERE id = ? AND organizacao_id = ?`,
+      [...colunas.map((c) => campos[c]), req.params.id, req.organizacaoId]
     );
     if (!r.affectedRows) return res.status(404).json({ erro: 'Palavra não encontrada.' });
     res.json({ ok: true });
@@ -150,7 +168,10 @@ rotas.patch('/excluidas/:id', async (req, res) => {
 
 rotas.delete('/excluidas/:id', async (req, res) => {
   try {
-    const [r] = await pool.query('DELETE FROM palavras_excluidas WHERE id = ?', [req.params.id]);
+    const [r] = await pool.query(
+      'DELETE FROM palavras_excluidas WHERE id = ? AND organizacao_id = ?',
+      [req.params.id, req.organizacaoId]
+    );
     if (!r.affectedRows) return res.status(404).json({ erro: 'Palavra não encontrada.' });
     res.json({ ok: true });
   } catch (erro) {

@@ -45,7 +45,6 @@ DB_HOST=studiomythos_mysql
 DB_PORT=3306
 DB_USER=mysql
 DB_DATABASE=licitacoes
-AUTH_DB_DATABASE=digitalplussmysql
 JWT_EXPIRA=8h
 FILA_DRIVER=mysql
 FILA_INTERVALO_MS=30000
@@ -72,26 +71,23 @@ precisa sair para a internet.
 
 ## O que falta — e por que não fiz sozinho
 
-Três coisas, nenhuma delas código. Fiz tudo que dava para fazer sem credencial; o resto
+**Atualizado em 12/11/2026 (Fase 15):** o GRANT na base `digitalplussmysql.usuarios` do CRM
+**não é mais bloqueador** — a Fase 15 (ver [README.md](README.md#fase-15--base-multiempresa-saas)
+e [PLANO_SAAS_CONLICITACAO.md](PLANO_SAAS_CONLICITACAO.md)) deu ao painel login e organizações
+próprios, em `licitacoes.usuarios`; ele não lê mais a tabela do CRM. `AUTH_DB_DATABASE` saiu do
+`.env.example` e das variáveis dos dois serviços (linha removida da lista acima). O primeiro
+login agora nasce do `npm run semear`, com `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` — ou pelo
+cadastro direto em `/api/auth/cadastro`, já em produção, sem precisar do seed.
+
+Restam duas coisas, nenhuma delas código. Fiz tudo que dava para fazer sem credencial; o resto
 exige uma pessoa, por desenho deste assistente (nunca digita senha, API key ou token de
-produção num formulário, e não abre console de banco de produção):
+produção num formulário):
 
-### 1. O GRANT no MySQL — bloqueador nº 1, sem ele ninguém entra
+### 1. Cinco variáveis — só as que são segredo
 
-```sql
-GRANT SELECT ON digitalplussmysql.usuarios TO 'mysql'@'%';
-FLUSH PRIVILEGES;
-```
-
-Rodar com um usuário **administrativo** do MySQL (não o `mysql` de todo dia), apontando
-para `oehpg2.easypanel.host`, porta `3302` — ou pelo Console do serviço `mysql` dentro do
-EasyPanel (`studiomythos` → `mysql` → ícone de terminal na barra do serviço), que já está
-autenticado como root sem precisar digitar a senha em lugar nenhum.
-
-### 2. Seis variáveis — só as que são segredo
-
-Nas duas telas **Ambiente** (`licitacoes-api` e `licitacoes-worker`, já abertas com as
-outras 34 preenchidas), faltam preencher, lendo do `.env` local de quem desenvolve:
+Nas duas telas **Ambiente** (`licitacoes-api` e `licitacoes-worker`), faltam preencher, lendo
+do `.env` local de quem desenvolve (`ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` são opcionais —
+sem elas, cadastre a primeira organização direto pela tela):
 
 | Variável | Obrigatória? | Efeito sem ela |
 |---|---|---|
@@ -99,14 +95,13 @@ outras 34 preenchidas), faltam preencher, lendo do `.env` local de quem desenvol
 | `JWT_SECRET` | **sim** | sobe, mas ninguém consegue logar (token não assina) |
 | `GEMINI_API_KEY` | não | leitura assistida por IA fica desligada, painel funciona inteiro sem ela |
 | `PORTAL_TRANSPARENCIA_CHAVE` | não | consulta de sanções CEIS/CNEP fica desligada |
-| `SMTP_SENHA` | não | alerta por e-mail fica desligado, aviso segue só no sino |
+| `SMTP_SENHA` | não | alerta por e-mail (e convite de organização) fica desligado |
 | `WHATSAPP_TOKEN` | não | alerta por WhatsApp fica desligado |
 
-Depois de colar as seis (ou pelo menos as duas obrigatórias), clicar **Implantar** de
-novo nos dois serviços — a implantação de hoje ficou com o build pronto, só falta reenviar
-com o ambiente completo.
+Depois de colar as duas obrigatórias (e as migrações 016/017 rodarem — `npm run migrar` é
+idempotente, pode rodar a qualquer momento), clicar **Implantar** de novo nos dois serviços.
 
-### 3. O registro DNS, no Cloudflare
+### 2. O registro DNS, no Cloudflare
 
 `licitacoes.studiomythos.com.br` ainda não resolve. O domínio raiz `studiomythos.com.br`
 já está no Cloudflare e já aponta para este servidor — é questão de criar o registro do
@@ -124,7 +119,7 @@ o certificado Let's Encrypt sozinho, sem mais nenhum clique.
 
 ## Como confirmar que está tudo no ar
 
-Depois dos três passos acima:
+Depois dos dois passos acima:
 
 ```bash
 curl https://licitacoes.studiomythos.com.br/api/saude

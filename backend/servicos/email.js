@@ -94,4 +94,31 @@ async function enviarAvisos(avisos) {
   }
 }
 
-module.exports = { enviarAvisos, configurado, destinatario, montarCorpo, montarAssunto };
+/**
+ * E-mail transacional (convite de organização, seção 1 do plano de SaaS) —
+ * não é alerta, então não depende de `alerta_email_para`: só do SMTP estar
+ * configurado. Quem chama decide o que fazer sem SMTP (ex.: devolver o link
+ * do convite na resposta da API, para o admin copiar e mandar à mão).
+ * @returns {{enviado:boolean, motivo?:string}}
+ */
+async function enviarTransacional({ para, assunto, texto }) {
+  if (!smtp.host || !smtp.de) {
+    return { enviado: false, motivo: 'smtp não configurado' };
+  }
+  try {
+    await obterTransporte().sendMail({ from: smtp.de, to: para, subject: assunto, text: texto });
+    return { enviado: true };
+  } catch (erro) {
+    console.error('Não foi possível enviar o e-mail transacional:', erro.message);
+    return { enviado: false, motivo: erro.message };
+  }
+}
+
+module.exports = {
+  enviarAvisos,
+  enviarTransacional,
+  configurado,
+  destinatario,
+  montarCorpo,
+  montarAssunto,
+};

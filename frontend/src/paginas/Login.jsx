@@ -2,7 +2,12 @@ import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { api, guardarSessao } from '../servicos/api';
 
-/** Login com os mesmos usuários do painel atual (seção 13). */
+/**
+ * Login próprio do painel, multiempresa desde a Fase 15 (PLANO_SAAS_CONLICITACAO.md,
+ * Seção 1). O cadastro de organização nova e a troca entre organizações ainda não
+ * têm tela — ficam para a próxima parte da Seção 1, com o backend já pronto em
+ * /api/auth/cadastro e /api/auth/trocar-organizacao.
+ */
 export default function Login({ onEntrar }) {
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');

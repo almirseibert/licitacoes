@@ -1104,8 +1104,17 @@ o que transforma o painel em ferramenta de decisão.
 
 ## 13. API (rotas principais)
 
+> **Divergência registrada (Fase 15, 12/11/2026).** Esta seção e a seção 2 descreviam um
+> painel de uma empresa só, com `/api/auth/login` reaproveitando o JWT do painel atual. Por
+> decisão do dono do produto, o painel virou multiempresa — cada cliente é uma organização,
+> com login e senha próprios (bcrypt), nunca mais lidos do banco do CRM. O detalhe está em
+> [PLANO_SAAS_CONLICITACAO.md](PLANO_SAAS_CONLICITACAO.md), Seção 1, e nas migrações
+> `016_organizacoes.sql` e `017_organizacao_escopo.sql`. As rotas novas:
+> `POST /api/auth/cadastro`, `POST /api/auth/trocar-organizacao`, `POST /api/auth/convites` e
+> `POST /api/auth/convites/:token/aceitar`.
+
 ```
-POST   /api/auth/login                       # JWT, reaproveitar o do painel atual
+POST   /api/auth/login                       # JWT próprio, com organizacao_id e papel
 GET    /api/licitacoes                       # filtros via query string, paginado
 GET    /api/licitacoes/:id
 PATCH  /api/licitacoes/:id                   # etapa, favorito, descarte, custo estimado
