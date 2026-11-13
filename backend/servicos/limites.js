@@ -267,7 +267,7 @@ async function uso(organizacaoId, agora = new Date()) {
        + (SELECT COUNT(*) FROM convites WHERE organizacao_id = ? AND aceito_em IS NULL AND expira_em > NOW()) AS usuarios,
        (SELECT COUNT(*) FROM palavras_chave WHERE organizacao_id = ?) AS palavras_chave,
        (SELECT COUNT(*) FROM empresa_perfis WHERE organizacao_id = ?) AS perfis_empresa,
-       (SELECT COUNT(*) FROM perfis_busca WHERE organizacao_id = ?) AS perfis_busca,
+       (SELECT COUNT(*) FROM perfis_busca WHERE organizacao_id = ? AND origem = 'boletim') AS perfis_busca,
        (SELECT COUNT(*) FROM monitoramentos WHERE organizacao_id = ? AND ativo = 1) AS monitoramentos,
        COALESCE((SELECT SUM(tamanho_bytes) FROM empresa_documentos WHERE organizacao_id = ?), 0)
        + COALESCE((SELECT SUM(tamanho_bytes) FROM licitacao_anexos WHERE organizacao_id = ?), 0)
@@ -363,6 +363,7 @@ function exigirLimite(chave, acrescimo = 1) {
 }
 
 module.exports = {
+  lerJson,
   DIAS_CARENCIA,
   BYTES_POR_GB,
   NOMES_LIMITE,

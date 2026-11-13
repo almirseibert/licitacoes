@@ -22,6 +22,7 @@ const VALIDADE_CACHE_MS = 30000;
 const CHAVES_ORG = {
   alerta_email_para: { tipo: 'texto', descricao: 'Para quem vai o e-mail de alerta desta organização.' },
   alerta_whatsapp_destino: { tipo: 'texto', descricao: 'Número do WhatsApp que recebe o alerta, com DDI.' },
+  radar_cidade_base: { tipo: 'texto', descricao: 'Código IBGE da cidade de onde o Radar mede o raio de atuação.' },
 };
 
 const CHAVES = {

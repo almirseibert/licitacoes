@@ -4,6 +4,7 @@ import { api, obterToken, obterUsuario, obterOrganizacao, guardarSessao, encerra
 import Login from './paginas/Login';
 import Convite from './paginas/Convite';
 import RedefinirSenha from './paginas/RedefinirSenha';
+import RadarPublico from './paginas/RadarPublico';
 import Equipe from './paginas/Equipe';
 import Radar from './paginas/Radar';
 import Fontes from './paginas/Fontes';
@@ -59,6 +60,9 @@ function linkDeEmail() {
   return achado ? { tipo: achado[1], token: achado[2] } : null;
 }
 
+// Lista do Radar compartilhada por link (Seção 7): /publico/radar/<token>, sem login.
+const TOKEN_PUBLICO = (window.location.pathname.match(/^\/publico\/radar\/([A-Za-z0-9_-]{43})\/?$/) || [])[1];
+
 function voltarParaRaiz() {
   window.history.replaceState(null, '', '/');
 }
@@ -109,6 +113,7 @@ export default function App() {
     setLink(null);
   };
 
+  if (TOKEN_PUBLICO) return <RadarPublico token={TOKEN_PUBLICO} />;
   if (link && link.tipo === 'redefinir-senha') return <RedefinirSenha token={link.token} onSair={paraEntrada} />;
   if (link && link.tipo === 'convite') return <Convite token={link.token} onEntrar={entrar} onSair={paraEntrada} />;
   if (!usuario) return <Login onEntrar={entrar} />;

@@ -27,7 +27,7 @@ cofre de senha de portal e a assinatura digital (ver a tabela de divergências n
 | Fase | Seções | O que o cliente ganha | Marco |
 |---|---|---|---|
 | **A — Fundação SaaS** | 0 ✅, 1 (1a ✅, 1b ✅, 1c), 2 ✅, 3 ✅ | Conta própria, equipe, dados isolados, tema claro/escuro, plano e cobrança | Dá para cobrar e isolar clientes |
-| **B — Paridade de captação** | 4 ✅, 7, 8, 9, 10 | Boletim diário, banco de licitações completo, gestão com tarefas, avisos por tipo, documentos | Substitui o uso diário do ConLicitação na captação |
+| **B — Paridade de captação** | 4 ✅, 7 ✅, 8, 9, 10 | Boletim diário, banco de licitações completo, gestão com tarefas, avisos por tipo, documentos | Substitui o uso diário do ConLicitação na captação |
 | **C — IA e inteligência** | 5, 11, 12, 13, 14, 15, 17 | Pergunte ao Edital, resumo com checklist, acompanhamentos, contratos e atas, concorrentes e mercado, API, onboarding | **Versão 1 vendável** — fim da Fase C |
 | **D — Estratégia e automação** | 6, 16 | Monitor de chat, alerta de deserta por segmento, consultor jurídico | Planos mais caros |
 | **E — Ecossistema** | 18 | Seguro garantia, assessoria cadastral, cursos por parceria | Receita complementar |
@@ -306,27 +306,61 @@ que exige login aparece como `bloqueado` sem tentativa de autenticação.
 
 ---
 
-## Seção 7 — Radar 2.0: o banco de licitações completo (Fase B)
+## Seção 7 — Radar 2.0: o banco de licitações completo (Fase B) — ✅ feito em 13/11/2026
 Hoje o Radar tem filtros, pontuação e exportação Excel (`backend/rotas/licitacoes.js`,
 `servicos/exportar.js`). Falta o que a referência tem no "Encontrar Licitações".
-- [ ] Filtros que faltam em `montarFiltros`: **busca exata** do objeto (aspas), estado / região /
-      **raio de atuação** em km a partir da cidade da organização, nº do edital, nº do processo,
-      esfera, situação, órgão, texto nos itens, texto na observação, data de inclusão e de prazo com
-      atalhos hoje/ontem, "com edital baixado", "com chat monitorado".
-- [ ] **Salvar pesquisa**: `pesquisas_salvas` (organizacao_id, nome, filtros JSON) — é o mesmo
-      objeto do `perfis_busca` da Seção 4; uma só tabela, os dois usam.
-- [ ] Exportar também em **.docx** (`servicos/exportar.js` já faz xlsx), **imprimir** (folha de
-      estilo própria) e **compartilhar** por link de leitura com validade (`links_publicos`).
-- [ ] Etiquetas de situação no cartão (nova, urgente, SRP, prorrogada, adiada, recebendo propostas,
-      homologada, vence hoje) calculadas na leitura, nunca gravadas.
-- [ ] Selo **CAPAG** do município (capacidade de pagamento — dado público do Tesouro) e alerta
-      "edital exige seguro garantia" (vem do resumo, Seção 11).
-- [ ] "Ver itens" que expande no próprio cartão; "ver mais informações" (processo, observação,
-      telefone, site); anotação com **ditado por voz** (Web Speech API do navegador, sem enviar áudio).
-- [ ] Página de 20 resultados por padrão, selecionar página.
+- [x] Filtros que faltam (`backend/regras/filtros-radar.js`, função pura): **busca exata** entre
+      aspas (palavras soltas = todas, qualquer ordem), região, **raio em km** (haversine sobre o
+      catálogo `municipios` do IBGE, a partir da cidade escolhida ou da `radar_cidade_base`),
+      nº do edital, nº do processo, esfera, situação, órgão (nome ou CNPJ), texto nos itens, texto
+      na observação, inclusão e prazo de/até com atalhos hoje/ontem/amanhã, "com edital baixado",
+      SRP e "monitorada" (monitor do edital — o de chat é a Seção 6).
+- [x] **Salvar pesquisa**: na mesma `perfis_busca`, com `origem = 'radar'` e `filtros` JSON
+      (migração `022_radar.sql`); não gera boletim nem conta no limite dele; até 30 por organização.
+- [x] Exportar em **.docx** (`servicos/docx.js`, sem dependência nova), **imprimir** (`@media
+      print` em `estilo.css`) e **compartilhar** por link de leitura de 1–30 dias
+      (`links_publicos`, só o SHA-256 do token; `GET /api/publico/radar/:token`), revogável. O
+      link tira os filtros de decisão da organização e mostra só o fato público.
+- [x] Etiquetas no cartão calculadas na leitura (`regras/etiquetas.js`): nova, vence hoje, urgente,
+      recebendo propostas, SRP, prorrogada, adiada, suspensa, revogada, homologada.
+- [ ] Selo **CAPAG** — vai para a 7b. [x] Alerta "exige garantia" (das exigências lidas do edital,
+      código `garantia_contrato`; o resumo da Seção 11 pode refinar para "seguro garantia").
+- [x] "Ver itens" e "mais informações" (processo, observação, unidade, telefone como lacuna, site)
+      no próprio cartão; anotação com **ditado por voz** (Web Speech API, nenhum áudio ao painel).
+- [x] Página de 20 por padrão, 20/50/100 e "ir para" página.
 
-**Aceite:** o mesmo filtro rodado no Radar e no ConLicitação para RS traz conjuntos comparáveis;
-cada filtro novo testado contra o banco real com a contagem anotada no commit.
+**Aceite (medido):** MariaDB 10.11, as 150 licitações reais de RS do PNCP, agora **detalhadas
+de verdade** no PNCP (150/150 sem falha: 3.746 itens, SRP em 150, observação em 27, esfera em
+144) e 3 editais baixados de verdade. Roteiro pela API, cada filtro contra SQL independente:
+**44/44** — busca solta "eventual futura" 13 × exata "futura e eventual" 6; região Sul 150,
+Nordeste 0; raio 100 km de Porto Alegre 64, raio 1 km 23 (= só Porto Alegre); esfera Municipal
+116; situação Suspensa 4; órgão "municipio" 109; CNPJ 8; nº do edital "90" 4; processo "2026" 83;
+itens "papel" 12; observação "edital" 11; inclusão hoje 150 / ontem 0; prazo em 16/11 18; SRP 76;
+com edital 3; monitorada 5; "%%zz" 0 (curinga é texto). Página padrão 20; xlsx e docx com as
+mesmas 138 linhas. Etiquetas no conjunto: recebendo 137, SRP 76, suspensa 4, revogada 1,
+homologada 1 (prorrogada/adiada 0 — nenhuma data mudou desde a coleta). Isolamento com duas
+organizações: a B não vê, não apaga a pesquisa e não revoga o link da A (404); o boletim não apaga
+pesquisa do Radar (404). Link público: sem login, 116 = SQL, nenhum campo de decisão, token só como
+hash no banco, inválido/expirado/revogado 404, validade cortada em 30 dias, link com
+"favoritas + nota 80" traz as 150 (não revela a escolha), o da organização B só o que a B vê (118).
+Migração em banco zerado. Lint limpo, **87/87** testes (`testes/radar.test.js`, 11 novos). Tela
+conferida com Playwright (1366 e 390 px, sem rolagem lateral, sem erro no console; impressão sem
+menu nem filtros). `code-review` (10 achados, 9 corrigidos) e `simplify` aplicados.
+**Não verificado:** "o mesmo filtro no ConLicitação para RS" — sem acesso ao ConLicitação daqui;
+fica para o gate da Fase B (duas semanas lado a lado). Ditado por voz não testável no Chromium
+sem microfone (o botão só aparece onde o navegador oferece a API).
+
+**Seção 7b — pendente:**
+- [ ] Selo **CAPAG** do município: o Tesouro Transparente recusou conexão neste ambiente; falta
+      a carga (tabela por código IBGE) e o selo no cartão.
+- [ ] Filtro "com **chat** monitorado" — depende da Seção 6.
+- [ ] Raio e cidade pelo **código IBGE** gravado na licitação (hoje casa pelo nome, sem acento e
+      sem caixa; grafia diferente do IBGE fica fora do raio sem aviso).
+- [ ] Tela de Configurações para escolher a `radar_cidade_base` (hoje pela API de ajustes).
+- [ ] Regra da "primeira data vista" num ponto só (trigger ou helper) — hoje está nos três
+      caminhos de gravação de `coletar.js`.
+- [ ] Usar a pesquisa salva como filtro do boletim (os dois na mesma tabela, ainda com campos
+      próprios).
 
 ---
 

@@ -36,7 +36,7 @@ function agoraNoFuso(agora = new Date()) {
  */
 async function garantirPerfilInicial(organizacaoId, conexao = pool) {
   const org = escopo.idOrganizacao(organizacaoId);
-  const [[{ total }]] = await conexao.query('SELECT COUNT(*) AS total FROM perfis_busca WHERE organizacao_id = ?', [org]);
+  const [[{ total }]] = await conexao.query("SELECT COUNT(*) AS total FROM perfis_busca WHERE organizacao_id = ? AND origem = 'boletim'", [org]);
   if (total) return false;
   const [palavras] = await conexao.query(
     'SELECT termo FROM palavras_chave WHERE organizacao_id = ? AND ativa = 1 ORDER BY peso DESC, termo LIMIT 100',
@@ -232,7 +232,7 @@ async function podeReceber(organizacaoId) {
 
 async function perfisAtivos(organizacaoId) {
   const [linhas] = await pool.query(
-    'SELECT * FROM perfis_busca WHERE organizacao_id = ? AND ativo = 1 ORDER BY id',
+    "SELECT * FROM perfis_busca WHERE organizacao_id = ? AND origem = 'boletim' AND ativo = 1 ORDER BY id",
     [escopo.idOrganizacao(organizacaoId)]
   );
   return linhas.map(regras.lerPerfil);

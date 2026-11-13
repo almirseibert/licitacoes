@@ -19,6 +19,10 @@ const questionamento = require('../servicos/questionamento');
 const jobBaixar = require('../jobs/baixar');
 const escopo = require('../servicos/escopo');
 const limites = require('../servicos/limites');
+const filtrosRadar = require('../regras/filtros-radar');
+const { filtrosDe, comEtiquetas, cidadeBase, COLUNAS_LISTA } = require('../servicos/radar');
+const { lerJson } = limites;
+const linkPublico = require('../servicos/link-publico');
 
 const rotas = express.Router();
 
@@ -33,109 +37,39 @@ const ORDENACOES = {
 // As etapas vivem em regras/funil.js, com o que cada uma pede e dispara.
 const ETAPAS = funil.CHAVES;
 
-function montarFiltros(q) {
-  const onde = [];
-  const valores = [];
-
-  if (q.incluir_descartadas !== '1') onde.push('l.descartada = 0');
-
-  if (q.grupo) {
-    onde.push('l.grupo = ?');
-    valores.push(q.grupo);
-  }
-  if (q.uf) {
-    const ufs = String(q.uf).split(',').map((u) => u.trim().toUpperCase()).filter(Boolean);
-    onde.push(`l.uf IN (${ufs.map(() => '?').join(',')})`);
-    valores.push(...ufs);
-  }
-  if (q.modalidade) {
-    onde.push('l.modalidade LIKE ?');
-    valores.push(`%${q.modalidade}%`);
-  }
-  if (q.fonte_id) {
-    onde.push('l.fonte_id = ?');
-    valores.push(Number(q.fonte_id));
-  }
-  if (q.valor_min) {
-    onde.push('l.valor_estimado >= ?');
-    valores.push(Number(q.valor_min));
-  }
-  if (q.valor_max) {
-    onde.push('l.valor_estimado <= ?');
-    valores.push(Number(q.valor_max));
-  }
-  // Por padrão o Radar esconde a faixa "Baixa" (<30), conforme a seção 6.
-  const pontuacaoMinima = q.pontuacao_min === undefined || q.pontuacao_min === '' ? 30 : Number(q.pontuacao_min);
-  if (pontuacaoMinima > 0) {
-    onde.push('l.pontuacao >= ?');
-    valores.push(pontuacaoMinima);
-  }
-  if (q.prazo_dias) {
-    onde.push('l.fim_propostas IS NOT NULL AND l.fim_propostas <= DATE_ADD(NOW(), INTERVAL ? DAY)');
-    valores.push(Number(q.prazo_dias));
-  }
-  if (q.em_aberto === '1') {
-    onde.push('(l.fim_propostas IS NULL OR l.fim_propostas >= NOW())');
-  }
-  if (q.pode_participar) {
-    onde.push('l.pode_participar = ?');
-    valores.push(q.pode_participar);
-  }
-  if (q.objeto_social) {
-    onde.push('l.objeto_social = ?');
-    valores.push(q.objeto_social);
-  }
-  if (q.exclusivo_me === '1') {
-    onde.push("l.beneficio_me IN ('exclusivo','cota')");
-  }
-  if (q.etapa) {
-    onde.push('l.etapa = ?');
-    valores.push(q.etapa);
-  }
-  if (q.favorito === '1') onde.push('l.favorito = 1');
-  if (q.novas_24h === '1') onde.push('l.criado_em >= DATE_SUB(NOW(), INTERVAL 24 HOUR)');
-  if (q.busca) {
-    onde.push('(l.objeto LIKE ? OR l.orgao_nome LIKE ? OR l.municipio LIKE ?)');
-    const alvo = `%${q.busca}%`;
-    valores.push(alvo, alvo, alvo);
-  }
-
-  return { onde: onde.length ? `WHERE ${onde.join(' AND ')}` : '', valores };
-}
+const MAX_PESQUISAS = 30;
+const MAX_LINKS = 50;
 
 // GET /api/licitacoes
 rotas.get('/', async (req, res) => {
   try {
-    const { onde, valores } = montarFiltros(req.query);
+    const { onde, valores, avisos } = await filtrosDe(req.query, req.organizacaoId);
     const ordem = ORDENACOES[req.query.ordem] || ORDENACOES.relevancia;
-    const porPagina = Math.min(Number(req.query.por_pagina || 50), 200);
-    const pagina = Math.max(Number(req.query.pagina || 1), 1);
+    // 20 por página, como a referência (Seção 7); a tela deixa escolher.
+    const porPagina = Math.min(Math.max(Number(req.query.por_pagina) || 20, 1), 200);
+    const pagina = Math.max(Number(req.query.pagina) || 1, 1);
     const deslocamento = (pagina - 1) * porPagina;
 
-    const [linhas] = await pool.query(
-      `SELECT l.id, l.chave_externa, l.orgao_nome, l.unidade, l.uf, l.municipio, l.esfera,
-              l.modalidade, l.modo_disputa, l.objeto, l.valor_estimado, l.orcamento_sigiloso,
-              l.abertura_propostas, l.fim_propostas, l.situacao, l.plataforma_disputa,
-              l.link_portal, l.link_disputa, l.grupo, l.palavra_casada, l.pontuacao,
-              l.pode_participar, l.motivo_participacao, l.objeto_social, l.beneficio_me,
-              l.etapa, l.favorito, l.criado_em, l.arquivos_status,
-              f.nome AS fonte_nome,
-              (SELECT COUNT(*) FROM licitacao_itens i WHERE i.licitacao_id = l.id) AS total_itens
+    const [[linhas], [[{ total }]]] = await Promise.all([
+      pool.query(
+      `SELECT ${COLUNAS_LISTA}, l.grupo, l.palavra_casada, l.pontuacao,
+              l.pode_participar, l.motivo_participacao, l.objeto_social,
+              l.etapa, l.favorito, f.nome AS fonte_nome
          FROM ${escopo.daOrganizacao(req.organizacaoId)} l
          JOIN fontes f ON f.id = l.fonte_id
          ${onde}
          ORDER BY ${ordem}
          LIMIT ? OFFSET ?`,
       [...valores, porPagina, deslocamento]
-    );
+      ),
+      pool.query(
+        `SELECT COUNT(*) AS total FROM ${escopo.daOrganizacao(req.organizacaoId)} l
+           JOIN fontes f ON f.id = l.fonte_id ${onde}`,
+        valores
+      ),
+    ]);
 
-    const [[{ total }]] = await pool.query(
-      `SELECT COUNT(*) AS total FROM ${escopo.daOrganizacao(req.organizacaoId)} l
-         JOIN fontes f ON f.id = l.fonte_id ${onde}`,
-      valores
-    );
-
-    res.json({ dados: linhas, total: Number(total), pagina, por_pagina: porPagina });
+    res.json({ dados: comEtiquetas(linhas), total: Number(total), pagina, por_pagina: porPagina, avisos });
   } catch (erro) {
     console.error('Erro ao listar licitações:', erro.message);
     responderErro(res, 500, 'Não foi possível carregar as licitações.', erro);
@@ -148,20 +82,154 @@ rotas.get('/', async (req, res) => {
 // Por que Excel e não CSV: o Radar tem objeto longo, valor em real e data com
 // hora, e o CSV entrega os três errados — o Excel quebra a linha no ponto e
 // vírgula do objeto, lê 1.234,56 como texto e inverte dia com mês.
+// `?formato=docx` sai em Word (Seção 7), para ler e encaminhar.
 rotas.get('/exportar', limites.exigirLimite('exportacoes_mes'), async (req, res) => {
   try {
-    const { onde, valores } = montarFiltros(req.query);
+    const { onde, valores } = await filtrosDe(req.query, req.organizacaoId);
     const ordem = ORDENACOES[req.query.ordem] || ORDENACOES.relevancia;
+    const emWord = req.query.formato === 'docx';
 
-    const r = await exportar.radarEmExcel({ organizacaoId: req.organizacaoId, onde, valores, ordem });
+    const gerar = emWord ? exportar.radarEmDocx : exportar.radarEmExcel;
+    const r = await gerar({ organizacaoId: req.organizacaoId, onde, valores, ordem });
     await limites.registrarUso(req.organizacaoId, 'exportacoes_mes');
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader(
+      'Content-Type',
+      emWord
+        ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
     res.setHeader('Content-Disposition', `attachment; filename="${r.arquivo}"`);
     res.setHeader('X-Linhas', String(r.linhas));
     res.send(r.buffer);
   } catch (erro) {
     console.error('Erro ao exportar o Radar:', erro.message);
-    responderErro(res, 500, 'Não foi possível gerar a planilha do Radar.', erro);
+    responderErro(res, 500, 'Não foi possível gerar o arquivo do Radar.', erro);
+  }
+});
+
+// GET /api/licitacoes/municipios?busca=porto — cidade de partida do raio.
+rotas.get('/municipios', async (req, res) => {
+  const busca = String(req.query.busca || '').trim();
+  if (busca.length < 2) return res.json({ dados: [] });
+  const prefixo = filtrosRadar.comoLike(busca).slice(1); // "porto%": quem começa assim vem primeiro
+  try {
+    const [dados] = await pool.query(
+      `SELECT codigo_ibge, nome, uf FROM municipios WHERE nome LIKE ?
+        ORDER BY (nome LIKE ?) DESC, nome LIMIT 15`,
+      [`%${prefixo}`, prefixo]
+    );
+    res.json({ dados });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível buscar a cidade.', erro);
+  }
+});
+
+// ------------------------------------------------------------- pesquisas salvas
+// Moram em `perfis_busca` com origem 'radar' (uma tabela para o Radar e o
+// boletim, como o plano pede). Não geram boletim nem contam no limite dele.
+rotas.get('/pesquisas', async (req, res) => {
+  try {
+    const [linhas] = await pool.query(
+      "SELECT id, nome, filtros, criado_em FROM perfis_busca WHERE organizacao_id = ? AND origem = 'radar' ORDER BY nome",
+      [req.organizacaoId]
+    );
+    res.json({ dados: linhas.map((l) => ({ ...l, filtros: lerJson(l.filtros, {}) })) });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível carregar as pesquisas salvas.', erro);
+  }
+});
+
+rotas.post('/pesquisas', async (req, res) => {
+  const nome = String((req.body && req.body.nome) || '').trim().slice(0, 80);
+  const filtros = filtrosRadar.limparFiltros(req.body && req.body.filtros);
+  if (!nome) return res.status(400).json({ erro: 'Dê um nome à pesquisa.' });
+  if (!Object.keys(filtros).length) return res.status(400).json({ erro: 'Não há filtro aplicado para salvar.' });
+  try {
+    const [[{ total, existe }]] = await pool.query(
+      "SELECT COUNT(*) AS total, SUM(nome = ?) AS existe FROM perfis_busca WHERE organizacao_id = ? AND origem = 'radar'",
+      [nome, req.organizacaoId]
+    );
+    // Mesmo nome é atualização: não esbarra no teto.
+    if (!Number(existe) && Number(total) >= MAX_PESQUISAS) {
+      return res.status(400).json({ erro: `Já há ${MAX_PESQUISAS} pesquisas salvas. Apague uma para salvar outra.` });
+    }
+    // Mesmo nome = atualizar a pesquisa (o usuário refinou o filtro).
+    const [r] = await pool.query(
+      `INSERT INTO perfis_busca (organizacao_id, nome, origem, filtros, palavras, exclusoes, ufs, municipios, modalidades, horarios, ativo, enviar_email)
+       VALUES (?, ?, 'radar', ?, '[]', '[]', '[]', '[]', '[]', '[]', 0, 0)
+       ON DUPLICATE KEY UPDATE filtros = VALUES(filtros)`,
+      [req.organizacaoId, nome, JSON.stringify(filtros)]
+    );
+    res.status(Number(existe) ? 200 : 201).json({ id: Number(existe) ? null : r.insertId, nome, filtros });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível salvar a pesquisa.', erro);
+  }
+});
+
+rotas.delete('/pesquisas/:pesquisaId', async (req, res) => {
+  try {
+    const [r] = await pool.query(
+      "DELETE FROM perfis_busca WHERE id = ? AND organizacao_id = ? AND origem = 'radar'",
+      [Number(req.params.pesquisaId) || 0, req.organizacaoId]
+    );
+    if (!r.affectedRows) return res.status(404).json({ erro: 'Pesquisa não encontrada.' });
+    res.json({ ok: true });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível apagar a pesquisa.', erro);
+  }
+});
+
+// ------------------------------------------------------- link público de leitura
+// POST /api/licitacoes/compartilhar { filtros, dias, nome } → { url, expira_em }
+// O token sai uma vez, nesta resposta; o banco guarda só o SHA-256 dele.
+rotas.post('/compartilhar', async (req, res) => {
+  const filtros = filtrosRadar.filtrosPublicos(req.body && req.body.filtros);
+  const dias = Math.min(Math.max(Math.round(Number(req.body && req.body.dias) || 7), 1), 30);
+  const nome = String((req.body && req.body.nome) || '').trim().slice(0, 80) || null;
+  try {
+    const [[{ total }]] = await pool.query(
+      'SELECT COUNT(*) AS total FROM links_publicos WHERE organizacao_id = ? AND expira_em > NOW()',
+      [req.organizacaoId]
+    );
+    if (Number(total) >= MAX_LINKS) {
+      return res.status(400).json({ erro: `Já há ${MAX_LINKS} links válidos. Revogue um para criar outro.` });
+    }
+    const token = linkPublico.novoToken();
+    const [r] = await pool.query(
+      `INSERT INTO links_publicos (organizacao_id, token_hash, nome, filtros, criado_por, expira_em)
+       VALUES (?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL ? DAY))`,
+      [req.organizacaoId, linkPublico.hash(token), nome, JSON.stringify(filtros), (req.usuario && req.usuario.id) || null, dias]
+    );
+    const [[link]] = await pool.query('SELECT expira_em FROM links_publicos WHERE id = ?', [r.insertId]);
+    res.status(201).json({ id: r.insertId, caminho: `/publico/radar/${token}`, expira_em: link.expira_em, dias });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível criar o link.', erro);
+  }
+});
+
+rotas.get('/compartilhados', async (req, res) => {
+  try {
+    const [dados] = await pool.query(
+      `SELECT id, nome, filtros, expira_em, acessos, criado_em
+         FROM links_publicos WHERE organizacao_id = ? AND expira_em > NOW() ORDER BY criado_em DESC LIMIT 100`,
+      [req.organizacaoId]
+    );
+    res.json({ dados: dados.map((d) => ({ ...d, filtros: lerJson(d.filtros, {}) })) });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível carregar os links.', erro);
+  }
+});
+
+rotas.delete('/compartilhados/:linkId', async (req, res) => {
+  try {
+    const [r] = await pool.query('DELETE FROM links_publicos WHERE id = ? AND organizacao_id = ?', [
+      Number(req.params.linkId) || 0,
+      req.organizacaoId,
+    ]);
+    if (!r.affectedRows) return res.status(404).json({ erro: 'Link não encontrado.' });
+    res.json({ ok: true });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível revogar o link.', erro);
   }
 });
 
@@ -198,11 +266,19 @@ rotas.get('/filtros', async (req, res) => {
       'SELECT DISTINCT modalidade FROM licitacoes WHERE modalidade IS NOT NULL ORDER BY modalidade'
     );
     const [fontes] = await pool.query('SELECT id, nome FROM fontes ORDER BY nome');
+    const [situacoes] = await pool.query(
+      'SELECT DISTINCT situacao FROM licitacoes WHERE situacao IS NOT NULL ORDER BY situacao'
+    );
+    const base = await cidadeBase(req.organizacaoId);
 
     res.json({
       grupos: grupos.map((g) => g.grupo),
       ufs: ufs.map((u) => ({ uf: u.uf, total: Number(u.total) })),
       modalidades: modalidades.map((m) => m.modalidade),
+      situacoes: situacoes.map((m) => m.situacao),
+      esferas: filtrosRadar.ESFERAS,
+      regioes: Object.keys(filtrosRadar.REGIOES),
+      cidade_base: base && { codigo_ibge: base.codigo_ibge, nome: base.nome, uf: base.uf },
       fontes,
       etapas: ETAPAS,
       funil: funil.ETAPAS,

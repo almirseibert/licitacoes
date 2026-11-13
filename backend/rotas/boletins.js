@@ -49,7 +49,7 @@ rotas.get('/perfis', async (req, res) => {
               EXISTS (SELECT 1 FROM boletim_descadastros d WHERE d.perfil_id = p.id AND d.usuario_id = ?) AS descadastrado,
               (SELECT COUNT(*) FROM boletins b WHERE b.perfil_id = p.id AND b.total_itens > 0) AS boletins
          FROM perfis_busca p
-        WHERE p.organizacao_id = ?
+        WHERE p.organizacao_id = ? AND p.origem = 'boletim'
         ORDER BY p.id`,
       [req.usuario.id, org]
     );
@@ -100,7 +100,7 @@ rotas.put('/perfis/:id', async (req, res) => {
     // Faixa de valor conferida contra o que já está gravado, quando só um lado veio.
     if (('valor_minimo' in campos) !== ('valor_maximo' in campos)) {
       const [[atual]] = await pool.query(
-        'SELECT valor_minimo, valor_maximo FROM perfis_busca WHERE id = ? AND organizacao_id = ?',
+        "SELECT valor_minimo, valor_maximo FROM perfis_busca WHERE id = ? AND organizacao_id = ? AND origem = 'boletim'",
         [perfilId, req.organizacaoId]
       );
       if (!atual) return res.status(404).json({ erro: 'Filtro não encontrado.' });
@@ -114,7 +114,7 @@ rotas.put('/perfis/:id', async (req, res) => {
     const nomes = Object.keys(dados);
     if (!nomes.length) return res.status(400).json({ erro: 'Nada para alterar.' });
     const [r] = await pool.query(
-      `UPDATE perfis_busca SET ${nomes.map((n) => `${n} = ?`).join(', ')} WHERE id = ? AND organizacao_id = ?`,
+      `UPDATE perfis_busca SET ${nomes.map((n) => `${n} = ?`).join(', ')} WHERE id = ? AND organizacao_id = ? AND origem = 'boletim'`,
       [...nomes.map((n) => dados[n]), perfilId, req.organizacaoId]
     );
     if (!r.affectedRows) return res.status(404).json({ erro: 'Filtro não encontrado.' });
@@ -129,13 +129,13 @@ rotas.delete('/perfis/:id', async (req, res) => {
   const perfilId = id(req.params.id);
   if (!perfilId) return res.status(404).json({ erro: 'Filtro não encontrado.' });
   try {
-    const [[{ total }]] = await pool.query('SELECT COUNT(*) AS total FROM perfis_busca WHERE organizacao_id = ?', [req.organizacaoId]);
-    const [[existe]] = await pool.query('SELECT id FROM perfis_busca WHERE id = ? AND organizacao_id = ?', [perfilId, req.organizacaoId]);
+    const [[{ total }]] = await pool.query("SELECT COUNT(*) AS total FROM perfis_busca WHERE organizacao_id = ? AND origem = 'boletim'", [req.organizacaoId]);
+    const [[existe]] = await pool.query("SELECT id FROM perfis_busca WHERE id = ? AND organizacao_id = ? AND origem = 'boletim'", [perfilId, req.organizacaoId]);
     if (!existe) return res.status(404).json({ erro: 'Filtro não encontrado.' });
     if (total <= 1) {
       return res.status(409).json({ erro: 'Mantenha ao menos um filtro. Para parar o boletim, desative-o.' });
     }
-    await pool.query('DELETE FROM perfis_busca WHERE id = ? AND organizacao_id = ?', [perfilId, req.organizacaoId]);
+    await pool.query("DELETE FROM perfis_busca WHERE id = ? AND organizacao_id = ? AND origem = 'boletim'", [perfilId, req.organizacaoId]);
     res.json({ ok: true });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível apagar o filtro.', erro);
@@ -147,7 +147,7 @@ rotas.put('/perfis/:id/email', async (req, res) => {
   const perfilId = id(req.params.id);
   if (!perfilId) return res.status(404).json({ erro: 'Filtro não encontrado.' });
   try {
-    const [[existe]] = await pool.query('SELECT id FROM perfis_busca WHERE id = ? AND organizacao_id = ?', [perfilId, req.organizacaoId]);
+    const [[existe]] = await pool.query("SELECT id FROM perfis_busca WHERE id = ? AND organizacao_id = ? AND origem = 'boletim'", [perfilId, req.organizacaoId]);
     if (!existe) return res.status(404).json({ erro: 'Filtro não encontrado.' });
     if (req.body && req.body.receber) {
       await pool.query('DELETE FROM boletim_descadastros WHERE perfil_id = ? AND usuario_id = ?', [perfilId, req.usuario.id]);
@@ -299,7 +299,7 @@ async function lerDescadastro(token) {
   const [[perfil]] = await pool.query(
     `SELECT p.id, p.nome FROM perfis_busca p
        JOIN organizacao_membros m ON m.organizacao_id = p.organizacao_id AND m.usuario_id = ?
-      WHERE p.id = ?`,
+      WHERE p.id = ? AND p.origem = 'boletim'`,
     [dados.usuarioId, dados.perfilId]
   );
   return perfil ? { ...dados, nome: perfil.nome } : null;

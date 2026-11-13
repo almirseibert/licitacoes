@@ -104,3 +104,21 @@ body {
 ::-webkit-scrollbar-track { background: rgb(var(--cor-obsidiana)); }
 ::-webkit-scrollbar-thumb { background: rgb(var(--cor-rolagem)); border-radius: 6px; }
 ::-webkit-scrollbar-thumb:hover { background: rgb(var(--cor-rolagem-foco)); }
+
+/* Impressão do Radar (Seção 7): só a lista, preto no branco, sem menu nem
+   filtros nem botões. A lista impressa é a página da tela — para tudo de uma
+   vez, a exportação em Word ou Excel. */
+@media print {
+  @page { size: A4 landscape; margin: 12mm; }
+  nav, .imprimir-oculto, button, select, input, textarea { display: none !important; }
+  html, body, #root, main, .h-screen, .h-full, .overflow-auto, .overflow-hidden, .flex-1 {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+  * { color: #000 !important; border-color: #999 !important; box-shadow: none !important; background: transparent !important; }
+  .sticky { position: static !important; }
+  .tabela-densa tr { break-inside: avoid; }
+  a[href]::after { content: none; }
+}

@@ -184,6 +184,36 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
   - Não verificado: casamento no texto do edital com edital baixado de verdade (o PNCP não
     respondeu neste ambiente; o caminho foi conferido com um texto inserido numa licitação real)
     e envio por SMTP de produção.
+- **Seção 7 — Radar 2.0, entregue em 13/11/2026.** Migração `022_radar.sql`: `municipios`
+  (catálogo, 5.570 municípios do IBGE com coordenadas — `backend/config/dados/municipios.csv`,
+  carregado pelo `npm run semear`), `perfis_busca.origem`/`filtros` (a pesquisa salva do Radar
+  mora na mesma tabela dos filtros do boletim, com `origem = 'radar'`, sem gerar boletim nem
+  contar no limite dele), `links_publicos` (só o SHA-256 do token) e, no catálogo, `srp`,
+  `informacao_complementar` (a observação do PNCP), `abertura_original` e
+  `fim_propostas_original` (primeira data vista — é dela que sai "prorrogada"/"adiada").
+  - Filtros (`backend/regras/filtros-radar.js`, função pura usada pela lista, pelas exportações
+    e pelo link): palavras soltas = todas, em qualquer ordem; **"entre aspas" = frase exata** no
+    objeto; região; **raio em km** (haversine sobre `municipios`, a partir da cidade escolhida ou
+    da `radar_cidade_base` da organização; sem cidade, aviso em vez de filtro mudo); esfera,
+    situação, órgão (nome ou CNPJ), nº do edital, nº do processo, texto nos itens, texto na
+    observação, inclusão e prazo de/até com atalhos hoje/ontem/amanhã, SRP, com edital baixado,
+    monitorada. `%` e `_` digitados são texto, não curinga.
+  - Etiquetas calculadas na leitura (`backend/regras/etiquetas.js`): nova, vence hoje, urgente,
+    recebendo propostas, SRP, prorrogada, adiada, suspensa, revogada, homologada; e "exige
+    garantia" quando o edital lido pede garantia contratual.
+  - Saídas: Excel e **Word** (`backend/servicos/docx.js`, A4 deitado, lacuna visível),
+    **imprimir** (folha de estilo de impressão em `estilo.css`) e **compartilhar** por link de
+    leitura de 1 a 30 dias (`/publico/radar/<token>`), revogável. O link tira os filtros de
+    decisão (nota, favorito, etapa, descarte, grupo, monitorada) e mostra só o fato público.
+  - Cartão: "ver itens" e "mais informações" (processo, observação, telefone e site — o PNCP não
+    dá telefone: lacuna) abrem no próprio cartão; anotação com **ditado por voz** (Web Speech API
+    do navegador; nenhum áudio vai ao painel). 20 por página, com "ir para" e 20/50/100.
+  - O detalhe do PNCP passou a gravar SRP, observação e esfera (`adaptadores/pncp.js`).
+  - **Aceite medido**: ver o plano (Seção 7) — contagem de cada filtro pela API igual à
+    conferência por SQL independente no banco real; isolamento entre duas organizações; link
+    público. Testes em `testes/radar.test.js`.
+  - Não verificado: comparação com o ConLicitação no mesmo filtro (sem acesso a ele daqui).
+    Pendente (Seção 7b no plano): CAPAG, monitor de chat, município por código IBGE.
 - `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
   ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
 
@@ -465,6 +495,7 @@ O que existe hoje:
 Tudo em português: código, comentários, tabelas, interface.
 
 ---
+
 
 ## Como rodar
 
@@ -1008,6 +1039,12 @@ POST   /api/boletins/marcar-lidos   mesmo filtro da lista
 GET    /api/boletins/perfis         "Meus filtros"         POST/PUT/DELETE /api/boletins/perfis/:id
 PUT    /api/boletins/perfis/:id/email  { receber } — só para quem está logado
 GET    /api/boletins/descadastro/:token  página de confirmação; POST descadastra (sem login)
+GET    /api/licitacoes?…&pagina=&por_pagina=   Radar (20 por página) com `etiquetas` e `avisos`
+GET    /api/licitacoes/municipios?busca=      cidade de partida do raio
+GET    /api/licitacoes/pesquisas              pesquisas salvas   POST { nome, filtros }   DELETE /:id
+POST   /api/licitacoes/compartilhar           { filtros, dias ≤ 30, nome } → caminho do link (uma vez)
+GET    /api/licitacoes/compartilhados         links válidos      DELETE /:id revoga
+GET    /api/publico/radar/:token?pagina=      lista compartilhada, sem login, só o fato público
 GET    /api/admin/organizacoes      superadmin: todas, com uso          GET .../:id/eventos
 POST   /api/admin/organizacoes/:id/acao  { acao: ativar|suspender|reativar|estender_teste }
 POST   /api/cobranca/webhook/:provedor   pública, HMAC em X-Assinatura; fechada no provedor manual
@@ -1101,7 +1138,7 @@ POST   /api/contratos/:id/marcos               marco a mao (medicao, por exemplo
 PATCH  /api/contratos/:id/marcos/:marcoId      data prevista e conclusao
 DELETE /api/contratos/:id/marcos/:marcoId      so os acrescentados a mao
 POST   /api/contratos/avisos/rodar             roda os alertas de marco agora
-GET    /api/licitacoes/exportar                o Radar em Excel, com os filtros da tela
+GET    /api/licitacoes/exportar                o Radar em Excel (`?formato=docx` em Word), com os filtros da tela
 GET    /api/licitacoes/relatorio?meses=12      relatorio mensal (&formato=xlsx baixa)
 GET    /api/painel/resumo          GET /api/saude
 ```

@@ -1,4 +1,12 @@
-import { Search, X } from 'lucide-react';
+import { useState } from 'react';
+import { Search, SlidersHorizontal, X } from 'lucide-react';
+import FiltrosAvancados from './FiltrosAvancados';
+
+// Os campos do painel "mais filtros" — para contar quantos estão ligados.
+const AVANCADOS = [
+  'regiao', 'raio_km', 'esfera', 'situacao', 'orgao', 'numero_edital', 'processo', 'texto_itens',
+  'observacao', 'inclusao_de', 'inclusao_ate', 'prazo_de', 'prazo_ate',
+];
 
 const rotuloCampo = 'block text-[11px] uppercase tracking-wide text-texto-suave mb-1';
 const campo =
@@ -11,17 +19,22 @@ const campo =
  */
 export default function Filtros({ valores, opcoes, onMudar, onLimpar }) {
   const mudar = (campoNome) => (evento) => onMudar({ ...valores, [campoNome]: evento.target.value, pagina: 1 });
+  const alternar = (nome) => () => onMudar({ ...valores, [nome]: valores[nome] === '1' ? '' : '1', pagina: 1 });
+  const ligados = AVANCADOS.filter((c) => valores[c]).length;
+  const [aberto, setAberto] = useState(ligados > 0);
 
   return (
-    <div className="border-b border-borda bg-obsidiana/80 backdrop-blur sticky top-0 z-20">
+    <div className="border-b border-borda bg-obsidiana/80 backdrop-blur sticky top-0 z-20 imprimir-oculto">
       <div className="px-4 py-3 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
         <div className="col-span-2 md:col-span-2">
-          <label className={rotuloCampo}>Buscar no objeto</label>
+          <label className={rotuloCampo} title='Palavras soltas: todas, em qualquer ordem. Entre aspas: a frase exata.'>
+            Buscar no objeto <span className="normal-case tracking-normal">(&quot;entre aspas&quot; = exata)</span>
+          </label>
           <div className="relative">
             <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-texto-suave" />
             <input
               className={`${campo} pl-7`}
-              placeholder="site, rastreador, toner…"
+              placeholder='toner "cartucho original"'
               value={valores.busca || ''}
               onChange={mudar('busca')}
             />
@@ -100,9 +113,20 @@ export default function Filtros({ valores, opcoes, onMudar, onLimpar }) {
         <Marcador ativo={valores.favorito === '1'} onClick={() => onMudar({ ...valores, favorito: valores.favorito === '1' ? '' : '1', pagina: 1 })}>
           Favoritas
         </Marcador>
+        <Marcador ativo={valores.srp === '1'} onClick={alternar('srp')}>SRP</Marcador>
+        <Marcador ativo={valores.com_edital === '1'} onClick={alternar('com_edital')}>Com edital baixado</Marcador>
+        <Marcador ativo={valores.monitorada === '1'} onClick={alternar('monitorada')}>Monitoradas</Marcador>
         <Marcador ativo={valores.em_aberto !== '0'} onClick={() => onMudar({ ...valores, em_aberto: valores.em_aberto === '0' ? '1' : '0', pagina: 1 })}>
           Só em aberto
         </Marcador>
+
+        <button
+          onClick={() => setAberto(!aberto)}
+          aria-expanded={aberto}
+          className="flex items-center gap-1 px-2 py-1 rounded border border-borda text-texto-suave hover:text-texto"
+        >
+          <SlidersHorizontal size={12} /> mais filtros{ligados ? ` (${ligados})` : ''}
+        </button>
 
         <select
           className="ml-auto bg-superficie border border-borda rounded px-2 py-1 text-xs text-texto-suave"
@@ -119,6 +143,8 @@ export default function Filtros({ valores, opcoes, onMudar, onLimpar }) {
           <X size={12} /> limpar
         </button>
       </div>
+
+      {aberto && <FiltrosAvancados valores={valores} opcoes={opcoes} onMudar={onMudar} />}
     </div>
   );
 }

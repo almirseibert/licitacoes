@@ -56,7 +56,8 @@ const COLUNAS_DECISAO = [
 const COLUNAS_CATALOGO = [
   'id', 'fonte_id', 'chave_externa', 'numero_controle', 'orgao_cnpj', 'orgao_nome', 'unidade',
   'esfera', 'uf', 'municipio', 'modalidade', 'modo_disputa', 'numero_compra', 'processo', 'objeto',
-  'valor_estimado', 'valor_homologado', 'orcamento_sigiloso', 'abertura_propostas', 'fim_propostas',
+  'informacao_complementar', 'valor_estimado', 'valor_homologado', 'orcamento_sigiloso', 'srp',
+  'abertura_propostas', 'abertura_original', 'fim_propostas', 'fim_propostas_original',
   'prazo_questionamento', 'situacao', 'plataforma_disputa', 'link_portal', 'link_disputa',
   'beneficio_me', 'estrategica', 'reaberta_como', 'assinatura_objeto', 'bruto', 'ia_resumo', 'ia_em',
   'ia_situacao', 'pasta', 'arquivos_status', 'arquivos_em', 'exigencias_status', 'exigencias_em',

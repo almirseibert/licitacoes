@@ -186,4 +186,4 @@ ${colunas}
   return zip.toBuffer();
 }
 
-module.exports = { gerar, coluna, ESTILOS };
+module.exports = { gerar, coluna, escapar, ESTILOS };

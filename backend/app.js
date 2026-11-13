@@ -31,6 +31,7 @@ app.get('/api/saude', (_req, res) => {
 app.use('/api/auth', require('./rotas/auth'));
 // Link de descadastro do e-mail do boletim (Seção 4): sem token, assinado por HMAC.
 app.use('/api/boletins/descadastro', require('./rotas/boletins').publico);
+app.use('/api/publico', require('./rotas/publico'));
 
 // Tudo abaixo exige token. Seção 3: `assinaturaValida` barra a organização
 // suspensa e deixa só leitura para teste/assinatura vencidos; `exigirRecurso`

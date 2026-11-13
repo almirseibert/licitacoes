@@ -3,6 +3,8 @@
 // Idempotente — roda quantas vezes quiser, não duplica e não sobrescreve o que
 // o usuário já editou na tela (só insere o que falta).
 //   npm run semear
+const fs = require('fs');
+const path = require('path');
 const bcrypt = require('bcrypt');
 const pool = require('../config/db');
 const perfilPadrao = require('./dados/perfil-padrao');
@@ -301,6 +303,28 @@ async function semearAdmin() {
   return emailAdmin;
 }
 
+// Coordenadas dos 5.570 municípios do IBGE, para o filtro de raio do Radar
+// (Seção 7 do plano SaaS). Fonte: kelvins/municipios-brasileiros (licença MIT),
+// reduzida a código, nome, UF, latitude e longitude. Catálogo compartilhado:
+// regravar é idempotente.
+async function semearMunicipios() {
+  const arquivo = path.join(__dirname, 'dados', 'municipios.csv');
+  const linhas = fs.readFileSync(arquivo, 'utf8').trim().split('\n').slice(1);
+  const registros = linhas.map((linha) => {
+    const [codigo, nome, uf, latitude, longitude] = linha.split(',');
+    return [Number(codigo), nome, uf, Number(latitude), Number(longitude)];
+  });
+  for (let i = 0; i < registros.length; i += 500) {
+    await pool.query(
+      `INSERT INTO municipios (codigo_ibge, nome, uf, latitude, longitude) VALUES ?
+       ON DUPLICATE KEY UPDATE nome = VALUES(nome), uf = VALUES(uf),
+         latitude = VALUES(latitude), longitude = VALUES(longitude)`,
+      [registros.slice(i, i + 500)]
+    );
+  }
+  return registros.length;
+}
+
 async function principal() {
   const admin = await semearAdmin();
   const fontes = await semearFontes();
@@ -310,12 +334,14 @@ async function principal() {
   const kits = await semearKits();
   const modelos = await semearModelos();
   const precos = await encerradas.semearEstudo();
+  const municipios = await semearMunicipios();
 
   console.log(
     admin
       ? `Usuário administrador criado: ${admin} (organização Studio Mythos, papel dono).`
       : 'Usuário administrador: nenhum criado (já existia alguém, ou faltam as variáveis).'
   );
+  console.log(`Municípios com coordenadas: ${municipios}.`);
   console.log(`Fontes inseridas: ${fontes} (de ${FONTES.length}).`);
   console.log(`Palavras-chave inseridas: ${palavras} (de ${PALAVRAS.length}).`);
   console.log(`Palavras excluídas inseridas: ${excluidas} (de ${EXCLUIDAS.length}).`);

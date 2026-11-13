@@ -571,14 +571,30 @@ export const api = {
   rodarAvisosContrato: () => requisitar('/contratos/avisos/rodar', { method: 'POST' }),
 
   // ------------- exportações e relatório (Fase 14)
-  exportarRadar: (parametros = {}) => {
+  // `formato`: 'xlsx' (padrão) ou 'docx' (Seção 7).
+  exportarRadar: (parametros = {}, formato = 'xlsx') => {
     const q = new URLSearchParams();
     Object.entries(parametros).forEach(([k, v]) => {
       if (v !== '' && v !== null && v !== undefined && v !== false) q.set(k, v);
     });
+    if (formato === 'docx') q.set('formato', 'docx');
     const dia = new Date().toISOString().slice(0, 10);
-    return salvarComo(`/licitacoes/exportar?${q.toString()}`, `radar-licitacoes-${dia}.xlsx`);
+    return salvarComo(`/licitacoes/exportar?${q.toString()}`, `radar-licitacoes-${dia}.${formato}`);
   },
+
+  // ------------------------------------------------- Radar 2.0 (Seção 7)
+  itensDaLicitacao: (id) => requisitar(`/licitacoes/${id}/itens`),
+  municipios: (busca) => requisitar(`/licitacoes/municipios?busca=${encodeURIComponent(busca)}`),
+  pesquisas: () => requisitar('/licitacoes/pesquisas'),
+  salvarPesquisa: (nome, filtros) =>
+    requisitar('/licitacoes/pesquisas', { method: 'POST', body: JSON.stringify({ nome, filtros }) }),
+  apagarPesquisa: (id) => requisitar(`/licitacoes/pesquisas/${id}`, { method: 'DELETE' }),
+  compartilharRadar: (filtros, dias, nome) =>
+    requisitar('/licitacoes/compartilhar', { method: 'POST', body: JSON.stringify({ filtros, dias, nome }) }),
+  compartilhados: () => requisitar('/licitacoes/compartilhados'),
+  revogarLink: (id) => requisitar(`/licitacoes/compartilhados/${id}`, { method: 'DELETE' }),
+  radarPublico: (token, pagina = 1) =>
+    requisitar(`/publico/radar/${encodeURIComponent(token)}?pagina=${pagina}`, { publica: true }),
 
   relatorioMensal: (meses = 12) => requisitar(`/licitacoes/relatorio?meses=${meses}`),
 

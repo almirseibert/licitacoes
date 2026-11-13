@@ -159,17 +159,26 @@ async function salvarLicitacao(licitacao, avaliacao) {
   if (existentes.length) {
     // Decisão do usuário mora em `org_licitacoes` e nem passa por aqui.
     const atualizaveis = colunas.filter((c) => c !== 'fonte_id' && c !== 'chave_externa');
+    // A primeira data vista fica guardada ANTES de a nova entrar (o UPDATE
+    // avalia da esquerda para a direita): é dela que sai a etiqueta
+    // "prorrogada"/"adiada" (Seção 7 do plano SaaS).
     await pool.query(
-      `UPDATE licitacoes SET ${atualizaveis.map((c) => `\`${c}\` = ?`).join(', ')} WHERE id = ?`,
-      [...atualizaveis.map((c) => campos[c]), existentes[0].id]
+      `UPDATE licitacoes SET
+         abertura_original = COALESCE(abertura_original, abertura_propostas, ?),
+         fim_propostas_original = COALESCE(fim_propostas_original, fim_propostas, ?),
+         ${atualizaveis.map((c) => `\`${c}\` = ?`).join(', ')} WHERE id = ?`,
+      [campos.abertura_propostas, campos.fim_propostas, ...atualizaveis.map((c) => campos[c]), existentes[0].id]
     );
     return { id: existentes[0].id, novo: false };
   }
 
+  campos.abertura_original = campos.abertura_propostas;
+  campos.fim_propostas_original = campos.fim_propostas;
+  const inseridas = Object.keys(campos);
   const [resultado] = await pool.query(
-    `INSERT INTO licitacoes (${colunas.map((c) => `\`${c}\``).join(', ')})
-     VALUES (${colunas.map(() => '?').join(', ')})`,
-    colunas.map((c) => campos[c])
+    `INSERT INTO licitacoes (${inseridas.map((c) => `\`${c}\``).join(', ')})
+     VALUES (${inseridas.map(() => '?').join(', ')})`,
+    inseridas.map((c) => campos[c])
   );
   return { id: resultado.insertId, novo: true };
 }
@@ -484,7 +493,12 @@ async function detalharLicitacao({ licitacaoId }) {
        numero_compra = COALESCE(?, numero_compra),
        processo = COALESCE(?, processo),
        objeto = COALESCE(?, objeto),
+       informacao_complementar = COALESCE(?, informacao_complementar),
+       srp = COALESCE(?, srp),
+       esfera = COALESCE(?, esfera),
+       abertura_original = COALESCE(abertura_original, abertura_propostas, ?),
        abertura_propostas = COALESCE(?, abertura_propostas),
+       fim_propostas_original = COALESCE(fim_propostas_original, fim_propostas, ?),
        fim_propostas = COALESCE(?, fim_propostas),
        valor_estimado = COALESCE(?, valor_estimado),
        valor_homologado = COALESCE(?, valor_homologado),
@@ -498,7 +512,12 @@ async function detalharLicitacao({ licitacaoId }) {
       recortar(detalhe && detalhe.numero_compra, 60),
       recortar(detalhe && detalhe.processo, 80),
       (detalhe && detalhe.objeto) || null,
+      (detalhe && detalhe.informacao_complementar) || null,
+      detalhe && typeof detalhe.srp === 'boolean' ? Number(detalhe.srp) : null,
+      (detalhe && detalhe.esfera) || null,
       paraMysql(detalhe && detalhe.abertura_propostas),
+      paraMysql(detalhe && detalhe.abertura_propostas),
+      paraMysql(detalhe && detalhe.fim_propostas),
       paraMysql(detalhe && detalhe.fim_propostas),
       (detalhe && detalhe.valor_estimado) ?? null,
       (detalhe && detalhe.valor_homologado) ?? null,
