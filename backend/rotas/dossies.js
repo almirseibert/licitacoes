@@ -2,6 +2,7 @@
 const express = require('express');
 const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
+const escopo = require('../servicos/escopo');
 const sancoes = require('../servicos/sancoes');
 const dossies = require('../jobs/dossies');
 const exigencias = require('../regras/exigencias');
@@ -77,7 +78,8 @@ rotas.get('/orgaos/:cnpj', async (req, res) => {
 
     const [licitacoes] = await pool.query(
       `SELECT id, objeto, modalidade, valor_estimado, valor_homologado, situacao, etapa, fim_propostas
-         FROM licitacoes WHERE orgao_cnpj = ? ORDER BY fim_propostas DESC LIMIT 30`,
+         FROM ${escopo.daOrganizacao(req.organizacaoId, { todas: true })} l
+        WHERE orgao_cnpj = ? ORDER BY fim_propostas DESC LIMIT 30`,
       [cnpj]
     );
     const [recorrencias] = await pool.query(
@@ -116,12 +118,25 @@ rotas.get('/concorrentes/:cnpj', async (req, res) => {
       `SELECT l.id, l.objeto, l.orgao_nome, l.uf, l.grupo, l.valor_estimado, l.fim_propostas,
               COUNT(p.id) AS itens
          FROM propostas_concorrentes p
-         JOIN licitacoes l ON l.id = p.licitacao_id
+         JOIN ${escopo.daOrganizacao(req.organizacaoId, { todas: true })} l ON l.id = p.licitacao_id
         WHERE p.cnpj = ?
         GROUP BY l.id
         ORDER BY l.fim_propostas DESC LIMIT 30`,
       [cnpj]
     );
+
+    // "Encontrou você" é da organização que pergunta (Seção 1b): calculado
+    // agora, contra as licitações que ELA levou até Ganhamos/Perdemos — o
+    // número gravado em `concorrentes` é do catálogo e não diz nada sobre ela.
+    const [[encontro]] = await pool.query(
+      `SELECT COUNT(DISTINCT l.id) AS encontros, COALESCE(SUM(l.cnpj_vencedor = ?), 0) AS perdidos
+         FROM ${escopo.daOrganizacao(req.organizacaoId)} l
+         JOIN propostas_concorrentes p ON p.licitacao_id = l.id AND p.cnpj = ?
+        WHERE l.etapa IN ('Ganhamos','Perdemos')`,
+      [cnpj, cnpj]
+    );
+    c.encontros = Number(encontro.encontros || 0);
+    c.encontros_perdidos = Number(encontro.perdidos || 0);
 
     res.json({
       concorrente: {
@@ -153,9 +168,9 @@ rotas.post('/concorrentes/:cnpj/sancoes', async (req, res) => {
 });
 
 // POST /api/dossies/minhas-sancoes — o próprio CNPJ (seção 26.3, uso 1).
-rotas.post('/minhas-sancoes', async (_req, res) => {
+rotas.post('/minhas-sancoes', async (req, res) => {
   try {
-    const r = await sancoes.checarPropriaEmpresa();
+    const r = await sancoes.checarPropriaEmpresa(req.organizacaoId);
     if (r.ok === false) return res.status(400).json({ erro: r.motivo });
     if (!r.disponivel) return res.status(409).json({ erro: r.motivo });
     res.json(r);

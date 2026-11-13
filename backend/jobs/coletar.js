@@ -14,6 +14,7 @@ const { pontuar } = require('../regras/aderencia');
 const { normalizar } = require('../regras/texto');
 const pesosDoBanco = require('../regras/pesos');
 const objetoSocial = require('../regras/objeto-social');
+const escopo = require('../servicos/escopo');
 
 const PONTUACAO_PARA_DETALHAR = 30;
 
@@ -32,13 +33,23 @@ function recortar(valor, tamanho) {
   return texto.slice(0, tamanho);
 }
 
-async function carregarContexto() {
+/**
+ * Palavras, exclusões, CNAEs e pesos de UMA organização (Seção 1b): a mesma
+ * licitação do catálogo vale nota diferente para clientes diferentes.
+ */
+async function carregarContexto(organizacaoId) {
   const [palavras] = await pool.query(
-    'SELECT id, termo, grupo, peso, usar_aspas, fontes_ids FROM palavras_chave WHERE ativa = 1 ORDER BY peso DESC, termo ASC'
+    `SELECT id, termo, grupo, peso, usar_aspas, fontes_ids FROM palavras_chave
+      WHERE organizacao_id = ? AND ativa = 1 ORDER BY peso DESC, termo ASC`,
+    [organizacaoId]
   );
-  const [excluidas] = await pool.query('SELECT termo FROM palavras_excluidas WHERE ativa = 1');
+  const [excluidas] = await pool.query(
+    'SELECT termo FROM palavras_excluidas WHERE organizacao_id = ? AND ativa = 1',
+    [organizacaoId]
+  );
   const [perfis] = await pool.query(
-    'SELECT cnaes FROM empresa_perfis ORDER BY padrao DESC, id ASC LIMIT 1'
+    'SELECT cnaes FROM empresa_perfis WHERE organizacao_id = ? ORDER BY padrao DESC, id ASC LIMIT 1',
+    [organizacaoId]
   );
   const cnaes = perfis.length
     ? (typeof perfis[0].cnaes === 'string' ? JSON.parse(perfis[0].cnaes || '[]') : perfis[0].cnaes) || []
@@ -50,9 +61,18 @@ async function carregarContexto() {
       fontes_ids: typeof p.fontes_ids === 'string' ? JSON.parse(p.fontes_ids) : p.fontes_ids,
     })),
     palavrasExcluidas: excluidas.map((e) => e.termo),
-    pesos: await pesosDoBanco.carregar(),
+    pesos: await pesosDoBanco.carregar(organizacaoId),
+    organizacaoId,
     cnaes,
   };
+}
+
+/** Um contexto por organização ativa — é o que a coleta e a repontuação percorrem. */
+async function carregarContextos() {
+  const ids = await escopo.organizacoesAtivas(pool);
+  const contextos = [];
+  for (const id of ids) contextos.push(await carregarContexto(id));
+  return contextos;
 }
 
 /**
@@ -70,6 +90,23 @@ function palavraAtendeFonte(palavra, fonteId) {
   if (!palavra.fontes_ids) return true;
   const lista = Array.isArray(palavra.fontes_ids) ? palavra.fontes_ids : [];
   return lista.length === 0 || lista.includes(fonteId);
+}
+
+/** União dos termos de várias organizações: o mesmo termo é buscado uma vez só. */
+function unirTermos(palavras) {
+  const vistos = new Map();
+  for (const p of palavras) {
+    const chave = `${normalizar(p.termo)}|${p.usar_aspas !== 0 ? 1 : 0}`;
+    if (!vistos.has(chave)) vistos.set(chave, p);
+  }
+  return [...vistos.values()];
+}
+
+/** A avaliação de maior nota entre as organizações que não excluíram a licitação. */
+function melhorAvaliacao(avaliacoes) {
+  const validas = avaliacoes.filter((a) => !a.avaliacao.excluida);
+  const base = validas.length ? validas : avaliacoes;
+  return base.reduce((m, a) => (a.avaliacao.pontuacao > m.pontuacao ? a.avaliacao : m), base[0].avaliacao);
 }
 
 // ------------------------------------------------------------------- gravação
@@ -102,15 +139,9 @@ async function salvarLicitacao(licitacao, avaliacao) {
     plataforma_disputa: recortar(licitacao.plataforma_disputa, 160),
     link_portal: recortar(licitacao.link_portal, 500),
     link_disputa: recortar(licitacao.link_disputa, 500),
-    grupo: recortar(avaliacao.grupo, 60),
-    palavra_casada: recortar(avaliacao.palavra, 160),
-    pontuacao: avaliacao.pontuacao,
-    pontuacao_detalhe: JSON.stringify(avaliacao.detalhe || []),
+    // O benefício ME/EPP é do edital, igual para todos; a nota e o objeto
+    // social são de cada organização e vão para `org_licitacoes`.
     beneficio_me: recortar(avaliacao.beneficio_me, 40),
-    objeto_social: (avaliacao.social && avaliacao.social.estado) || null,
-    objeto_social_motivo: recortar(avaliacao.social && avaliacao.social.motivo, 255),
-    pode_participar: (avaliacao.participacao && avaliacao.participacao.pode) || 'Depende',
-    motivo_participacao: recortar(avaliacao.participacao && avaliacao.participacao.motivo, 255),
     bruto: JSON.stringify(licitacao.bruto || null),
   };
 
@@ -126,8 +157,7 @@ async function salvarLicitacao(licitacao, avaliacao) {
   );
 
   if (existentes.length) {
-    // Colunas do usuário (etapa, favorito, descartada, motivo_descarte) ficam de fora
-    // do UPDATE de propósito: a coleta não desfaz decisão de quem usa o painel.
+    // Decisão do usuário mora em `org_licitacoes` e nem passa por aqui.
     const atualizaveis = colunas.filter((c) => c !== 'fonte_id' && c !== 'chave_externa');
     await pool.query(
       `UPDATE licitacoes SET ${atualizaveis.map((c) => `\`${c}\` = ?`).join(', ')} WHERE id = ?`,
@@ -178,6 +208,59 @@ async function salvarItens(licitacaoId, itens) {
 
 // -------------------------------------------------------------------- coletas
 /**
+ * Grava a avaliação de uma organização para uma licitação. Na linha nova, a
+ * licitação que casa com palavra excluída já nasce descartada (some do Radar
+ * daquela organização, como antes). Na linha que já existe, só a nota e o que
+ * deriva dela mudam — etapa, favorito e descarte são decisão do usuário e
+ * ficam de fora (CLAUDE.md), salvo `descartarSeExcluida`, que é o que a
+ * repontuação sempre fez quando uma palavra de corte passa a valer.
+ * @returns {Promise<{descartou:boolean}>}
+ */
+async function salvarAvaliacao(organizacaoId, licitacaoId, avaliacao, { descartarSeExcluida = false } = {}) {
+  const valores = [
+    avaliacao.pontuacao,
+    JSON.stringify(avaliacao.detalhe || []),
+    recortar(avaliacao.grupo, 60),
+    recortar(avaliacao.palavra, 160),
+    (avaliacao.participacao && avaliacao.participacao.pode) || 'Depende',
+    recortar(avaliacao.participacao && avaliacao.participacao.motivo, 255),
+    (avaliacao.social && avaliacao.social.estado) || null,
+    recortar(avaliacao.social && avaliacao.social.motivo, 255),
+  ];
+  const excluida = Boolean(avaliacao.excluida);
+  const motivoExclusao = 'palavra excluída';
+
+  const [antes] = await pool.query(
+    'SELECT id, descartada FROM org_licitacoes WHERE organizacao_id = ? AND licitacao_id = ?',
+    [organizacaoId, licitacaoId]
+  );
+
+  if (!antes.length) {
+    await pool.query(
+      `INSERT INTO org_licitacoes
+         (organizacao_id, licitacao_id, pontuacao, pontuacao_detalhe, grupo, palavra_casada,
+          pode_participar, motivo_participacao, objeto_social, objeto_social_motivo,
+          descartada, motivo_descarte, descartado_em)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${excluida ? 'NOW()' : 'NULL'})
+       ON DUPLICATE KEY UPDATE pontuacao = VALUES(pontuacao)`,
+      [organizacaoId, licitacaoId, ...valores, excluida ? 1 : 0, excluida ? motivoExclusao : null]
+    );
+    return { descartou: excluida };
+  }
+
+  const descartar = descartarSeExcluida && excluida && !antes[0].descartada;
+  await pool.query(
+    `UPDATE org_licitacoes SET
+       pontuacao = ?, pontuacao_detalhe = ?, grupo = ?, palavra_casada = ?,
+       pode_participar = ?, motivo_participacao = ?, objeto_social = ?, objeto_social_motivo = ?
+       ${descartar ? ', descartada = 1, motivo_descarte = ?, descartado_em = NOW()' : ''}
+     WHERE id = ?`,
+    [...valores, ...(descartar ? ['palavra excluída passou a valer'] : []), antes[0].id]
+  );
+  return { descartou: descartar };
+}
+
+/**
  * Coleta uma fonte inteira. Com `simular: true` não grava nada — é o
  * "Testar agora" da tela de Fontes (seção 4.1).
  */
@@ -188,6 +271,7 @@ async function coletarFonte({
   peso = 10,
   simular = false,
   limitePaginas = null,
+  organizacaoId = null,
 }) {
   const inicio = Date.now();
   const [fontes] = await pool.query('SELECT * FROM fontes WHERE id = ?', [fonteId]);
@@ -196,16 +280,20 @@ async function coletarFonte({
 
   const adaptador = adaptadores.obter(fonte.adaptador);
   const config = typeof fonte.config === 'string' ? JSON.parse(fonte.config || '{}') : fonte.config || {};
-  const contexto = await carregarContexto();
+  // O teste pela tela (simular) pontua com o contexto de quem pediu; a coleta
+  // de verdade pontua para cada organização ativa e busca a união dos termos.
+  const contextos = organizacaoId ? [await carregarContexto(organizacaoId)] : await carregarContextos();
 
   const termos = termo
     ? [{ termo, peso, grupo: null, usar_aspas: usarAspas ? 1 : 0 }]
-    : contexto.palavras.filter((p) => palavraAtendeFonte(p, fonte.id));
+    : unirTermos(contextos.flatMap((c) => c.palavras.filter((p) => palavraAtendeFonte(p, fonte.id))));
 
   // Simulação de um termo ainda não cadastrado: ele entra na pontuação só desta
   // execução, senão a tela mostraria notas menores do que as reais depois de ativar.
-  if (termo && !contexto.palavras.some((p) => normalizar(p.termo) === normalizar(termo))) {
-    contexto.palavras = [...contexto.palavras, { termo, peso, grupo: null }];
+  for (const contexto of contextos) {
+    if (termo && !contexto.palavras.some((p) => normalizar(p.termo) === normalizar(termo))) {
+      contexto.palavras = [...contexto.palavras, { termo, peso, grupo: null }];
+    }
   }
 
   const paginasMax = limitePaginas || Number(config.paginas_max || 3);
@@ -237,13 +325,18 @@ async function coletarFonte({
         if (vistas.has(identidade)) continue; // mesma licitação em dois termos
         vistas.add(identidade);
 
-        const avaliacao = avaliar(licitacao, contexto);
-
-        // Encerradas e palavras excluídas não entram no Radar (seção 6).
-        if (avaliacao.encerrada || avaliacao.excluida) {
+        const avaliacoes = contextos.map((contexto) => ({
+          organizacaoId: contexto.organizacaoId,
+          avaliacao: avaliar(licitacao, contexto),
+        }));
+        // Encerrada é fato da licitação; palavra excluída é de cada organização —
+        // só fica fora do catálogo o que TODAS excluíram (seção 6).
+        const encerrada = avaliacoes.some((a) => a.avaliacao.encerrada);
+        if (!avaliacoes.length || encerrada || avaliacoes.every((a) => a.avaliacao.excluida)) {
           resumo.ignoradas += 1;
           continue;
         }
+        const avaliacao = melhorAvaliacao(avaliacoes);
 
         if (simular) {
           if (resumo.amostra.length < 20) {
@@ -268,6 +361,7 @@ async function coletarFonte({
           const { id, novo } = await salvarLicitacao(licitacao, avaliacao);
           if (novo) resumo.novas += 1;
           else resumo.atualizadas += 1;
+          for (const a of avaliacoes) await salvarAvaliacao(a.organizacaoId, id, a.avaliacao);
 
           if (novo && avaliacao.pontuacao >= PONTUACAO_PARA_DETALHAR) {
             await fila.enfileirar(
@@ -369,13 +463,18 @@ async function detalharLicitacao({ licitacaoId }) {
 
   const gravados = await salvarItens(licitacaoId, itens);
 
-  const contexto = await carregarContexto();
+  const contextos = await carregarContextos();
   const mesclada = {
     ...licitacao,
     ...Object.fromEntries(Object.entries(detalhe || {}).filter(([, v]) => v !== null && v !== undefined)),
     beneficios_itens: itens.map((i) => i.beneficio).filter(Boolean),
   };
-  const avaliacao = avaliar(mesclada, contexto);
+  const avaliacoes = contextos.map((contexto) => ({
+    organizacaoId: contexto.organizacaoId,
+    avaliacao: avaliar(mesclada, contexto),
+  }));
+  // beneficio_me sai do edital (dos itens), não da organização.
+  const beneficioMe = avaliacoes.length ? avaliacoes[0].avaliacao.beneficio_me : null;
 
   await pool.query(
     `UPDATE licitacoes SET
@@ -390,13 +489,7 @@ async function detalharLicitacao({ licitacaoId }) {
        valor_estimado = COALESCE(?, valor_estimado),
        valor_homologado = COALESCE(?, valor_homologado),
        link_disputa = COALESCE(?, link_disputa),
-       beneficio_me = COALESCE(?, beneficio_me),
-       objeto_social = ?,
-       objeto_social_motivo = ?,
-       pode_participar = ?,
-       motivo_participacao = ?,
-       pontuacao = ?,
-       pontuacao_detalhe = ?
+       beneficio_me = COALESCE(?, beneficio_me)
      WHERE id = ?`,
     [
       recortar(detalhe && detalhe.modalidade, 60),
@@ -410,18 +503,15 @@ async function detalharLicitacao({ licitacaoId }) {
       (detalhe && detalhe.valor_estimado) ?? null,
       (detalhe && detalhe.valor_homologado) ?? null,
       recortar(detalhe && detalhe.link_disputa, 500),
-      recortar(avaliacao.beneficio_me, 40),
-      avaliacao.social.estado,
-      recortar(avaliacao.social.motivo, 255),
-      avaliacao.participacao.pode,
-      recortar(avaliacao.participacao.motivo, 255),
-      avaliacao.pontuacao,
-      JSON.stringify(avaliacao.detalhe || []),
+      recortar(beneficioMe, 40),
       licitacaoId,
     ]
   );
 
-  return { itens: gravados, pontuacao: avaliacao.pontuacao };
+  for (const a of avaliacoes) await salvarAvaliacao(a.organizacaoId, licitacaoId, a.avaliacao);
+
+  const maior = avaliacoes.reduce((m, a) => Math.max(m, a.avaliacao.pontuacao || 0), 0);
+  return { itens: gravados, pontuacao: maior };
 }
 
 /**
@@ -432,15 +522,17 @@ async function detalharLicitacao({ licitacaoId }) {
  * Licitação que passa a casar com uma palavra excluída é descartada com o
  * motivo à vista — nunca apagada, para o histórico continuar explicável.
  */
-async function repontuar({ lote = 500 } = {}) {
-  const contexto = await carregarContexto();
-  const resumo = { avaliadas: 0, mudaram: 0, descartadas: 0 };
+async function repontuar({ lote = 500, organizacaoId = null } = {}) {
+  // Sem organização: todas as ativas (botão do worker, `npm run repontuar`).
+  // Com organização: só ela — é o que a tela de Configurações e o cadastro de
+  // uma organização nova pedem, e cria a linha dela para cada licitação.
+  const contextos = organizacaoId ? [await carregarContexto(organizacaoId)] : await carregarContextos();
+  const resumo = { avaliadas: 0, mudaram: 0, descartadas: 0, organizacoes: contextos.length };
   let ultimoId = 0;
 
   for (;;) {
     const [linhas] = await pool.query(
-      `SELECT id, objeto, uf, modalidade, valor_estimado, orcamento_sigiloso, fim_propostas,
-              pontuacao, descartada, beneficio_me
+      `SELECT id, objeto, uf, modalidade, valor_estimado, orcamento_sigiloso, fim_propostas, beneficio_me
          FROM licitacoes
         WHERE id > ?
         ORDER BY id ASC
@@ -450,39 +542,28 @@ async function repontuar({ lote = 500 } = {}) {
     if (!linhas.length) break;
     ultimoId = linhas[linhas.length - 1].id;
 
-    for (const linha of linhas) {
-      // O benefício ME/EPP já apurado nos itens é preservado: `pontuar()` o
-      // relê a partir de beneficios_itens, que aqui vem do que foi gravado.
-      const avaliacao = avaliar(
-        { ...linha, beneficios_itens: linha.beneficio_me ? [linha.beneficio_me] : [] },
-        contexto
+    for (const contexto of contextos) {
+      const [antes] = await pool.query(
+        'SELECT licitacao_id, pontuacao FROM org_licitacoes WHERE organizacao_id = ? AND licitacao_id IN (?)',
+        [contexto.organizacaoId, linhas.map((l) => l.id)]
       );
-      resumo.avaliadas += 1;
+      const notaAntes = new Map(antes.map((a) => [a.licitacao_id, a.pontuacao]));
 
-      const descartar = avaliacao.excluida && !linha.descartada;
-      if (descartar) resumo.descartadas += 1;
-      if (avaliacao.pontuacao !== linha.pontuacao) resumo.mudaram += 1;
+      for (const linha of linhas) {
+        // O benefício ME/EPP já apurado nos itens é preservado: `pontuar()` o
+        // relê a partir de beneficios_itens, que aqui vem do que foi gravado.
+        const avaliacao = avaliar(
+          { ...linha, beneficios_itens: linha.beneficio_me ? [linha.beneficio_me] : [] },
+          contexto
+        );
+        resumo.avaliadas += 1;
+        if (avaliacao.pontuacao !== notaAntes.get(linha.id)) resumo.mudaram += 1;
 
-      await pool.query(
-        `UPDATE licitacoes SET
-           pontuacao = ?, pontuacao_detalhe = ?, grupo = ?, palavra_casada = ?,
-           objeto_social = ?, objeto_social_motivo = ?,
-           pode_participar = ?, motivo_participacao = ?
-           ${descartar ? ', descartada = 1, motivo_descarte = ?' : ''}
-         WHERE id = ?`,
-        [
-          avaliacao.pontuacao,
-          JSON.stringify(avaliacao.detalhe || []),
-          recortar(avaliacao.grupo, 60),
-          recortar(avaliacao.palavra, 160),
-          avaliacao.social.estado,
-          recortar(avaliacao.social.motivo, 255),
-          avaliacao.participacao.pode,
-          recortar(avaliacao.participacao.motivo, 255),
-          ...(descartar ? [recortar('palavra excluída passou a valer', 255)] : []),
-          linha.id,
-        ]
-      );
+        const { descartou } = await salvarAvaliacao(contexto.organizacaoId, linha.id, avaliacao, {
+          descartarSeExcluida: true,
+        });
+        if (descartou) resumo.descartadas += 1;
+      }
     }
 
     if (linhas.length < lote) break;
@@ -506,7 +587,9 @@ module.exports = {
   avaliar,
   salvarLicitacao,
   salvarItens,
+  salvarAvaliacao,
   carregarContexto,
+  carregarContextos,
   registrarNaFila,
   PONTUACAO_PARA_DETALHAR,
 };

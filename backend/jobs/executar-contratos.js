@@ -11,11 +11,13 @@ const moeda = (valor) =>
     : `R$ ${Number(valor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const achado = process.argv.slice(2).find((a) => a.startsWith('--contrato='));
+// Seção 1b: a linha de comando enxerga a organização pedida (padrão: a 1).
+const organizacaoId = require('../servicos/escopo').organizacaoDaLinhaDeComando();
 
 async function principal() {
   if (achado) {
     const id = Number(achado.split('=')[1]);
-    const r = await servico.ver(id);
+    const r = await servico.ver(organizacaoId, id);
     if (!r) return console.log(`Contrato ${id} não encontrado.`);
 
     console.log(`Contrato ${r.contrato.numero || `(sem número) #${r.contrato.id}`} — ${r.contrato.situacao}`);
@@ -42,7 +44,7 @@ async function principal() {
       );
     }
 
-    const faixa = await servico.receita12m();
+    const faixa = await servico.receita12m(organizacaoId);
     console.log(
       `  faixa: ${faixa.faixa} · receita ${moeda(faixa.receita)} (${faixa.origem}) · ` +
         `falta ${moeda(faixa.falta_para_proxima)} para ${faixa.proxima || 'sair da faixa'}`

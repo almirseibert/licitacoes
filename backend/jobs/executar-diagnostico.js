@@ -33,7 +33,9 @@ async function principal() {
     );
   }
 
-  const d = await diagnosticar({ dias });
+  // Seção 1b: o ranking é de uma organização (`--org=`, padrão 1).
+  const organizacaoId = require('../servicos/escopo').organizacaoDaLinhaDeComando();
+  const d = await diagnosticar({ organizacaoId, dias });
   console.log(`\nO que mais te barrou nos últimos ${d.periodo.rotulo}\n`);
 
   if (!d.bloqueios.length) {

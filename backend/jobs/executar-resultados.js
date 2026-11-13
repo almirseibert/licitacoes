@@ -18,7 +18,11 @@ async function principal() {
   if (id) {
     alvos = [{ id: Number(id) }];
   } else if (etapa) {
-    const [linhas] = await pool.query('SELECT id FROM licitacoes WHERE etapa = ?', [etapa]);
+    // Seção 1b: a etapa é de cada organização — vale qualquer uma que esteja nela.
+    const [linhas] = await pool.query(
+      'SELECT DISTINCT licitacao_id AS id FROM org_licitacoes WHERE etapa = ?',
+      [etapa]
+    );
     alvos = linhas;
   } else {
     console.error('Informe --licitacao=<id> ou --etapa="<etapa>".');

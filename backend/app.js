@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
-const { autenticar } = require('./middlewares/autenticar');
+const { autenticar, confirmarVinculo, leitorSoLe } = require('./middlewares/autenticar');
 const { responderErro } = require('./middlewares/responder-erro');
 const { ambiente, urlPublica } = require('./config/ambiente');
 
@@ -28,24 +28,24 @@ app.get('/api/saude', (_req, res) => {
 app.use('/api/auth', require('./rotas/auth'));
 
 // Tudo abaixo exige token.
-app.use('/api/licitacoes', autenticar, require('./rotas/licitacoes'));
-app.use('/api/fontes', autenticar, require('./rotas/fontes'));
-app.use('/api/palavras', autenticar, require('./rotas/palavras'));
-app.use('/api/painel', autenticar, require('./rotas/painel'));
-app.use('/api/configuracoes', autenticar, require('./rotas/configuracoes'));
-app.use('/api/empresa', autenticar, require('./rotas/empresa'));
-app.use('/api/kits', autenticar, require('./rotas/kits'));
-app.use('/api/modelos-declaracao', autenticar, require('./rotas/modelos'));
-app.use('/api/alertas', autenticar, require('./rotas/alertas'));
-app.use('/api/precos-referencia', autenticar, require('./rotas/precos-referencia'));
-app.use('/api/concorrentes', autenticar, require('./rotas/concorrentes'));
-app.use('/api/diagnostico', autenticar, require('./rotas/diagnostico'));
-app.use('/api/oportunidades', autenticar, require('./rotas/oportunidades'));
-app.use('/api/calendario', autenticar, require('./rotas/calendario'));
-app.use('/api/ia', autenticar, require('./rotas/ia'));
-app.use('/api/dossies', autenticar, require('./rotas/dossies'));
-app.use('/api/feriados', autenticar, require('./rotas/feriados'));
-app.use('/api/contratos', autenticar, require('./rotas/contratos'));
+app.use('/api/licitacoes', autenticar, confirmarVinculo, leitorSoLe, require('./rotas/licitacoes'));
+app.use('/api/fontes', autenticar, confirmarVinculo, leitorSoLe, require('./rotas/fontes'));
+app.use('/api/palavras', autenticar, confirmarVinculo, leitorSoLe, require('./rotas/palavras'));
+app.use('/api/painel', autenticar, confirmarVinculo, leitorSoLe, require('./rotas/painel'));
+app.use('/api/configuracoes', autenticar, confirmarVinculo, leitorSoLe, require('./rotas/configuracoes'));
+app.use('/api/empresa', autenticar, confirmarVinculo, leitorSoLe, require('./rotas/empresa'));
+app.use('/api/kits', autenticar, confirmarVinculo, leitorSoLe, require('./rotas/kits'));
+app.use('/api/modelos-declaracao', autenticar, confirmarVinculo, leitorSoLe, require('./rotas/modelos'));
+app.use('/api/alertas', autenticar, confirmarVinculo, leitorSoLe, require('./rotas/alertas'));
+app.use('/api/precos-referencia', autenticar, confirmarVinculo, leitorSoLe, require('./rotas/precos-referencia'));
+app.use('/api/concorrentes', autenticar, confirmarVinculo, leitorSoLe, require('./rotas/concorrentes'));
+app.use('/api/diagnostico', autenticar, confirmarVinculo, leitorSoLe, require('./rotas/diagnostico'));
+app.use('/api/oportunidades', autenticar, confirmarVinculo, leitorSoLe, require('./rotas/oportunidades'));
+app.use('/api/calendario', autenticar, confirmarVinculo, leitorSoLe, require('./rotas/calendario'));
+app.use('/api/ia', autenticar, confirmarVinculo, leitorSoLe, require('./rotas/ia'));
+app.use('/api/dossies', autenticar, confirmarVinculo, leitorSoLe, require('./rotas/dossies'));
+app.use('/api/feriados', autenticar, confirmarVinculo, leitorSoLe, require('./rotas/feriados'));
+app.use('/api/contratos', autenticar, confirmarVinculo, leitorSoLe, require('./rotas/contratos'));
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ erro: 'Rota não encontrada.' });

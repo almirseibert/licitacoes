@@ -1,6 +1,7 @@
 // Preço de referência e concorrência (seção 12) — a parte que fala com o banco.
 // A matemática fica em regras/preco.js.
 const pool = require('../config/db');
+const { daOrganizacao } = require('./escopo');
 const regras = require('../regras/preco');
 
 /**
@@ -46,11 +47,11 @@ async function referenciaPara({ grupo, modalidade }) {
 }
 
 /** O bloco da seção 12 para uma licitação. */
-async function resumoDaLicitacao(licitacaoId) {
+async function resumoDaLicitacao(organizacaoId, licitacaoId) {
   const [[licitacao]] = await pool.query(
     `SELECT id, objeto, grupo, modalidade, valor_estimado, valor_homologado,
             custo_estimado, orcamento_sigiloso, valor_proposto, etapa
-       FROM licitacoes WHERE id = ?`,
+       FROM ${daOrganizacao(organizacaoId, { todas: true })} l WHERE id = ?`,
     [licitacaoId]
   );
   if (!licitacao) return null;
@@ -247,7 +248,7 @@ async function concorrentesDa(licitacaoId) {
  * Ficha de um concorrente pelo CNPJ: onde apareceu, quanto levou, em que UF.
  * É a base do dossiê da seção 26, que vem completo na fase 12.
  */
-async function perfilDoConcorrente(cnpj) {
+async function perfilDoConcorrente(organizacaoId, cnpj) {
   const limpo = String(cnpj || '').replace(/\D/g, '');
   if (!limpo) return null;
 
@@ -268,7 +269,7 @@ async function perfilDoConcorrente(cnpj) {
             COUNT(p.id) AS itens,
             SUM(COALESCE(p.valor_negociado, p.valor_ofertado)) AS levou
        FROM propostas_concorrentes p
-       JOIN licitacoes l ON l.id = p.licitacao_id
+       JOIN ${daOrganizacao(organizacaoId, { todas: true })} l ON l.id = p.licitacao_id
       WHERE p.cnpj = ?
       GROUP BY l.id
       ORDER BY l.fim_propostas DESC
@@ -279,7 +280,7 @@ async function perfilDoConcorrente(cnpj) {
   const [grupos] = await pool.query(
     `SELECT l.grupo, COUNT(DISTINCT l.id) AS licitacoes
        FROM propostas_concorrentes p
-       JOIN licitacoes l ON l.id = p.licitacao_id
+       JOIN ${daOrganizacao(organizacaoId, { todas: true })} l ON l.id = p.licitacao_id
       WHERE p.cnpj = ? AND l.grupo IS NOT NULL
       GROUP BY l.grupo
       ORDER BY licitacoes DESC`,
@@ -300,13 +301,13 @@ async function perfilDoConcorrente(cnpj) {
 }
 
 /** Os concorrentes que mais aparecem, para a tela de preço e concorrência. */
-async function listarConcorrentes({ grupo, limite = 50 } = {}) {
+async function listarConcorrentes({ organizacaoId, grupo, limite = 50 } = {}) {
   const [linhas] = await pool.query(
     `SELECT p.cnpj, MAX(p.empresa) AS empresa, MAX(p.uf) AS uf, MAX(p.me_epp) AS me_epp,
             COUNT(DISTINCT p.licitacao_id) AS licitacoes,
             SUM(COALESCE(p.valor_negociado, p.valor_ofertado)) AS total
        FROM propostas_concorrentes p
-       JOIN licitacoes l ON l.id = p.licitacao_id
+       JOIN ${daOrganizacao(organizacaoId, { todas: true })} l ON l.id = p.licitacao_id
       WHERE p.cnpj IS NOT NULL ${grupo ? 'AND l.grupo = ?' : ''}
       GROUP BY p.cnpj
       ORDER BY licitacoes DESC, total DESC

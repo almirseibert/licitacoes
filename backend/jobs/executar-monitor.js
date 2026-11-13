@@ -6,6 +6,7 @@
 const pool = require('../config/db');
 const monitorar = require('./monitorar');
 const servico = require('../servicos/monitor');
+const escopo = require('../servicos/escopo');
 
 const argumentos = process.argv.slice(2);
 function opcao(nome, padrao) {
@@ -14,15 +15,17 @@ function opcao(nome, padrao) {
 }
 
 async function uma(licitacaoId) {
-  await servico.ligar({ licitacaoId: Number(licitacaoId), motivo: 'interesse' });
+  // Seção 1b: o monitoramento é de uma organização (`--org=`, padrão 1).
+  const organizacaoId = escopo.organizacaoDaLinhaDeComando();
+  await servico.ligar({ organizacaoId, licitacaoId: Number(licitacaoId), motivo: 'interesse' });
   const [[completo]] = await pool.query(
     `SELECT m.*, l.etapa, l.objeto, l.orgao_nome, l.orgao_cnpj, l.chave_externa, l.fonte_id,
             l.abertura_propostas, l.fim_propostas, l.situacao, l.valor_estimado, l.pasta, f.adaptador
        FROM monitoramentos m
-       JOIN licitacoes l ON l.id = m.licitacao_id
+       JOIN ${escopo.daOrganizacao(organizacaoId, { todas: true })} l ON l.id = m.licitacao_id
        JOIN fontes f ON f.id = l.fonte_id
-      WHERE m.licitacao_id = ?`,
-    [licitacaoId]
+      WHERE m.organizacao_id = ? AND m.licitacao_id = ?`,
+    [organizacaoId, licitacaoId]
   );
   if (!completo) throw new Error(`licitação ${licitacaoId} não encontrada`);
 

@@ -11,6 +11,7 @@
 // registrada na migração 011): a deserta que passou pelo radar e a que nunca
 // passou. A segunda é a maioria, e costuma ser a melhor: ninguém a viu.
 const pool = require('../config/db');
+const escopo = require('../servicos/escopo');
 const fila = require('../servicos/fila');
 const alertas = require('../servicos/alertas');
 const servicoMonitor = require('../servicos/monitor');
@@ -245,17 +246,26 @@ async function ligarReaberturas() {
     const prazo = melhor.candidato.fim_propostas
       ? ` — prazo até ${new Date(melhor.candidato.fim_propostas).toLocaleDateString('pt-BR')}`
       : '';
-    if (await alertas.criar({
-      tipo: 'reabertura',
-      nivel: 'atencao',
-      chave: `reabertura:${oportunidade.id}:${melhor.candidato.id}`,
-      licitacaoId: melhor.candidato.id,
-      quando: melhor.candidato.fim_propostas,
-      mensagem:
-        `${oportunidade.orgao_nome || 'O órgão'} reabriu o objeto que ficou sem vencedor em ` +
-        `${new Date(oportunidade.encerrada_em).toLocaleDateString('pt-BR')}${prazo}`,
-    })) {
-      avisos += 1;
+    // Reabertura é fato do catálogo: avisa quem se interessou pela antiga ou
+    // pela nova (Seção 1b).
+    const interessadas = await escopo.organizacoesInteressadas(pool, [
+      oportunidade.licitacao_id,
+      melhor.candidato.id,
+    ]);
+    for (const organizacaoId of interessadas) {
+      if (await alertas.criar({
+        organizacaoId,
+        tipo: 'reabertura',
+        nivel: 'atencao',
+        chave: `reabertura:${oportunidade.id}:${melhor.candidato.id}`,
+        licitacaoId: melhor.candidato.id,
+        quando: melhor.candidato.fim_propostas,
+        mensagem:
+          `${oportunidade.orgao_nome || 'O órgão'} reabriu o objeto que ficou sem vencedor em ` +
+          `${new Date(oportunidade.encerrada_em).toLocaleDateString('pt-BR')}${prazo}`,
+      })) {
+        avisos += 1;
+      }
     }
   }
 
@@ -314,12 +324,12 @@ const HORAS_IMINENCIA = 24;
  * "está acabando", não "ninguém disputou ainda". Quem quiser saber se há
  * proposta abre o link do portal de disputa (seção 30, item 2) e confere.
  */
-async function iminencia({ horas = HORAS_IMINENCIA } = {}) {
+async function iminencia({ organizacaoId, horas = HORAS_IMINENCIA } = {}) {
   const [linhas] = await pool.query(
     `SELECT id, numero_controle, objeto, orgao_nome, orgao_cnpj, uf, municipio,
             modalidade, valor_estimado, fim_propostas, pontuacao, link_portal,
             link_disputa
-       FROM licitacoes
+       FROM ${escopo.daOrganizacao(organizacaoId)} l
       WHERE descartada = 0
         AND fim_propostas IS NOT NULL
         AND fim_propostas BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL ? HOUR)

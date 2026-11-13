@@ -8,7 +8,7 @@ const rotas = express.Router();
 rotas.get('/', async (req, res) => {
   try {
     const lido = req.query.lido === undefined ? null : req.query.lido === '1';
-    const resultado = await alertas.listar({ lido, limite: Number(req.query.limite) || 60 });
+    const resultado = await alertas.listar({ organizacaoId: req.organizacaoId, lido, limite: Number(req.query.limite) || 60 });
     res.json(resultado);
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível carregar os alertas.', erro);
@@ -18,7 +18,7 @@ rotas.get('/', async (req, res) => {
 rotas.patch('/:id/lido', async (req, res) => {
   try {
     const lido = !(req.body && req.body.lido === false);
-    const achou = await alertas.marcarLido(req.params.id, lido);
+    const achou = await alertas.marcarLido(req.organizacaoId, req.params.id, lido);
     if (!achou) return res.status(404).json({ erro: 'Alerta não encontrado.' });
     res.json({ ok: true });
   } catch (erro) {
@@ -26,9 +26,9 @@ rotas.patch('/:id/lido', async (req, res) => {
   }
 });
 
-rotas.post('/lidos', async (_req, res) => {
+rotas.post('/lidos', async (req, res) => {
   try {
-    const quantos = await alertas.marcarTodosLidos();
+    const quantos = await alertas.marcarTodosLidos(req.organizacaoId);
     res.json({ ok: true, quantos, mensagem: `${quantos} alerta(s) marcados como lidos.` });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível marcar os alertas.', erro);

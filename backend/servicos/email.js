@@ -17,12 +17,13 @@ let avisouDesligado = false;
  * Para quem o aviso vai. A tela manda (seção 11.13); vazia lá, vale o
  * ALERTA_PARA do ambiente.
  */
-async function destinatario() {
-  return configuracoes.texto('alerta_email_para', smtp.para);
+async function destinatario(organizacaoId) {
+  // Seção 1b: o destino é da organização; o do ambiente só vale para a operadora.
+  return configuracoes.textoDaOrganizacao(organizacaoId, 'alerta_email_para', smtp.para);
 }
 
-async function configurado() {
-  return Boolean(smtp.host && smtp.de && (await destinatario()));
+async function configurado(organizacaoId) {
+  return Boolean(smtp.host && smtp.de && (await destinatario(organizacaoId)));
 }
 
 function obterTransporte() {
@@ -64,10 +65,10 @@ function montarAssunto(avisos) {
  * Envia os avisos em um único e-mail.
  * @returns {{enviado:boolean, motivo?:string, assunto?:string}}
  */
-async function enviarAvisos(avisos) {
+async function enviarAvisos(organizacaoId, avisos) {
   if (!avisos || !avisos.length) return { enviado: false, motivo: 'nada a enviar' };
 
-  const para = await destinatario();
+  const para = await destinatario(organizacaoId);
   if (!smtp.host || !smtp.de || !para) {
     if (!avisouDesligado) {
       console.log(

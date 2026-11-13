@@ -126,6 +126,7 @@ rotas.post('/:id/preparar', async (req, res) => {
       : null;
 
     const criado = await alertas.criar({
+      organizacaoId: req.organizacaoId,
       tipo: 'preparar',
       nivel: 'atencao',
       chave: `preparar:${r.id}:${String(r.proxima_prevista).slice(0, 7)}`,

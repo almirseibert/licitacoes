@@ -22,12 +22,13 @@ let avisouDesligado = false;
  * Para qual número vai. A tela manda (seção 11.13); vazia lá, vale o
  * WHATSAPP_DESTINO do ambiente.
  */
-async function destinatario() {
-  return configuracoes.texto('alerta_whatsapp_destino', cfg.destino);
+async function destinatario(organizacaoId) {
+  // Seção 1b: o destino é da organização; o do ambiente só vale para a operadora.
+  return configuracoes.textoDaOrganizacao(organizacaoId, 'alerta_whatsapp_destino', cfg.destino);
 }
 
-async function configurado() {
-  return Boolean(cfg.token && cfg.telefoneId && (await destinatario()));
+async function configurado(organizacaoId) {
+  return Boolean(cfg.token && cfg.telefoneId && (await destinatario(organizacaoId)));
 }
 
 /** Só dígitos: a API recusa número com +, espaço ou parêntese. */
@@ -57,10 +58,10 @@ function montarTexto(avisos) {
  * Envia os avisos em uma única mensagem.
  * @returns {{enviado:boolean, motivo?:string}}
  */
-async function enviarAvisos(avisos) {
+async function enviarAvisos(organizacaoId, avisos) {
   if (!avisos || !avisos.length) return { enviado: false, motivo: 'nada a enviar' };
 
-  const destino = numeroLimpo(await destinatario());
+  const destino = numeroLimpo(await destinatario(organizacaoId));
   if (!cfg.token || !cfg.telefoneId || !destino) {
     if (!avisouDesligado) {
       console.log(

@@ -2,11 +2,23 @@
 const express = require('express');
 const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
+const { ehOperadora } = require('../servicos/escopo');
+const { exigirPapel } = require('../middlewares/autenticar');
 const fila = require('../servicos/fila');
 const adaptadores = require('../adaptadores');
 const { coletarFonte } = require('../jobs/coletar');
 
 const rotas = express.Router();
+
+// Seção 1b: fonte é catálogo — o que uma cadastra, todas coletam. Criar,
+// mudar, apagar e disparar coleta é da organização operadora (admin ou dono);
+// as outras veem a lista e testam ("Testar agora" não grava nada).
+function apenasOperadora(req, res, next) {
+  if (!ehOperadora(req.organizacaoId)) {
+    return res.status(403).json({ erro: 'As fontes de coleta são mantidas pela equipe do painel.' });
+  }
+  return exigirPapel('admin')(req, res, next);
+}
 
 rotas.get('/', async (_req, res) => {
   try {
@@ -68,7 +80,7 @@ function limpar(corpo, { exigirTudo }) {
   return campos;
 }
 
-rotas.post('/', async (req, res) => {
+rotas.post('/', apenasOperadora, async (req, res) => {
   try {
     const campos = limpar(req.body || {}, { exigirTudo: true });
     const colunas = Object.keys(campos);
@@ -83,7 +95,7 @@ rotas.post('/', async (req, res) => {
   }
 });
 
-rotas.patch('/:id', async (req, res) => {
+rotas.patch('/:id', apenasOperadora, async (req, res) => {
   try {
     const campos = limpar(req.body || {}, { exigirTudo: false });
     const colunas = Object.keys(campos);
@@ -103,7 +115,7 @@ rotas.patch('/:id', async (req, res) => {
 
 // Apagar uma fonte leva junto as licitações dela (FK em cascata). Por isso só
 // apagamos quando não há nada gravado; do contrário, o caminho é desativar.
-rotas.delete('/:id', async (req, res) => {
+rotas.delete('/:id', apenasOperadora, async (req, res) => {
   try {
     const [[contagem]] = await pool.query('SELECT COUNT(*) AS total FROM licitacoes WHERE fonte_id = ?', [req.params.id]);
     if (contagem.total) {
@@ -127,6 +139,7 @@ rotas.post('/:id/testar', async (req, res) => {
       termo: req.body && req.body.termo ? String(req.body.termo) : null,
       simular: true,
       limitePaginas: 1,
+      organizacaoId: req.organizacaoId,
     });
     res.json(resultado);
   } catch (erro) {
@@ -135,7 +148,7 @@ rotas.post('/:id/testar', async (req, res) => {
 });
 
 // POST /api/fontes/:id/coletar — enfileira a coleta de verdade.
-rotas.post('/:id/coletar', async (req, res) => {
+rotas.post('/:id/coletar', apenasOperadora, async (req, res) => {
   try {
     const [linhas] = await pool.query('SELECT id, nome FROM fontes WHERE id = ?', [req.params.id]);
     if (!linhas.length) return res.status(404).json({ erro: 'Fonte não encontrada.' });
@@ -152,7 +165,7 @@ rotas.post('/:id/coletar', async (req, res) => {
 });
 
 // POST /api/fontes/coletar-todas — varre todas as fontes ativas vencidas.
-rotas.post('/coletar-todas', async (req, res) => {
+rotas.post('/coletar-todas', apenasOperadora, async (req, res) => {
   try {
     await fila.enfileirar(
       'coletar_fontes',

@@ -12,17 +12,17 @@ const declaracao = require('../servicos/declaracao');
 
 const rotas = express.Router({ mergeParams: true });
 
-async function contexto(licitacaoId) {
+async function contexto(organizacaoId, licitacaoId) {
   const [[licitacao]] = await pool.query('SELECT * FROM licitacoes WHERE id = ?', [licitacaoId]);
   if (!licitacao) throw new Error('Licitação não encontrada.');
-  const perfil = await envio.perfilPadrao(null);
+  const perfil = await envio.perfilPadrao(organizacaoId, null);
   return { licitacao, perfil, dados: declaracao.variaveis({ licitacao, perfil }) };
 }
 
 // GET — o que entraria, sem gerar nada.
 rotas.get('/', async (req, res) => {
   try {
-    const montagem = await envio.montar({ licitacaoId: Number(req.params.id) });
+    const montagem = await envio.montar({ organizacaoId: req.organizacaoId, licitacaoId: Number(req.params.id) });
     res.json({ dados: montagem.declaracoes });
   } catch (erro) {
     res.status(400).json({ erro: erro.message });
@@ -32,17 +32,18 @@ rotas.get('/', async (req, res) => {
 rotas.post('/', async (req, res) => {
   try {
     const corpo = req.body || {};
-    const montagem = await envio.montar({ licitacaoId: Number(req.params.id) });
+    const montagem = await envio.montar({ organizacaoId: req.organizacaoId, licitacaoId: Number(req.params.id) });
     const ids = Array.isArray(corpo.modelos) && corpo.modelos.length
       ? corpo.modelos.map(Number)
       : montagem.declaracoes.filter((d) => d.marcado).map((d) => d.modelo_id);
 
     if (!ids.length) return res.status(400).json({ erro: 'Escolha ao menos uma declaração.' });
 
-    const { dados } = await contexto(req.params.id);
+    const { dados } = await contexto(req.organizacaoId, req.params.id);
     const [modelos] = await pool.query(
-      `SELECT * FROM modelos_declaracao WHERE id IN (${ids.map(() => '?').join(',')})`,
-      ids
+      `SELECT * FROM modelos_declaracao
+        WHERE (organizacao_id IS NULL OR organizacao_id = ?) AND id IN (${ids.map(() => '?').join(',')})`,
+      [req.organizacaoId, ...ids]
     );
 
     const geradas = [];
@@ -50,7 +51,7 @@ rotas.post('/', async (req, res) => {
       const { texto, faltando } = declaracao.preencher(modelo.corpo, dados);
       const bytes = await declaracao.gerarPdf({ titulo: modelo.titulo, texto, dados });
       const nome = `${arquivos.limpar(modelo.titulo).replace(/\s+/g, '_').slice(0, 80)}.pdf`;
-      const salvo = await pacote.gravar(`declaracoes/${req.params.id}`, nome, bytes);
+      const salvo = await pacote.gravar(`org/${req.organizacaoId}/declaracoes/${req.params.id}`, nome, bytes);
       geradas.push({
         modelo_id: modelo.id, titulo: modelo.titulo, arquivo: nome,
         faltando, tamanho: salvo.tamanho,
@@ -73,10 +74,13 @@ rotas.post('/', async (req, res) => {
 // GET /:modeloId — a declaração desta licitação, em PDF, para conferir na tela.
 rotas.get('/:modeloId', async (req, res) => {
   try {
-    const [[modelo]] = await pool.query('SELECT * FROM modelos_declaracao WHERE id = ?', [req.params.modeloId]);
+    const [[modelo]] = await pool.query(
+      'SELECT * FROM modelos_declaracao WHERE id = ? AND (organizacao_id IS NULL OR organizacao_id = ?)',
+      [req.params.modeloId, req.organizacaoId]
+    );
     if (!modelo) return res.status(404).json({ erro: 'Modelo não encontrado.' });
 
-    const { dados } = await contexto(req.params.id);
+    const { dados } = await contexto(req.organizacaoId, req.params.id);
     const { texto } = declaracao.preencher(modelo.corpo, dados);
     const bytes = await declaracao.gerarPdf({ titulo: modelo.titulo, texto, dados });
 

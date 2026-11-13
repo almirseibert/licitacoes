@@ -51,9 +51,12 @@ function limpar(corpo, { exigirTudo }) {
   return campos;
 }
 
-rotas.get('/perfis', async (_req, res) => {
+rotas.get('/perfis', async (req, res) => {
   try {
-    const [linhas] = await pool.query('SELECT * FROM empresa_perfis ORDER BY padrao DESC, id ASC');
+    const [linhas] = await pool.query(
+      'SELECT * FROM empresa_perfis WHERE organizacao_id = ? ORDER BY padrao DESC, id ASC',
+      [req.organizacaoId]
+    );
     res.json({
       dados: linhas.map((p) => ({
         ...p,
@@ -68,12 +71,18 @@ rotas.get('/perfis', async (_req, res) => {
 rotas.post('/perfis', async (req, res) => {
   try {
     const campos = limpar(req.body || {}, { exigirTudo: true });
-    const colunas = Object.keys(campos);
+    const colunas = ['organizacao_id', ...Object.keys(campos)];
+    const valores = [req.organizacaoId, ...Object.keys(campos).map((c) => campos[c])];
     const [r] = await pool.query(
       `INSERT INTO empresa_perfis (${colunas.join(', ')}) VALUES (${colunas.map(() => '?').join(', ')})`,
-      colunas.map((c) => campos[c])
+      valores
     );
-    if (campos.padrao) await pool.query('UPDATE empresa_perfis SET padrao = 0 WHERE id <> ?', [r.insertId]);
+    if (campos.padrao) {
+      await pool.query('UPDATE empresa_perfis SET padrao = 0 WHERE organizacao_id = ? AND id <> ?', [
+        req.organizacaoId,
+        r.insertId,
+      ]);
+    }
     res.status(201).json({ ok: true, id: r.insertId });
   } catch (erro) {
     if (erro.code === 'ER_DUP_ENTRY') return res.status(409).json({ erro: 'Já existe um perfil com esse nome.' });
@@ -88,12 +97,17 @@ rotas.patch('/perfis/:id', async (req, res) => {
     if (!colunas.length) return res.status(400).json({ erro: 'Nada para alterar.' });
 
     const [r] = await pool.query(
-      `UPDATE empresa_perfis SET ${colunas.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`,
-      [...colunas.map((c) => campos[c]), req.params.id]
+      `UPDATE empresa_perfis SET ${colunas.map((c) => `${c} = ?`).join(', ')} WHERE id = ? AND organizacao_id = ?`,
+      [...colunas.map((c) => campos[c]), req.params.id, req.organizacaoId]
     );
     if (!r.affectedRows) return res.status(404).json({ erro: 'Perfil não encontrado.' });
     // Só um perfil é o padrão — é dele que a coleta lê os CNAEs.
-    if (campos.padrao) await pool.query('UPDATE empresa_perfis SET padrao = 0 WHERE id <> ?', [req.params.id]);
+    if (campos.padrao) {
+      await pool.query('UPDATE empresa_perfis SET padrao = 0 WHERE organizacao_id = ? AND id <> ?', [
+        req.organizacaoId,
+        req.params.id,
+      ]);
+    }
     res.json({ ok: true, mensagem: 'Perfil salvo. Repontue para aplicar aos CNAEs do que já está no Radar.' });
   } catch (erro) {
     if (erro.code === 'ER_DUP_ENTRY') return res.status(409).json({ erro: 'Já existe um perfil com esse nome.' });

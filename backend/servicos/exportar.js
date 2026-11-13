@@ -6,6 +6,7 @@
 // aqui sai com os tipos certos, a primeira linha congelada e as larguras
 // pensadas para ser lida sem ajustar coluna nenhuma.
 const pool = require('../config/db');
+const { daOrganizacao } = require('./escopo');
 const planilha = require('./planilha');
 
 /** Data e hora como o Excel entende, pelo texto: dia de calendário em pt-BR. */
@@ -59,13 +60,13 @@ const COLUNAS_RADAR = [
  * usa: exportar coisa diferente do que está na tela seria a pior armadilha
  * possível aqui.
  */
-async function radarEmExcel({ onde = '', valores = [], ordem, limite = 5000 } = {}) {
+async function radarEmExcel({ organizacaoId, onde = '', valores = [], ordem, limite = 5000 } = {}) {
   const [linhas] = await pool.query(
     `SELECT l.id, l.orgao_nome, l.uf, l.municipio, l.modalidade, l.objeto, l.valor_estimado,
             l.abertura_propostas, l.fim_propostas, l.plataforma_disputa, l.link_portal,
             l.grupo, l.palavra_casada, l.pontuacao, l.pode_participar, l.objeto_social,
             l.beneficio_me, l.etapa, l.prazo_questionamento
-       FROM licitacoes l
+       FROM ${daOrganizacao(organizacaoId)} l
        JOIN fontes f ON f.id = l.fonte_id
        ${onde}
        ORDER BY ${ordem || 'l.pontuacao DESC, l.fim_propostas IS NULL, l.fim_propostas ASC'}
@@ -98,7 +99,7 @@ async function radarEmExcel({ onde = '', valores = [], ordem, limite = 5000 } = 
  * conta a disputa mas não entra na média: dividir por um estimado ausente
  * produziria desconto de 100%.
  */
-async function relatorioMensal({ meses = 12 } = {}) {
+async function relatorioMensal({ organizacaoId, meses = 12 } = {}) {
   const [linhas] = await pool.query(
     `SELECT DATE_FORMAT(COALESCE(l.proposta_em, l.etapa_em, l.fim_propostas), '%Y-%m') AS mes,
             COUNT(*) AS disputei,
@@ -126,7 +127,7 @@ async function relatorioMensal({ meses = 12 } = {}) {
                   WHEN l.valor_estimado > 0 AND COALESCE(l.valor_proposto, l.valor_final) > l.valor_estimado
                   THEN 1 ELSE 0
                 END) AS acima_do_estimado
-       FROM licitacoes l
+       FROM ${daOrganizacao(organizacaoId)} l
       WHERE l.etapa IN ('Proposta enviada','Em disputa','Ganhamos','Perdemos')
         AND COALESCE(l.proposta_em, l.etapa_em, l.fim_propostas) IS NOT NULL
         AND COALESCE(l.proposta_em, l.etapa_em, l.fim_propostas) >= DATE_SUB(CURDATE(), INTERVAL ? MONTH)
@@ -203,8 +204,8 @@ const COLUNAS_RELATORIO = [
 ];
 
 /** O mesmo relatório em Excel. */
-async function relatorioEmExcel({ meses = 12 } = {}) {
-  const r = await relatorioMensal({ meses });
+async function relatorioEmExcel({ organizacaoId, meses = 12 } = {}) {
+  const r = await relatorioMensal({ organizacaoId, meses });
 
   const cabecalho = COLUNAS_RELATORIO.map((c) => ({ texto: c.titulo, estilo: 'cabecalho' }));
   const corpo = r.meses.map((m) => COLUNAS_RELATORIO.map((c) => c.ler(m)));

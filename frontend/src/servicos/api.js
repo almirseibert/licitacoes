@@ -1,7 +1,10 @@
-// Cliente da API. Guarda o token do painel (o mesmo JWT do CRM) no localStorage.
+// Cliente da API. Guarda o token do painel e a organização em que ele atua
+// no localStorage (Seção 1 do PLANO_SAAS_CONLICITACAO.md: login próprio,
+// multiempresa — o token vale para UMA organização por vez).
 const BASE = import.meta.env.VITE_API_URL || '/api';
 const CHAVE_TOKEN = 'licitacoes.token';
 const CHAVE_USUARIO = 'licitacoes.usuario';
+const CHAVE_ORGANIZACAO = 'licitacoes.organizacao';
 
 export function obterToken() {
   return localStorage.getItem(CHAVE_TOKEN);
@@ -15,14 +18,24 @@ export function obterUsuario() {
   }
 }
 
-export function guardarSessao(token, usuario) {
+export function obterOrganizacao() {
+  try {
+    return JSON.parse(localStorage.getItem(CHAVE_ORGANIZACAO) || 'null');
+  } catch {
+    return null;
+  }
+}
+
+export function guardarSessao(token, usuario, organizacao = null) {
   localStorage.setItem(CHAVE_TOKEN, token);
   localStorage.setItem(CHAVE_USUARIO, JSON.stringify(usuario));
+  if (organizacao) localStorage.setItem(CHAVE_ORGANIZACAO, JSON.stringify(organizacao));
 }
 
 export function encerrarSessao() {
   localStorage.removeItem(CHAVE_TOKEN);
   localStorage.removeItem(CHAVE_USUARIO);
+  localStorage.removeItem(CHAVE_ORGANIZACAO);
 }
 
 async function requisitar(caminho, opcoes = {}) {
@@ -36,7 +49,9 @@ async function requisitar(caminho, opcoes = {}) {
     },
   });
 
-  if (resposta.status === 401) {
+  // 401 numa rota pública (login, aceite de convite com senha errada) é
+  // resposta para a tela, não sessão vencida: não derruba nada.
+  if (resposta.status === 401 && token && !opcoes.publica) {
     encerrarSessao();
     window.location.reload();
     throw new Error('Sessão expirada.');
@@ -120,7 +135,46 @@ async function salvarComo(caminho, nome) {
 
 export const api = {
   login: (email, senha) =>
-    requisitar('/auth/login', { method: 'POST', body: JSON.stringify({ email, senha }) }),
+    requisitar('/auth/login', { method: 'POST', publica: true, body: JSON.stringify({ email, senha }) }),
+
+  // ---------------------------------------------- conta e equipe (Seção 1b)
+  cadastrar: (campos) =>
+    requisitar('/auth/cadastro', { method: 'POST', publica: true, body: JSON.stringify(campos) }),
+
+  eu: () => requisitar('/auth/eu'),
+
+  trocarOrganizacao: (organizacaoId) =>
+    requisitar('/auth/trocar-organizacao', {
+      method: 'POST',
+      body: JSON.stringify({ organizacao_id: organizacaoId }),
+    }),
+
+  convite: (token) => requisitar(`/auth/convites/${encodeURIComponent(token)}`, { publica: true }),
+
+  aceitarConvite: (token, campos) =>
+    requisitar(`/auth/convites/${encodeURIComponent(token)}/aceitar`, {
+      method: 'POST',
+      publica: true,
+      body: JSON.stringify(campos),
+    }),
+
+  recuperarSenha: (email) =>
+    requisitar('/auth/recuperar', { method: 'POST', publica: true, body: JSON.stringify({ email }) }),
+
+  redefinirSenha: (token, senha) =>
+    requisitar('/auth/redefinir', { method: 'POST', publica: true, body: JSON.stringify({ token, senha }) }),
+
+  equipe: () => requisitar('/auth/equipe'),
+
+  convidar: (email, papel) =>
+    requisitar('/auth/convites', { method: 'POST', body: JSON.stringify({ email, papel }) }),
+
+  cancelarConvite: (id) => requisitar(`/auth/convites/${id}`, { method: 'DELETE' }),
+
+  mudarPapel: (usuarioId, papel) =>
+    requisitar(`/auth/equipe/${usuarioId}`, { method: 'PATCH', body: JSON.stringify({ papel }) }),
+
+  removerDaEquipe: (usuarioId) => requisitar(`/auth/equipe/${usuarioId}`, { method: 'DELETE' }),
 
   resumo: () => requisitar('/painel/resumo'),
 

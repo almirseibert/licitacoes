@@ -2,6 +2,7 @@
 const express = require('express');
 const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
+const escopo = require('../servicos/escopo');
 const declaracao = require('../servicos/declaracao');
 const { PORCODIGO } = require('../regras/exigencias');
 
@@ -26,20 +27,27 @@ const VARIAVEIS = [
   ['ano', 'Ano corrente'],
 ];
 
-async function exemplo(licitacaoId) {
+async function exemplo(organizacaoId, licitacaoId) {
   const [linhas] = licitacaoId
     ? await pool.query('SELECT * FROM licitacoes WHERE id = ?', [licitacaoId])
-    : await pool.query('SELECT * FROM licitacoes WHERE descartada = 0 ORDER BY pontuacao DESC LIMIT 1');
-  const [perfis] = await pool.query('SELECT * FROM empresa_perfis ORDER BY padrao DESC, id ASC LIMIT 1');
+    : await pool.query(
+        `SELECT * FROM ${escopo.daOrganizacao(organizacaoId)} l WHERE descartada = 0 ORDER BY pontuacao DESC LIMIT 1`
+      );
+  const [perfis] = await pool.query(
+    'SELECT * FROM empresa_perfis WHERE organizacao_id = ? ORDER BY padrao DESC, id ASC LIMIT 1',
+    [organizacaoId]
+  );
   if (!linhas.length) throw new Error('Nenhuma licitação para usar de exemplo na pré-visualização.');
   if (!perfis.length) throw new Error('Cadastre o perfil da empresa antes.');
   return { licitacao: linhas[0], perfil: perfis[0] };
 }
 
-rotas.get('/', async (_req, res) => {
+rotas.get('/', async (req, res) => {
   try {
+    // Os do sistema (organizacao_id NULL) e as cópias desta organização.
     const [dados] = await pool.query(
-      'SELECT * FROM modelos_declaracao ORDER BY padrao_sistema DESC, titulo ASC'
+      'SELECT * FROM modelos_declaracao WHERE (organizacao_id IS NULL OR organizacao_id = ?) ORDER BY padrao_sistema DESC, titulo ASC',
+      [req.organizacaoId]
     );
     res.json({
       dados: dados.map((m) => ({
@@ -59,8 +67,8 @@ rotas.post('/', async (req, res) => {
     if (!corpo.titulo || !corpo.corpo) return res.status(400).json({ erro: 'Informe título e corpo.' });
 
     const [r] = await pool.query(
-      'INSERT INTO modelos_declaracao (codigo, titulo, corpo, padrao_sistema, ativo) VALUES (?, ?, ?, 0, 1)',
-      [String(corpo.codigo || 'outros').slice(0, 40), String(corpo.titulo).slice(0, 160), String(corpo.corpo)]
+      'INSERT INTO modelos_declaracao (organizacao_id, codigo, titulo, corpo, padrao_sistema, ativo) VALUES (?, ?, ?, ?, 0, 1)',
+      [req.organizacaoId, String(corpo.codigo || 'outros').slice(0, 40), String(corpo.titulo).slice(0, 160), String(corpo.corpo)]
     );
     res.status(201).json({ ok: true, id: r.insertId });
   } catch (erro) {
@@ -72,12 +80,15 @@ rotas.post('/', async (req, res) => {
 // Duplicar é o caminho de edição dos modelos do sistema (seção 18.3).
 rotas.post('/:id/duplicar', async (req, res) => {
   try {
-    const [[modelo]] = await pool.query('SELECT * FROM modelos_declaracao WHERE id = ?', [req.params.id]);
+    const [[modelo]] = await pool.query('SELECT * FROM modelos_declaracao WHERE id = ? AND (organizacao_id IS NULL OR organizacao_id = ?)', [
+      req.params.id,
+      req.organizacaoId,
+    ]);
     if (!modelo) return res.status(404).json({ erro: 'Modelo não encontrado.' });
 
     const [r] = await pool.query(
-      'INSERT INTO modelos_declaracao (codigo, titulo, corpo, padrao_sistema, ativo) VALUES (?, ?, ?, 0, 1)',
-      [modelo.codigo, `${modelo.titulo} (minha versão)`.slice(0, 160), modelo.corpo]
+      'INSERT INTO modelos_declaracao (organizacao_id, codigo, titulo, corpo, padrao_sistema, ativo) VALUES (?, ?, ?, ?, 0, 1)',
+      [req.organizacaoId, modelo.codigo, `${modelo.titulo} (minha versão)`.slice(0, 160), modelo.corpo]
     );
     res.status(201).json({ ok: true, id: r.insertId, mensagem: 'Cópia criada. O modelo do sistema continua intacto.' });
   } catch (erro) {
@@ -88,7 +99,10 @@ rotas.post('/:id/duplicar', async (req, res) => {
 
 rotas.patch('/:id', async (req, res) => {
   try {
-    const [[modelo]] = await pool.query('SELECT padrao_sistema FROM modelos_declaracao WHERE id = ?', [req.params.id]);
+    const [[modelo]] = await pool.query(
+      'SELECT padrao_sistema FROM modelos_declaracao WHERE id = ? AND (organizacao_id IS NULL OR organizacao_id = ?)',
+      [req.params.id, req.organizacaoId]
+    );
     if (!modelo) return res.status(404).json({ erro: 'Modelo não encontrado.' });
     if (modelo.padrao_sistema) {
       return res.status(409).json({
@@ -107,8 +121,8 @@ rotas.patch('/:id', async (req, res) => {
     if (!colunas.length) return res.status(400).json({ erro: 'Nada para alterar.' });
 
     await pool.query(
-      `UPDATE modelos_declaracao SET ${colunas.map((c) => `${c} = ?`).join(', ')} WHERE id = ?`,
-      [...colunas.map((c) => campos[c]), req.params.id]
+      `UPDATE modelos_declaracao SET ${colunas.map((c) => `${c} = ?`).join(', ')} WHERE id = ? AND organizacao_id = ?`,
+      [...colunas.map((c) => campos[c]), req.params.id, req.organizacaoId]
     );
     res.json({ ok: true });
   } catch (erro) {
@@ -118,11 +132,17 @@ rotas.patch('/:id', async (req, res) => {
 
 rotas.delete('/:id', async (req, res) => {
   try {
-    const [[modelo]] = await pool.query('SELECT padrao_sistema FROM modelos_declaracao WHERE id = ?', [req.params.id]);
+    const [[modelo]] = await pool.query(
+      'SELECT padrao_sistema FROM modelos_declaracao WHERE id = ? AND (organizacao_id IS NULL OR organizacao_id = ?)',
+      [req.params.id, req.organizacaoId]
+    );
     if (!modelo) return res.status(404).json({ erro: 'Modelo não encontrado.' });
     if (modelo.padrao_sistema) return res.status(409).json({ erro: 'Modelo do sistema não pode ser apagado — desative-o.' });
 
-    await pool.query('DELETE FROM modelos_declaracao WHERE id = ?', [req.params.id]);
+    await pool.query('DELETE FROM modelos_declaracao WHERE id = ? AND organizacao_id = ?', [
+      req.params.id,
+      req.organizacaoId,
+    ]);
     res.json({ ok: true });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível apagar o modelo.', erro);
@@ -133,7 +153,7 @@ rotas.delete('/:id', async (req, res) => {
 rotas.post('/previa', async (req, res) => {
   try {
     const corpo = req.body || {};
-    const { licitacao, perfil } = await exemplo(corpo.licitacao_id);
+    const { licitacao, perfil } = await exemplo(req.organizacaoId, corpo.licitacao_id);
     const dados = declaracao.variaveis({ licitacao, perfil });
     const { texto, faltando } = declaracao.preencher(corpo.corpo || '', dados);
 
@@ -155,10 +175,13 @@ rotas.post('/previa', async (req, res) => {
 // GET /:id/previa.pdf — a mesma prévia, já em PDF.
 rotas.get('/:id/previa.pdf', async (req, res) => {
   try {
-    const [[modelo]] = await pool.query('SELECT * FROM modelos_declaracao WHERE id = ?', [req.params.id]);
+    const [[modelo]] = await pool.query('SELECT * FROM modelos_declaracao WHERE id = ? AND (organizacao_id IS NULL OR organizacao_id = ?)', [
+      req.params.id,
+      req.organizacaoId,
+    ]);
     if (!modelo) return res.status(404).json({ erro: 'Modelo não encontrado.' });
 
-    const { licitacao, perfil } = await exemplo(req.query.licitacao_id);
+    const { licitacao, perfil } = await exemplo(req.organizacaoId, req.query.licitacao_id);
     const dados = declaracao.variaveis({ licitacao, perfil });
     const { texto } = declaracao.preencher(modelo.corpo, dados);
     const bytes = await declaracao.gerarPdf({ titulo: modelo.titulo, texto, dados });

@@ -3,6 +3,7 @@
 //   npm run ler -- --licitacao=582    -> só essa
 //   npm run ler -- --limite=10 --refazer
 const pool = require('../config/db');
+const escopo = require('../servicos/escopo');
 const { lerEdital } = require('./ler-edital');
 
 function argumento(nome) {
@@ -21,7 +22,7 @@ async function principal() {
     alvos = [{ id: Number(umaSo) }];
   } else {
     const [linhas] = await pool.query(
-      `SELECT id FROM licitacoes
+      `SELECT id FROM ${escopo.agregadoDasOrganizacoes()} l
         WHERE arquivos_status IN ('ok','parcial')
           ${refazer ? '' : "AND exigencias_status IN ('nao_lido','na_fila')"}
           AND descartada = 0

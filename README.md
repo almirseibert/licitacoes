@@ -23,7 +23,7 @@ roda na máquina de quem desenvolve. O passo a passo original está em
 O painel vira produto vendável com login: cada cliente é uma **organização**, com usuários e
 senha próprios (não mais lidos do banco do CRM) e dados isolados. O plano completo está em
 [PLANO_SAAS_CONLICITACAO.md](PLANO_SAAS_CONLICITACAO.md); esta é a Seção 1 (base multiempresa),
-**parcialmente entregue em 12/11/2026**:
+entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
 
 - **Pronto e verificado contra MariAB 10.11 real** (migrações, não mock): login, cadastro de
   organização, convite por e-mail/link, aceite de convite e troca entre organizações sem digitar
@@ -40,16 +40,66 @@ senha próprios (não mais lidos do banco do CRM) e dados isolados. O plano comp
   aceito uma vez, recusado na segunda tentativa (409) e vencido após 72 h (410). Troca de
   organização recusada para quem não é membro (403). Papel insuficiente bloqueado antes de chegar
   ao banco (403 em `/api/auth/convites` para quem não é admin/dono).
-- **O que ainda não mudou** (Seção 1b, deliberadamente adiada): o motor de pontuação, o funil, o
-  diagnóstico e as licitações estratégicas continuam lendo/escrevendo as colunas de `licitacoes`
-  (pontuação, etapa, favorito, descartada) em vez da nova `org_licitacoes` — mover isso exige
-  decidir, rota a rota, com banco real, sem arriscar o comportamento de quem já usa o painel hoje.
-  As demais ~19 rotas que passam a ler tabelas com `organizacao_id` (fontes compartilhadas à
-  parte) ainda não filtram por organização — só `/api/palavras` foi atualizada, como referência
-  do padrão (`WHERE organizacao_id = ?` em toda consulta, `req.organizacaoId` no `WHERE` de todo
-  `UPDATE`/`DELETE`, nunca no corpo do `SET`). Tela de cadastro, convite e troca de organização no
-  frontend também ficam para a continuação — o login atual funciona sem mudança nenhuma porque o
-  formato da resposta não mudou.
+- **Seção 1b — entregue em 13/11/2026** (verificada contra MariaDB 10.11 real e 450 licitações
+  reais do PNCP, RS/SC, propostas abertas):
+  - **Decisão por organização.** A migração `018_org_licitacoes.sql` move para `org_licitacoes`
+    tudo o que depende de quem olha — pontuação, grupo, palavra que casou, objeto social, pode
+    participar, etapa, favorito, descarte, proposta, custo, o resultado digitado e a
+    confirmação da leitura da IA — copia o que existia para a organização 1 (hash idêntico das 450
+    linhas antes e depois) e **apaga essas colunas de `licitacoes`**, para que consulta esquecida
+    falhe alto em vez de mostrar a decisão de outra organização. Toda rota lê pela visão
+    `escopo.daOrganizacao(id)` (`backend/servicos/escopo.js`); os jobs que servem a todos usam
+    `porOrganizacao()` (aviso nasce para a organização certa) ou `agregadoDasOrganizacoes()`
+    (baixar e ler edital: maior nota entre as ativas).
+  - **Coleta por organização.** A busca usa a união das palavras das organizações ativas; cada
+    licitação é pontuada com as palavras, os pesos e os CNAEs de cada uma. Organização nova
+    recebe uma repontuação na fila ao se cadastrar.
+  - **Rotas escopadas**: Radar, Funil, filtros, painel, exportação e relatório, Configurações
+    (pesos e perfis), Cofre, Kits, Modelos (os do sistema continuam de todos), Envio, Declarações,
+    Propostas, Preço, Concorrentes e dossiês ("encontrou você" calculado na hora, por
+    organização), Alertas, Contratos e marcos, Questionamentos, Monitor, Oportunidades (descarte
+    e observação em `org_oportunidades`), Diagnóstico, IA (sugestões de palavra por organização;
+    o gasto do serviço só a operadora vê). Fontes são catálogo: só a organização operadora (1,
+    admin/dono) cria, muda, apaga e dispara coleta.
+  - **`configuracoes`, decidido**: janela da coleta e teto de download são **operação** (globais,
+    só a operadora muda); destino do e-mail e do WhatsApp de alerta é **preferência** e mora em
+    `org_configuracoes`. O destino do `.env` (`ALERTA_PARA`, `WHATSAPP_DESTINO`) só vale para a
+    operadora — senão o alerta de um cliente iria para a caixa da Studio Mythos.
+  - **Cofre em disco por organização**: arquivo novo vai para `org/<id>/empresa/<perfil>/`,
+    pacotes para `org/<id>/pacotes/`, declarações, anexos e propostas idem. Os arquivos já
+    guardados continuam onde estão — o caminho está no banco.
+  - **Papéis valem na hora**: `confirmarVinculo` relê o papel em `organizacao_membros` (cache de
+    15 s, limpo quando a Equipe muda alguém); o papel `leitor` só lê (`leitorSoLe`, 403 em
+    qualquer escrita).
+  - **Telas**: entrar / criar conta / esqueci minha senha (`Login.jsx`), aceite de convite
+    (`/convite/<token>`), senha nova (`/redefinir-senha/<token>`), **Equipe** (papéis, remover,
+    convidar, cancelar convite; sem e-mail configurado mostra o link para mandar à mão) e o
+    seletor de organização na barra lateral.
+  - **Recuperação de senha**: link de uso único, 1 hora, só por e-mail (o banco guarda o
+    sha256 do token), resposta igual exista ou não a conta, no máximo 3 pedidos por hora.
+  - **Correção de segurança** da 1a: aceitar convite para um e-mail que já tem conta agora
+    exige a senha dessa conta. Antes, quem tinha o link (o próprio admin, quando o e-mail não
+    está configurado) entrava como aquela pessoa e, com `trocar-organizacao`, abria as outras
+    organizações dela.
+  - **Aceite medido** (roteiro com duas organizações pela API real, 53/53): org 1 e org 2 com
+    Radar próprio sobre o mesmo catálogo (topo "nobreak" 70 pts × "reforma" 88 pts; 272 × 450
+    pontuadas); a org 2 vê em Triagem a licitação que a org 1 pôs em "Vou disputar", e o
+    descarte da org 2 não muda a org 1 nem entra no diagnóstico dela; valor final digitado pela
+    org 2 não muda o da org 1 (990); 404 ao tentar ler, editar ou apagar pelo id perfil,
+    documento do cofre, kit, modelo, proposta, questionamento, contrato, marco e alerta da outra;
+    403 para fonte e ajuste de operação fora da operadora; convite para conta existente sem
+    senha ou com senha errada 401, com a senha 200; leitor 200 no GET e 403 no PATCH; rebaixado
+    a leitor 403 e removido 401 **na hora**; redefinir senha 200, reuso 410, senha velha 401,
+    nova 200. Os 20 jobs do worker rodaram sem erro contra o banco migrado, com os alertas
+    nascendo por organização (`limpar` tinha um bug antigo, `a.tamanho` → `tamanho_bytes`,
+    corrigido aqui). `npm run lint` limpo e 50/50 testes (6 novos em `testes/escopo.test.js`).
+  - **Não verificado aqui**: a busca textual do PNCP (`/api/search`) não respondeu deste
+    ambiente, então a coleta pelo adaptador não rodou de ponta a ponta — as 450 licitações
+    vieram da API de consulta do PNCP e a pontuação foi feita pelo `repontuar` novo. E-mail
+    (convite e senha) não foi enviado: não há SMTP no ambiente de teste.
+  - Pendente (Seção 1c no plano): monitor que checa a mesma licitação uma vez por organização,
+    correção manual de exigência ainda compartilhada, visão de alertas mais leve, ficha de órgão
+    e concorrente que mostra o grupo da operadora.
 - `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
   ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
 

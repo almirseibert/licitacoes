@@ -101,7 +101,14 @@ async function coletarEncerradas({ fonteId, termo, paginas = PAGINAS_POR_TERMO }
   const [palavras] = await pool.query(
     termo
       ? 'SELECT ? AS termo, NULL AS grupo, 1 AS usar_aspas'
-      : 'SELECT termo, grupo, usar_aspas FROM palavras_chave WHERE ativa = 1 ORDER BY peso DESC',
+      : // Seção 1b: a amostra de preço é do catálogo — usa a união das palavras
+        // das organizações ativas, cada termo uma vez.
+        `SELECT p.termo, MAX(p.grupo) AS grupo, MAX(p.usar_aspas) AS usar_aspas
+           FROM palavras_chave p
+           JOIN organizacoes g ON g.id = p.organizacao_id AND g.status <> 'suspensa'
+          WHERE p.ativa = 1
+          GROUP BY p.termo
+          ORDER BY MAX(p.peso) DESC`,
     termo ? [termo] : []
   );
 

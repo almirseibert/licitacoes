@@ -5,6 +5,7 @@
 // é como se perde uma disputa antes de começar. O que você informa é custo e
 // margem; o preço, o semáforo e o total o painel calcula.
 const pool = require('../config/db');
+const { daOrganizacao } = require('./escopo');
 const regras = require('../regras/proposta');
 const precos = require('./preco');
 const perfis = require('./perfil');
@@ -32,8 +33,12 @@ function numero(valor) {
   return Number.isFinite(n) ? n : null;
 }
 
-async function licitacaoDe(licitacaoId) {
-  const [[licitacao]] = await pool.query('SELECT * FROM licitacoes WHERE id = ?', [licitacaoId]);
+async function licitacaoDe(organizacaoId, licitacaoId) {
+  // Com as colunas da organização (grupo, custo): a referência de preço usa o grupo.
+  const [[licitacao]] = await pool.query(
+    `SELECT * FROM ${daOrganizacao(organizacaoId, { todas: true })} l WHERE id = ?`,
+    [licitacaoId]
+  );
   if (!licitacao) throw new Error('Licitação não encontrada.');
   return licitacao;
 }
@@ -44,13 +49,13 @@ async function licitacaoDe(licitacaoId) {
  * Copia, não referencia: o edital pode ser retificado depois e a proposta que
  * você assinou tem de continuar dizendo o que você assinou.
  */
-async function criar({ licitacaoId, perfilId = null }) {
-  const licitacao = await licitacaoDe(licitacaoId);
-  const perfil = await perfis.padrao(perfilId);
+async function criar({ organizacaoId, licitacaoId, perfilId = null }) {
+  const licitacao = await licitacaoDe(organizacaoId, licitacaoId);
+  const perfil = await perfis.padrao(organizacaoId, perfilId);
 
   const [resultado] = await pool.query(
-    'INSERT INTO propostas (licitacao_id, perfil_id) VALUES (?, ?)',
-    [licitacao.id, perfil.id]
+    'INSERT INTO propostas (organizacao_id, licitacao_id, perfil_id) VALUES (?, ?, ?)',
+    [organizacaoId, licitacao.id, perfil.id]
   );
 
   const copiados = await puxarItens(resultado.insertId);
@@ -95,15 +100,15 @@ async function puxarItens(propostaId) {
 }
 
 /** As propostas de uma licitação, para a aba e para o bloco 3 do envio. */
-async function listar(licitacaoId) {
+async function listar(organizacaoId, licitacaoId) {
   const [linhas] = await pool.query(
     `SELECT p.id, p.status, p.valor_total, p.custo_total, p.margem_media, p.arquivo_pdf, p.arquivo_xlsx,
             p.criado_em, p.atualizado_em,
             (SELECT COUNT(*) FROM proposta_itens i WHERE i.proposta_id = p.id AND i.disputar = 1) AS itens
        FROM propostas p
-      WHERE p.licitacao_id = ?
+      WHERE p.organizacao_id = ? AND p.licitacao_id = ?
       ORDER BY p.id DESC`,
-    [licitacaoId]
+    [organizacaoId, licitacaoId]
   );
   return linhas;
 }
@@ -116,7 +121,7 @@ async function obter(propostaId) {
   const [[proposta]] = await pool.query('SELECT * FROM propostas WHERE id = ?', [propostaId]);
   if (!proposta) return null;
 
-  const licitacao = await licitacaoDe(proposta.licitacao_id);
+  const licitacao = await licitacaoDe(proposta.organizacao_id, proposta.licitacao_id);
   const [[perfil]] = await pool.query('SELECT * FROM empresa_perfis WHERE id = ?', [proposta.perfil_id]);
 
   // O estimado unitário fica no edital, não na proposta: a proposta guarda o
@@ -376,13 +381,13 @@ async function remover(propostaId) {
  * As propostas desta licitação que já têm arquivo gerado — é o que o bloco 3
  * da tela "Montar envio" oferece (seção 17.4).
  */
-async function arquivosParaEnvio(licitacaoId) {
+async function arquivosParaEnvio(organizacaoId, licitacaoId) {
   const [linhas] = await pool.query(
     `SELECT id, status, valor_total, arquivo_pdf, arquivo_xlsx, atualizado_em
        FROM propostas
-      WHERE licitacao_id = ? AND (arquivo_pdf IS NOT NULL OR arquivo_xlsx IS NOT NULL)
+      WHERE organizacao_id = ? AND licitacao_id = ? AND (arquivo_pdf IS NOT NULL OR arquivo_xlsx IS NOT NULL)
       ORDER BY FIELD(status, 'final', 'enviada', 'rascunho'), id DESC`,
-    [licitacaoId]
+    [organizacaoId, licitacaoId]
   );
 
   // A proposta do topo da ordem (final antes de rascunho, mais nova antes da

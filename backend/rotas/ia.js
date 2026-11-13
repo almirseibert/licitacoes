@@ -2,6 +2,7 @@
 const express = require('express');
 const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
+const escopo = require('../servicos/escopo');
 const ia = require('../servicos/ia');
 const job = require('../jobs/ia-resumos');
 
@@ -10,17 +11,25 @@ const rotas = express.Router();
 // GET /api/ia — estado e livro-caixa (seção 23.3), para Configurações.
 rotas.get('/', async (req, res) => {
   try {
-    res.json(await ia.gasto({ dias: Number(req.query.dias) || 30 }));
+    const gasto = await ia.gasto({ dias: Number(req.query.dias) || 30 });
+    // O livro-caixa de `ia_execucoes` é do serviço inteiro (cache por edital,
+    // sem organização): só a operadora vê os números. As outras sabem se a
+    // IA está ligada; o uso por organização é a Seção 3 (limites do plano).
+    if (!escopo.ehOperadora(req.organizacaoId)) {
+      return res.json({ dias: gasto.dias, disponivel: gasto.disponivel, modelo: gasto.modelo, por_tipo: [] });
+    }
+    res.json(gasto);
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível ler o gasto com IA.', erro);
   }
 });
 
 // GET /api/ia/palavras-sugeridas — a fila da seção 23.5.
-rotas.get('/palavras-sugeridas', async (_req, res) => {
+rotas.get('/palavras-sugeridas', async (req, res) => {
   try {
     const [dados] = await pool.query(
-      "SELECT * FROM palavras_sugeridas WHERE situacao = 'sugerida' ORDER BY criado_em DESC LIMIT 50"
+      "SELECT * FROM palavras_sugeridas WHERE organizacao_id = ? AND situacao = 'sugerida' ORDER BY criado_em DESC LIMIT 50",
+      [req.organizacaoId]
     );
     res.json({ dados, disponivel: ia.disponivel() });
   } catch (erro) {
@@ -31,7 +40,10 @@ rotas.get('/palavras-sugeridas', async (_req, res) => {
 // POST /api/ia/palavras-sugeridas — pede uma rodada de sugestões agora.
 rotas.post('/palavras-sugeridas', async (req, res) => {
   try {
-    const r = await job.sugerirPalavras({ forcar: Boolean(req.body && req.body.forcar) });
+    const r = await job.sugerirPalavras({
+      organizacaoId: req.organizacaoId,
+      forcar: Boolean(req.body && req.body.forcar),
+    });
     if (!r.ok) return res.status(r.desligada ? 409 : 422).json({ erro: r.motivo });
     res.json({ ...r, mensagem: `${r.gravadas} termo(s) novo(s) sugeridos.` });
   } catch (erro) {
@@ -53,7 +65,10 @@ rotas.patch('/palavras-sugeridas/:id', async (req, res) => {
   }
 
   try {
-    const [[sugestao]] = await pool.query('SELECT * FROM palavras_sugeridas WHERE id = ?', [req.params.id]);
+    const [[sugestao]] = await pool.query('SELECT * FROM palavras_sugeridas WHERE id = ? AND organizacao_id = ?', [
+      req.params.id,
+      req.organizacaoId,
+    ]);
     if (!sugestao) return res.status(404).json({ erro: 'Sugestão não encontrada.' });
 
     if (situacao === 'aceita') {
@@ -61,14 +76,18 @@ rotas.patch('/palavras-sugeridas/:id', async (req, res) => {
       // centenas de licitações sem você ter olhado o termo é o oposto de ajudar.
       // Você liga na tela de Palavras-chave depois de simular.
       await pool.query(
-        `INSERT INTO palavras_chave (termo, grupo, ativa, peso)
-         VALUES (?, ?, 0, 1)
+        `INSERT INTO palavras_chave (organizacao_id, termo, grupo, ativa, peso)
+         VALUES (?, ?, ?, 0, 1)
          ON DUPLICATE KEY UPDATE grupo = COALESCE(palavras_chave.grupo, VALUES(grupo))`,
-        [sugestao.termo, sugestao.grupo]
+        [req.organizacaoId, sugestao.termo, sugestao.grupo]
       );
     }
 
-    await pool.query('UPDATE palavras_sugeridas SET situacao = ? WHERE id = ?', [situacao, req.params.id]);
+    await pool.query('UPDATE palavras_sugeridas SET situacao = ? WHERE id = ? AND organizacao_id = ?', [
+      situacao,
+      req.params.id,
+      req.organizacaoId,
+    ]);
     res.json({
       ok: true,
       mensagem:

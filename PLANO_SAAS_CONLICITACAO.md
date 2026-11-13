@@ -26,7 +26,7 @@ cofre de senha de portal e a assinatura digital (ver a tabela de divergências n
 
 | Fase | Seções | O que o cliente ganha | Marco |
 |---|---|---|---|
-| **A — Fundação SaaS** | 0 ✅, 1 (1a ✅, 1b), 2, 3 | Conta própria, equipe, dados isolados, tema claro/escuro, plano e cobrança | Dá para cobrar e isolar clientes |
+| **A — Fundação SaaS** | 0 ✅, 1 (1a ✅, 1b ✅, 1c), 2, 3 | Conta própria, equipe, dados isolados, tema claro/escuro, plano e cobrança | Dá para cobrar e isolar clientes |
 | **B — Paridade de captação** | 4, 7, 8, 9, 10 | Boletim diário, banco de licitações completo, gestão com tarefas, avisos por tipo, documentos | Substitui o uso diário do ConLicitação na captação |
 | **C — IA e inteligência** | 5, 11, 12, 13, 14, 15, 17 | Pergunte ao Edital, resumo com checklist, acompanhamentos, contratos e atas, concorrentes e mercado, API, onboarding | **Versão 1 vendável** — fim da Fase C |
 | **D — Estratégia e automação** | 6, 16 | Monitor de chat, alerta de deserta por segmento, consultor jurídico | Planos mais caros |
@@ -92,20 +92,50 @@ ponta a ponta, não mock):**
 - [x] Registrada a divergência na migração 016 (comentário) — a seção 2/13 da spec vira
       multiempresa.
 
-**Seção 1b — pendente, cada item exige banco real antes de fechar:**
-- [ ] Mover pontuação/etapa/favorito/descartada de `licitacoes` para `org_licitacoes`, rota a
-      rota (Radar, Funil, Diagnóstico, Estratégicas, `executar-repontuar.js`), sem quebrar quem
-      já usa o painel hoje.
-- [ ] Escopar por `organizacao_id` as ~15 rotas restantes que leem as tabelas da migração 017
-      (Configurações/perfil, Cofre, Kits, Modelos, Funil, Alertas, Contratos, Questionamentos).
-- [ ] Decidir o que fazer com `configuracoes` (separar ajuste de operação de preferência do
-      cliente) antes de lhe dar `organizacao_id`.
-- [ ] Cofre em disco por organização: hoje o caminho em `DIR_DADOS` não leva `organizacao_id` —
-      a tabela já isola a referência no banco, mas o arquivo físico ainda não.
-- [ ] Frontend: telas de cadastro de organização, convite, aceitar convite, trocar de
-      organização e "Equipe" — o login atual continua funcionando sem nenhuma mudança porque o
-      formato da resposta de `/api/auth/login` não mudou.
-- [ ] Recuperação de senha.
+**Seção 1b — entregue em 13/11/2026, verificada contra MariaDB 10.11 real com 450 licitações
+reais do PNCP (RS/SC, propostas abertas) e duas organizações pela API:**
+- [x] Pontuação/etapa/favorito/descartada (e grupo, palavra casada, objeto social, pode
+      participar, proposta, custo, resultado digitado, decisão da IA) movidos para
+      `org_licitacoes` (migração `018_org_licitacoes.sql`), com cópia para a organização 1 e as
+      colunas apagadas de `licitacoes`. Visões em `backend/servicos/escopo.js`; coleta e
+      `repontuar` pontuam por organização; Radar, Funil, Diagnóstico, Estratégicas e
+      `executar-repontuar.js` lêem a visão da organização.
+- [x] Escopadas por `organizacao_id` as rotas e serviços das tabelas da 017: Configurações/perfil,
+      Cofre, Kits, Modelos, Envio, Declarações, Propostas, Funil/anotações, Alertas, Contratos e
+      marcos, Questionamentos, Monitor, Oportunidades, IA, Preço, Concorrentes, Dossiês, Painel.
+      Fontes ficam catálogo, mantidas só pela organização operadora.
+- [x] `configuracoes` decidido: operação (janela de coleta, teto de download) global e só da
+      operadora; destino de alerta por organização em `org_configuracoes`.
+- [x] Cofre em disco por organização: `org/<id>/…` para documento, pacote, declaração, anexo e
+      proposta novos (os antigos seguem pelo caminho gravado no banco).
+- [x] Frontend: criar conta, aceite de convite, esqueci/redefinir senha, Equipe e seletor de
+      organização.
+- [x] Recuperação de senha (token de uso único, 1 h, hash no banco, 3 pedidos/hora).
+- [x] Achado na revisão e corrigido: convite para e-mail com conta exige a senha dela (antes o
+      link sozinho entregava a conta); papel e vínculo relidos a cada requisição.
+
+**Aceite da Seção 1b (medido):** roteiro de 53 conferências pela API real, 53/53. Radar próprio
+sobre o mesmo catálogo (org 1: topo "nobreak" 70 pts, 272 pontuadas; org 2: topo "reforma"
+88 pts, 450 pontuadas); etapa, favorito, descarte, custo, valor final, anotação, monitor e
+diagnóstico de uma não aparecem na outra; 404 ao ler/editar/apagar pelo id perfil, documento,
+kit, modelo, proposta, questionamento, contrato, marco e alerta da outra organização; 403 para
+fonte e ajuste de operação fora da operadora; leitor GET 200 / PATCH 403; rebaixado 403 e
+removido 401 na hora; convite p/ conta existente sem senha 401, com senha 200; redefinir 200,
+reuso 410. Cópia da 018: hash idêntico das 450 linhas da org 1 antes e depois. 20 jobs do worker
+sem erro. Lint limpo, 50/50 testes.
+**Não verificado:** coleta pelo adaptador do PNCP de ponta a ponta (a busca `/api/search` não
+responde deste ambiente; os dados vieram da API de consulta) e envio real de e-mail (sem SMTP).
+
+**Seção 1c — pendente (achados da revisão da 1b):**
+- [ ] Monitor: a mesma licitação monitorada por N organizações vai N vezes ao portal — checar uma
+      vez por licitação e espalhar o evento (conduta 5.4).
+- [ ] `licitacao_exigencias.confirmado_por_usuario` ainda é do catálogo: a correção manual de uma
+      organização vale para todas (CLAUDE.md lista como decisão do usuário).
+- [ ] `alertas.listar` junta com a visão do catálogo inteiro; trocar por LEFT JOIN direto em
+      `org_licitacoes` antes de o catálogo crescer.
+- [ ] Ficha de concorrente/órgão e recorrências usam o grupo da organização operadora.
+- [ ] Rodar a coleta pelo adaptador do PNCP (busca textual) num ambiente que alcance
+      `/api/search` e conferir as linhas de `org_licitacoes` criadas por organização.
 
 **Aceite da Seção 1a (medido):** duas organizações criadas por `/api/auth/cadastro`; a
 organização 2 só viu sua própria palavra-chave em `/api/palavras`, recebeu 404 ao tentar editar

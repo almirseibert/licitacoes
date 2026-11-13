@@ -15,7 +15,7 @@ rotas.get('/', async (req, res) => {
   const dias = servico.PERIODOS.some((p) => p.dias === pedido) ? pedido : 90;
 
   try {
-    const diagnostico = await servico.diagnosticar({ dias });
+    const diagnostico = await servico.diagnosticar({ organizacaoId: req.organizacaoId, dias });
     res.json({
       ...diagnostico,
       // O catálogo vai junto: é o que preenche o seletor de "qual exigência
@@ -31,9 +31,9 @@ rotas.get('/', async (req, res) => {
 
 // POST /api/diagnostico/descartar-vencidas — o job da seção 20.4 na mão, para
 // quem não quiser esperar a rodada do worker.
-rotas.post('/descartar-vencidas', async (_req, res) => {
+rotas.post('/descartar-vencidas', async (req, res) => {
   try {
-    const resultado = await descartarVencidas.descartarVencidas();
+    const resultado = await descartarVencidas.descartarVencidas({ organizacaoId: req.organizacaoId });
     res.json({
       ...resultado,
       mensagem: resultado.descartadas

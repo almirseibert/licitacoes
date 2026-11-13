@@ -14,6 +14,7 @@ const rotas = express.Router({ mergeParams: true });
 rotas.get('/', async (req, res) => {
   try {
     const montagem = await envio.montar({
+      organizacaoId: req.organizacaoId,
       licitacaoId: Number(req.params.id),
       kitId: req.query.kit_id || null,
       perfilId: req.query.perfil_id || null,
@@ -32,6 +33,7 @@ rotas.post('/', async (req, res) => {
     const formato = corpo.formato === 'zip' ? 'zip' : 'pdf';
 
     const preparado = await envio.gerar({
+      organizacaoId: req.organizacaoId,
       licitacaoId,
       kitId: corpo.kit_id || null,
       perfilId: corpo.perfil_id || null,
@@ -46,7 +48,8 @@ rotas.post('/', async (req, res) => {
 
     const { licitacao, perfil, pecas, montagem, vencidosIncluidos, lacunas } = preparado;
     const nome = pacote.nomeDoPacote({ licitacao, perfil, formato });
-    const pasta = `pacotes/${licitacaoId}`;
+    // Seção 1b: pacote é da organização, também no disco.
+    const pasta = `org/${req.organizacaoId}/pacotes/${licitacaoId}`;
 
     let gravado;
     let folhas = null;
@@ -111,9 +114,10 @@ rotas.post('/', async (req, res) => {
 
     const [r] = await pool.query(
       `INSERT INTO pacotes
-         (licitacao_id, perfil_id, kit_id, formato, arquivo_zip, nome_arquivo, tamanho_bytes, folhas, itens, faltando, observacao)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?)`,
+         (organizacao_id, licitacao_id, perfil_id, kit_id, formato, arquivo_zip, nome_arquivo, tamanho_bytes, folhas, itens, faltando, observacao)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CAST(? AS JSON), CAST(? AS JSON), ?)`,
       [
+        req.organizacaoId,
         licitacaoId, perfil.id, montagem.kit.id, formato, gravado.caminho, nome,
         gravado.tamanho, folhas,
         JSON.stringify(itens), JSON.stringify(montagem.faltando), observacao || null,
@@ -142,7 +146,10 @@ rotas.post('/', async (req, res) => {
 // POST /repetir/:pacoteId — mesma seleção, datas revalidadas (seção 17.6).
 rotas.post('/repetir/:pacoteId', async (req, res) => {
   try {
-    const [[anterior]] = await pool.query('SELECT * FROM pacotes WHERE id = ?', [req.params.pacoteId]);
+    const [[anterior]] = await pool.query('SELECT * FROM pacotes WHERE id = ? AND organizacao_id = ?', [
+      req.params.pacoteId,
+      req.organizacaoId,
+    ]);
     if (!anterior) return res.status(404).json({ erro: 'Envio anterior não encontrado.' });
 
     const itens = typeof anterior.itens === 'string' ? JSON.parse(anterior.itens || '[]') : anterior.itens || [];
@@ -153,9 +160,9 @@ rotas.post('/repetir/:pacoteId', async (req, res) => {
     const [atuais] = codigos.length
       ? await pool.query(
           `SELECT id, codigo FROM empresa_documentos
-            WHERE perfil_id = ? AND ativo = 1 AND codigo IN (${codigos.map(() => '?').join(',')})
+            WHERE organizacao_id = ? AND perfil_id = ? AND ativo = 1 AND codigo IN (${codigos.map(() => '?').join(',')})
             ORDER BY versao DESC`,
-          [anterior.perfil_id, ...codigos]
+          [req.organizacaoId, anterior.perfil_id, ...codigos]
         )
       : [[]];
 
@@ -184,8 +191,8 @@ rotas.post('/repetir/:pacoteId', async (req, res) => {
 rotas.get('/pacotes/:pacoteId/arquivo', async (req, res) => {
   try {
     const [[registro]] = await pool.query(
-      'SELECT * FROM pacotes WHERE id = ? AND licitacao_id = ?',
-      [req.params.pacoteId, req.params.id]
+      'SELECT * FROM pacotes WHERE id = ? AND licitacao_id = ? AND organizacao_id = ?',
+      [req.params.pacoteId, req.params.id, req.organizacaoId]
     );
     if (!registro || !registro.arquivo_zip) return res.status(404).json({ erro: 'Pacote não encontrado.' });
     if (!arquivos.dentroDoVolume(registro.arquivo_zip)) {
@@ -212,11 +219,14 @@ rotas.post('/anexos', (req, res) => {
     try {
       if (!req.file) return res.status(400).json({ erro: 'Anexe o arquivo.' });
       const titulo = String((req.body && req.body.titulo) || req.file.originalname || 'Anexo').slice(0, 160);
-      const gravado = upload.gravar(req.file, `anexos/${req.params.id}`);
+      const [[existe]] = await pool.query('SELECT id FROM licitacoes WHERE id = ?', [req.params.id]);
+      if (!existe) return res.status(404).json({ erro: 'Licitação não encontrada.' });
+      const gravado = upload.gravar(req.file, `org/${req.organizacaoId}/anexos/${req.params.id}`);
 
       const [r] = await pool.query(
-        'INSERT INTO licitacao_anexos (licitacao_id, titulo, nome_arquivo, arquivo_path, tamanho_bytes) VALUES (?, ?, ?, ?, ?)',
-        [req.params.id, titulo, gravado.nome, gravado.caminho, gravado.tamanho]
+        `INSERT INTO licitacao_anexos (organizacao_id, licitacao_id, titulo, nome_arquivo, arquivo_path, tamanho_bytes)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [req.organizacaoId, req.params.id, titulo, gravado.nome, gravado.caminho, gravado.tamanho]
       );
       res.status(201).json({ ok: true, id: r.insertId, mensagem: `"${titulo}" anexado a esta licitação.` });
     } catch (erro) {
@@ -228,8 +238,8 @@ rotas.post('/anexos', (req, res) => {
 rotas.delete('/anexos/:anexoId', async (req, res) => {
   try {
     const [r] = await pool.query(
-      'DELETE FROM licitacao_anexos WHERE id = ? AND licitacao_id = ?',
-      [req.params.anexoId, req.params.id]
+      'DELETE FROM licitacao_anexos WHERE id = ? AND licitacao_id = ? AND organizacao_id = ?',
+      [req.params.anexoId, req.params.id, req.organizacaoId]
     );
     if (!r.affectedRows) return res.status(404).json({ erro: 'Anexo não encontrado.' });
     res.json({ ok: true });

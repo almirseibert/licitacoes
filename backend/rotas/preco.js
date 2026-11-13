@@ -2,6 +2,7 @@
 const express = require('express');
 const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
+const escopo = require('../servicos/escopo');
 const servico = require('../servicos/preco');
 const encerradas = require('../jobs/encerradas');
 const adaptadores = require('../adaptadores');
@@ -11,7 +12,7 @@ const rotas = express.Router({ mergeParams: true });
 // GET /preco — o bloco "fecha normalmente por X" da seção 12.
 rotas.get('/preco', async (req, res) => {
   try {
-    const resumo = await servico.resumoDaLicitacao(Number(req.params.id));
+    const resumo = await servico.resumoDaLicitacao(req.organizacaoId, Number(req.params.id));
     if (!resumo) return res.status(404).json({ erro: 'Licitação não encontrada.' });
     res.json(resumo);
   } catch (erro) {
@@ -32,13 +33,17 @@ rotas.patch('/preco', async (req, res) => {
       }
     }
 
-    const [r] = await pool.query('UPDATE licitacoes SET custo_estimado = ? WHERE id = ?', [
+    // O custo é da organização (Seção 1b), não do catálogo.
+    if (!(await escopo.garantirLinha(pool, req.organizacaoId, req.params.id))) {
+      return res.status(404).json({ erro: 'Licitação não encontrada.' });
+    }
+    await pool.query('UPDATE org_licitacoes SET custo_estimado = ? WHERE organizacao_id = ? AND licitacao_id = ?', [
       custo,
+      req.organizacaoId,
       req.params.id,
     ]);
-    if (!r.affectedRows) return res.status(404).json({ erro: 'Licitação não encontrada.' });
 
-    res.json(await servico.resumoDaLicitacao(Number(req.params.id)));
+    res.json(await servico.resumoDaLicitacao(req.organizacaoId, Number(req.params.id)));
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível salvar o custo.', erro);
   }

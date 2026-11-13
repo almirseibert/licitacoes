@@ -8,23 +8,24 @@ const email = require('./email');
 const whatsapp = require('./whatsapp');
 
 /**
+ * @param {number} organizacaoId - de quem é o aviso; o destino é dela (Seção 1b).
  * @param {Array<{mensagem:string, quando?:Date|string}>} avisos
  * @returns {{email:object, whatsapp:object}}
  */
-async function avisar(avisos) {
+async function avisar(organizacaoId, avisos) {
   if (!avisos || !avisos.length) {
     const nada = { enviado: false, motivo: 'nada a enviar' };
     return { email: nada, whatsapp: nada };
   }
   // Em sequência, não em paralelo: são dois serviços de terceiro e a ordem do
   // log fica legível. São duas requisições por rodada, não vale paralelizar.
-  const porEmail = await email.enviarAvisos(avisos);
-  const porWhatsapp = await whatsapp.enviarAvisos(avisos);
+  const porEmail = await email.enviarAvisos(organizacaoId, avisos);
+  const porWhatsapp = await whatsapp.enviarAvisos(organizacaoId, avisos);
   return { email: porEmail, whatsapp: porWhatsapp };
 }
 
-async function canais() {
-  return { email: await email.configurado(), whatsapp: await whatsapp.configurado() };
+async function canais(organizacaoId) {
+  return { email: await email.configurado(organizacaoId), whatsapp: await whatsapp.configurado(organizacaoId) };
 }
 
 module.exports = { avisar, canais };

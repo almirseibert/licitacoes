@@ -14,7 +14,8 @@ rotas.get('/', async (req, res) => {
     const org = req.organizacaoId;
     const [palavras] = await pool.query(
       `SELECT p.*,
-              (SELECT COUNT(*) FROM licitacoes l WHERE l.palavra_casada = p.termo AND l.descartada = 0) AS licitacoes
+              (SELECT COUNT(*) FROM org_licitacoes o
+                WHERE o.organizacao_id = p.organizacao_id AND o.palavra_casada = p.termo AND o.descartada = 0) AS licitacoes
          FROM palavras_chave p
         WHERE p.organizacao_id = ?
         ORDER BY p.grupo ASC, p.peso DESC, p.termo ASC`,
@@ -214,6 +215,7 @@ rotas.post('/simular', async (req, res) => {
       peso: Number(req.body.peso) || 10,
       simular: true,
       limitePaginas: 1,
+      organizacaoId: req.organizacaoId,
     });
 
     res.json({

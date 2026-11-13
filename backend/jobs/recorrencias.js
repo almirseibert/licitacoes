@@ -15,6 +15,7 @@
 // prever a partir de uma compra é adivinhação, e adivinhação na tela vira
 // desconfiança em tudo o mais que o painel diz.
 const pool = require('../config/db');
+const escopo = require('../servicos/escopo');
 const fila = require('../servicos/fila');
 const alertas = require('../servicos/alertas');
 const similaridade = require('../regras/similaridade');
@@ -133,12 +134,15 @@ async function detectarRecorrencias({ anos = ANOS } = {}) {
       WHERE orgao_cnpj IS NOT NULL AND assinatura_objeto IS NOT NULL AND assinatura_objeto <> ''
         AND COALESCE(encerrada_em, publicada_em) >= DATE_SUB(CURDATE(), INTERVAL ? YEAR)
       UNION ALL
-     SELECT orgao_cnpj, orgao_nome, uf, grupo, objeto, assinatura_objeto,
-            valor_estimado, valor_homologado, NULL AS desconto,
-            DATE(COALESCE(fim_propostas, criado_em)) AS quando, vencedor
-       FROM licitacoes
-      WHERE orgao_cnpj IS NOT NULL AND assinatura_objeto IS NOT NULL AND assinatura_objeto <> ''
-        AND COALESCE(fim_propostas, criado_em) >= DATE_SUB(CURDATE(), INTERVAL ? YEAR)
+     SELECT l.orgao_cnpj, l.orgao_nome, l.uf, og.grupo, l.objeto, l.assinatura_objeto,
+            l.valor_estimado, l.valor_homologado, NULL AS desconto,
+            DATE(COALESCE(l.fim_propostas, l.criado_em)) AS quando, l.vencedor
+       FROM licitacoes l
+       -- Seção 1b: o grupo (das palavras-chave) é de cada organização; a
+       -- recorrência é do catálogo e usa a classificação da operadora.
+       LEFT JOIN org_licitacoes og ON og.licitacao_id = l.id AND og.organizacao_id = ${escopo.ORGANIZACAO_OPERADORA}
+      WHERE l.orgao_cnpj IS NOT NULL AND l.assinatura_objeto IS NOT NULL AND l.assinatura_objeto <> ''
+        AND COALESCE(l.fim_propostas, l.criado_em) >= DATE_SUB(CURDATE(), INTERVAL ? YEAR)
       ORDER BY orgao_cnpj, quando`,
     [anos, anos]
   );
@@ -269,7 +273,16 @@ async function avisarRecorrencias({ confiancaMinima = 0.5 } = {}) {
     const vencedor = r.ultimo_vencedor ? `, da última vez com ${r.ultimo_vencedor}` : '';
     const objeto = String(r.objeto_exemplo || r.assinatura_objeto).replace(/\s+/g, ' ').slice(0, 120);
 
+    // Recorrência é padrão do órgão (catálogo): avisa as organizações que já
+    // pontuaram licitação dele com o mesmo objeto (Seção 1b).
+    const [doOrgao] = await pool.query(
+      'SELECT id FROM licitacoes WHERE orgao_cnpj = ? AND assinatura_objeto = ?',
+      [r.orgao_cnpj, r.assinatura_objeto]
+    );
+    const interessadas = await escopo.organizacoesInteressadas(pool, doOrgao.map((l) => l.id));
+    for (const organizacaoId of interessadas) {
     const criado = await alertas.criar({
+      organizacaoId,
       tipo: 'recorrencia',
       nivel: marco === 30 ? 'atencao' : 'info',
       // Um alerta por marco e por ano previsto: a previsão de 2027 não é
@@ -281,6 +294,7 @@ async function avisarRecorrencias({ confiancaMinima = 0.5 } = {}) {
         `${mes ? ` em ${mes}` : ''}${valor}${vencedor}. Previsto em ${marco} dias.`,
     });
     if (criado) criados += 1;
+    }
   }
 
   return { previstas: linhas.length, criados };

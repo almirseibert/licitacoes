@@ -10,6 +10,7 @@ const fs = require('fs');
 const path = require('path');
 
 const pool = require('../config/db');
+const escopo = require('../servicos/escopo');
 const fila = require('../servicos/fila');
 const arquivos = require('../servicos/arquivos');
 const documento = require('../servicos/texto-documento');
@@ -176,7 +177,7 @@ async function gravarIndefinido(licitacaoId) {
 /** Enfileira a leitura das licitações que já têm documento e ainda não foram lidas. */
 async function lerEditais({ limite = 20 } = {}) {
   const [linhas] = await pool.query(
-    `SELECT id FROM licitacoes
+    `SELECT id FROM ${escopo.agregadoDasOrganizacoes()} l
       WHERE arquivos_status IN ('ok','parcial')
         AND exigencias_status = 'nao_lido'
         AND descartada = 0

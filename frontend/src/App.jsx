@@ -1,7 +1,10 @@
-import { useState } from 'react';
-import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut } from 'lucide-react';
-import { obterToken, obterUsuario, encerrarSessao } from './servicos/api';
+import { useEffect, useState } from 'react';
+import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users } from 'lucide-react';
+import { api, obterToken, obterUsuario, obterOrganizacao, guardarSessao, encerrarSessao } from './servicos/api';
 import Login from './paginas/Login';
+import Convite from './paginas/Convite';
+import RedefinirSenha from './paginas/RedefinirSenha';
+import Equipe from './paginas/Equipe';
 import Radar from './paginas/Radar';
 import Fontes from './paginas/Fontes';
 import Palavras from './paginas/Palavras';
@@ -32,20 +35,74 @@ const TELAS = [
   { chave: 'relatorio', rotulo: 'Relatório mensal', icone: BarChart3 },
   { chave: 'cofre', rotulo: 'Documentos', icone: FolderLock },
   { chave: 'modelos', rotulo: 'Declarações', icone: FileSignature },
+  { chave: 'equipe', rotulo: 'Equipe', icone: Users },
   { chave: 'configuracoes', rotulo: 'Configurações', icone: SlidersHorizontal },
 ];
+
+// Links que chegam por e-mail (Seção 1b): /convite/<token> e
+// /redefinir-senha/<token>. O painel não tem roteador; o caminho é lido uma vez.
+function linkDeEmail() {
+  const achado = window.location.pathname.match(/^\/(convite|redefinir-senha)\/([A-Za-z0-9]+)\/?$/);
+  return achado ? { tipo: achado[1], token: achado[2] } : null;
+}
+
+function voltarParaRaiz() {
+  window.history.replaceState(null, '', '/');
+}
 
 export default function App() {
   const [usuario, setUsuario] = useState(() => (obterToken() ? obterUsuario() : null));
   const [tela, setTela] = useState('radar');
   // O sino e o funil abrem a gaveta de uma licitação pelo Radar.
   const [licitacaoAberta, setLicitacaoAberta] = useState(null);
+  const [link, setLink] = useState(linkDeEmail);
+  const [organizacao, setOrganizacao] = useState(obterOrganizacao);
+  const [organizacoes, setOrganizacoes] = useState([]);
 
-  if (!usuario) return <Login onEntrar={setUsuario} />;
+  // A lista de organizações do usuário vem do backend (nada de permissão
+  // decidida no frontend): é ela que alimenta o seletor de troca.
+  useEffect(() => {
+    if (!usuario) return;
+    api
+      .eu()
+      .then((r) => {
+        setOrganizacoes(r.organizacoes || []);
+        const atual = (r.organizacoes || []).find((o) => o.id === r.usuario.organizacao_id);
+        if (atual) setOrganizacao(atual);
+      })
+      .catch(() => {});
+  }, [usuario]);
+
+  const entrar = (u) => {
+    voltarParaRaiz();
+    setLink(null);
+    setUsuario(u);
+  };
+  const paraEntrada = () => {
+    voltarParaRaiz();
+    setLink(null);
+  };
+
+  if (link && link.tipo === 'redefinir-senha') return <RedefinirSenha token={link.token} onSair={paraEntrada} />;
+  if (link && link.tipo === 'convite') return <Convite token={link.token} onEntrar={entrar} onSair={paraEntrada} />;
+  if (!usuario) return <Login onEntrar={entrar} />;
 
   const sair = () => {
     encerrarSessao();
     setUsuario(null);
+    setOrganizacoes([]);
+  };
+
+  // Trocar de organização reemite o token; a tela recomeça do zero para não
+  // sobrar na memória nada da organização anterior.
+  const trocar = async (id) => {
+    try {
+      const r = await api.trocarOrganizacao(Number(id));
+      guardarSessao(r.token, r.usuario, r.organizacao);
+      window.location.reload();
+    } catch (e) {
+      window.alert(e.message);
+    }
   };
 
   return (
@@ -53,8 +110,22 @@ export default function App() {
       {/* Navegação lateral. Ícones em traço, na cor do texto suave (seção 15). */}
       <nav className="w-14 md:w-52 shrink-0 border-r border-borda bg-superficie/40 flex flex-col">
         <div className="px-3 py-4 border-b border-borda">
-          <p className="font-titulo text-sm leading-tight hidden md:block">Studio Mythos</p>
+          <p className="font-titulo text-sm leading-tight hidden md:block truncate">
+            {(organizacao && organizacao.nome) || 'Painel'}
+          </p>
           <p className="text-[10px] uppercase tracking-widest text-texto-suave hidden md:block">Licitações</p>
+          {organizacoes.length > 1 && (
+            <select
+              className="campo-caixa w-full mt-2 text-xs hidden md:block"
+              aria-label="Trocar de organização"
+              value={organizacao ? organizacao.id : ''}
+              onChange={(e) => trocar(e.target.value)}
+            >
+              {organizacoes.map((o) => (
+                <option key={o.id} value={o.id}>{o.nome}</option>
+              ))}
+            </select>
+          )}
           <p className="font-titulo text-base md:hidden text-center">SM</p>
         </div>
 
@@ -112,6 +183,7 @@ export default function App() {
           <Diagnostico aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />
         )}
         {tela === 'relatorio' && <Relatorio />}
+        {tela === 'equipe' && <Equipe />}
         {tela === 'configuracoes' && <Configuracoes />}
       </main>
     </div>

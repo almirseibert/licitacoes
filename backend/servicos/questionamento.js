@@ -9,6 +9,7 @@ const pool = require('../config/db');
 const regras = require('../regras/prazos');
 const feriados = require('./feriados');
 const perfilEmpresa = require('./perfil');
+const { daOrganizacao } = require('./escopo');
 const declaracao = require('./declaracao');
 
 /**
@@ -119,10 +120,12 @@ const POR_CODIGO = new Map(MODELOS.map((m) => [m.codigo, m]));
  * Guarda o resultado em `licitacoes.prazo_questionamento` para o Radar não
  * refazer a conta a cada abertura de tela.
  */
-async function calcular(licitacaoId, { gravar = true } = {}) {
+async function calcular(organizacaoId, licitacaoId, { gravar = true } = {}) {
+  // O prazo é fato público da licitação; a organização entra só para o
+  // detalhe valer para quem pergunta (Seção 1b).
   const [[licitacao]] = await pool.query(
     `SELECT id, abertura_propostas, fim_propostas, uf, municipio, orgao_nome, etapa, favorito, pontuacao
-       FROM licitacoes WHERE id = ?`,
+       FROM ${daOrganizacao(organizacaoId, { todas: true })} l WHERE id = ?`,
     [licitacaoId]
   );
   if (!licitacao) return null;
@@ -162,35 +165,36 @@ async function calcular(licitacaoId, { gravar = true } = {}) {
 }
 
 /** O texto do modelo, já com as variáveis da licitação trocadas. */
-async function montarTexto({ licitacaoId, codigo }) {
+async function montarTexto({ organizacaoId, licitacaoId, codigo }) {
   const modelo = POR_CODIGO.get(codigo);
   if (!modelo) throw new Error(`Modelo desconhecido: ${codigo}.`);
 
   const [[licitacao]] = await pool.query('SELECT * FROM licitacoes WHERE id = ?', [licitacaoId]);
   if (!licitacao) throw new Error('Licitação não encontrada.');
 
-  const perfil = await perfilEmpresa.padrao();
+  const perfil = await perfilEmpresa.padrao(organizacaoId);
   const { texto, faltando } = declaracao.preencher(modelo.corpo, declaracao.variaveis({ licitacao, perfil }));
 
   return { modelo, texto, faltando, titulo: modelo.titulo, tipo: modelo.tipo };
 }
 
-async function listar(licitacaoId) {
+async function listar(organizacaoId, licitacaoId) {
   const [dados] = await pool.query(
-    'SELECT * FROM questionamentos WHERE licitacao_id = ? ORDER BY criado_em DESC',
-    [licitacaoId]
+    'SELECT * FROM questionamentos WHERE organizacao_id = ? AND licitacao_id = ? ORDER BY criado_em DESC',
+    [organizacaoId, licitacaoId]
   );
   return dados;
 }
 
-async function criar({ licitacaoId, tipo, assunto, texto }) {
-  const calculado = await calcular(licitacaoId);
+async function criar({ organizacaoId, licitacaoId, tipo, assunto, texto }) {
+  const calculado = await calcular(organizacaoId, licitacaoId);
+  if (!calculado) throw new Error('Licitação não encontrada.');
   const limite = calculado && calculado.prazo ? calculado.prazo.limite : null;
 
   const [r] = await pool.query(
-    `INSERT INTO questionamentos (licitacao_id, tipo, assunto, prazo_limite, texto_enviado)
-     VALUES (?, ?, ?, ?, ?)`,
-    [licitacaoId, tipo, assunto ? String(assunto).slice(0, 255) : null, limite, texto || null]
+    `INSERT INTO questionamentos (organizacao_id, licitacao_id, tipo, assunto, prazo_limite, texto_enviado)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [organizacaoId, licitacaoId, tipo, assunto ? String(assunto).slice(0, 255) : null, limite, texto || null]
   );
   return { id: r.insertId, prazo_limite: limite };
 }

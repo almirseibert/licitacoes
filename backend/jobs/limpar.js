@@ -77,11 +77,18 @@ async function limparDescartadas({ dias = DIAS_DO_DESCARTE, limite = 200 } = {})
   const resumo = { licitacoes: 0, arquivos: 0, bytes: 0, erros: [] };
 
   const [linhas] = await pool.query(
-    `SELECT a.id, a.licitacao_id, a.caminho, a.tamanho
+    `SELECT a.id, a.licitacao_id, a.caminho, a.tamanho_bytes AS tamanho
        FROM licitacao_arquivos a
        JOIN licitacoes l ON l.id = a.licitacao_id
-      WHERE l.etapa = 'Descartada'
-        AND l.atualizado_em < DATE_SUB(NOW(), INTERVAL ? DAY)
+      -- Seção 1b: o arquivo é do catálogo, e só sai quando TODA organização
+      -- que tem a licitação a descartou há mais de N dias.
+      WHERE EXISTS (SELECT 1 FROM org_licitacoes o WHERE o.licitacao_id = l.id)
+        AND NOT EXISTS (
+          SELECT 1 FROM org_licitacoes o
+           WHERE o.licitacao_id = l.id
+             AND (o.etapa <> 'Descartada'
+                  OR COALESCE(o.descartado_em, o.etapa_em, o.atualizado_em) >= DATE_SUB(NOW(), INTERVAL ? DAY))
+        )
         AND a.status <> 'limpo'
         AND a.caminho IS NOT NULL
       LIMIT ?`,

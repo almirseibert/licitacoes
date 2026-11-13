@@ -16,7 +16,7 @@ function mensagemDe(documento, dias) {
 
 async function verificarValidades() {
   const [documentos] = await pool.query(
-    `SELECT d.id, d.titulo, d.valido_ate, d.renovavel_em, p.nome AS perfil_nome
+    `SELECT d.id, d.organizacao_id, d.titulo, d.valido_ate, d.renovavel_em, p.nome AS perfil_nome
        FROM empresa_documentos d
        JOIN empresa_perfis p ON p.id = d.perfil_id
       WHERE d.ativo = 1 AND d.valido_ate IS NOT NULL`
@@ -38,14 +38,14 @@ async function verificarValidades() {
     // Um por documento, por marco, por dia.
     const [[existe]] = await pool.query(
       `SELECT id FROM alertas
-        WHERE tipo = ? AND documento_id = ? AND DATE(criado_em) = CURDATE() LIMIT 1`,
-      [tipo, documento.id]
+        WHERE organizacao_id = ? AND tipo = ? AND documento_id = ? AND DATE(criado_em) = CURDATE() LIMIT 1`,
+      [documento.organizacao_id, tipo, documento.id]
     );
     if (existe) continue;
 
     await pool.query(
-      'INSERT INTO alertas (tipo, documento_id, mensagem) VALUES (?, ?, ?)',
-      [tipo, documento.id, mensagemDe(documento, luz.dias).slice(0, 500)]
+      'INSERT INTO alertas (organizacao_id, tipo, documento_id, mensagem) VALUES (?, ?, ?, ?)',
+      [documento.organizacao_id, tipo, documento.id, mensagemDe(documento, luz.dias).slice(0, 500)]
     );
     resumo.alertas += 1;
   }

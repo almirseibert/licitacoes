@@ -55,8 +55,67 @@ function exigirPapel(papelMinimo) {
   };
 }
 
+// Seção 1b: o token diz a organização e o papel de quando foi emitido. Sem
+// conferir de novo, quem saiu da equipe (ou foi rebaixado) continuaria com o
+// acesso antigo até o token vencer (8 h). A conferência lê `organizacao_membros`
+// e guarda o resultado por poucos segundos — as rotas de Equipe limpam o cache
+// na hora em que mudam alguém.
+const VALIDADE_VINCULO_MS = 15000;
+const vinculos = new Map(); // "usuario:organizacao" -> { papel, em }
+
+function esquecerVinculo(usuarioId, organizacaoId) {
+  if (usuarioId === undefined) vinculos.clear();
+  else vinculos.delete(`${usuarioId}:${organizacaoId}`);
+}
+
+async function confirmarVinculo(req, res, next) {
+  const chave = `${req.usuario.id}:${req.organizacaoId}`;
+  const guardado = vinculos.get(chave);
+  let papel = guardado && Date.now() - guardado.em < VALIDADE_VINCULO_MS ? guardado.papel : undefined;
+  try {
+    if (papel === undefined) {
+      // Carregado aqui, não no topo: os testes deste módulo rodam sem banco.
+      const pool = require('../config/db');
+      const [[linha]] = await pool.query(
+        `SELECT m.papel FROM organizacao_membros m JOIN usuarios u ON u.id = m.usuario_id
+          WHERE m.usuario_id = ? AND m.organizacao_id = ? AND u.ativo = 1`,
+        [req.usuario.id, req.organizacaoId]
+      );
+      papel = linha ? linha.papel : null;
+      vinculos.set(chave, { papel, em: Date.now() });
+    }
+  } catch (erro) {
+    return next(erro);
+  }
+  if (!papel) return res.status(401).json({ erro: 'Seu acesso a esta organização foi encerrado. Entre novamente.' });
+  // O papel que vale é o de agora, não o do token. `req` é desta requisição
+  // só; nenhuma outra escreve nele entre o await e aqui.
+  // eslint-disable-next-line require-atomic-updates
+  req.papel = papel;
+  return next();
+}
+
+/**
+ * O papel 'leitor' só lê (Seção 1b): toda rota de dado recusa a escrita dele
+ * num ponto só, em vez de cada arquivo de rotas lembrar de pedir 'membro'.
+ */
+function leitorSoLe(req, res, next) {
+  if (req.papel === 'leitor' && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    return res.status(403).json({ erro: 'Seu acesso nesta organização é só de leitura.' });
+  }
+  return next();
+}
+
 function apenasAdmin(req, res, next) {
   return exigirPapel('admin')(req, res, next);
 }
 
-module.exports = { autenticar, apenasAdmin, exigirPapel, NIVEL_PAPEL };
+module.exports = {
+  autenticar,
+  apenasAdmin,
+  exigirPapel,
+  leitorSoLe,
+  confirmarVinculo,
+  esquecerVinculo,
+  NIVEL_PAPEL,
+};

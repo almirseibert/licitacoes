@@ -3,24 +3,41 @@ import { Loader2 } from 'lucide-react';
 import { api, guardarSessao } from '../servicos/api';
 
 /**
- * Login próprio do painel, multiempresa desde a Fase 15 (PLANO_SAAS_CONLICITACAO.md,
- * Seção 1). O cadastro de organização nova e a troca entre organizações ainda não
- * têm tela — ficam para a próxima parte da Seção 1, com o backend já pronto em
- * /api/auth/cadastro e /api/auth/trocar-organizacao.
+ * Entrada do painel, multiempresa (PLANO_SAAS_CONLICITACAO.md, Seção 1b):
+ * entrar, criar a conta de uma empresa nova (vira 'dono' dela, com 15 dias de
+ * teste) e pedir o link de senha nova. O link de senha nova e o de convite
+ * chegam por e-mail e abrem as telas próprias (RedefinirSenha, Convite).
  */
 export default function Login({ onEntrar }) {
-  const [email, setEmail] = useState('');
-  const [senha, setSenha] = useState('');
+  const [modo, setModo] = useState('entrar'); // entrar | cadastrar | esqueci
+  const [campos, setCampos] = useState({ nome: '', organizacao: '', email: '', senha: '' });
   const [erro, setErro] = useState(null);
+  const [aviso, setAviso] = useState(null);
   const [enviando, setEnviando] = useState(false);
+
+  const mudar = (chave) => (e) => setCampos({ ...campos, [chave]: e.target.value });
+  const irPara = (novo) => {
+    setModo(novo);
+    setErro(null);
+    setAviso(null);
+  };
 
   const enviar = async (evento) => {
     evento.preventDefault();
     setEnviando(true);
     setErro(null);
+    setAviso(null);
     try {
-      const r = await api.login(email, senha);
-      guardarSessao(r.token, r.usuario);
+      if (modo === 'esqueci') {
+        const r = await api.recuperarSenha(campos.email);
+        setAviso(r.mensagem);
+        return;
+      }
+      const r =
+        modo === 'cadastrar'
+          ? await api.cadastrar(campos)
+          : await api.login(campos.email, campos.senha);
+      guardarSessao(r.token, r.usuario, r.organizacao);
       onEntrar(r.usuario);
     } catch (e) {
       setErro(e.message);
@@ -29,37 +46,40 @@ export default function Login({ onEntrar }) {
     }
   };
 
-  const campo =
-    'w-full bg-superficie border border-borda rounded px-3 py-2 text-sm ' +
-    'focus:outline-none focus:border-voltagem/60 placeholder:text-texto-suave/50';
+  const titulos = {
+    entrar: ['Painel de Licitações', 'Entre com o seu e-mail e senha'],
+    cadastrar: ['Criar conta', 'Sua empresa entra com 15 dias de teste, sem cartão'],
+    esqueci: ['Esqueci minha senha', 'Mandamos um link para criar uma senha nova'],
+  };
 
   return (
     <div className="min-h-screen grid place-items-center px-4">
       <form onSubmit={enviar} className="w-full max-w-sm">
-        <h1 className="font-titulo text-2xl mb-1">Painel de Licitações</h1>
-        <p className="text-xs text-texto-suave mb-6">Studio Mythos · entre com o acesso do painel</p>
+        <h1 className="font-titulo text-2xl mb-1">{titulos[modo][0]}</h1>
+        <p className="text-xs text-texto-suave mb-6">{titulos[modo][1]}</p>
 
-        <label className="block text-[11px] uppercase tracking-wide text-texto-suave mb-1">E-mail</label>
-        <input
-          className={`${campo} mb-4`}
-          type="email"
-          autoComplete="username"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
+        {modo === 'cadastrar' && (
+          <>
+            <Campo rotulo="Seu nome" valor={campos.nome} aoMudar={mudar('nome')} autoComplete="name" />
+            <Campo rotulo="Nome da empresa" valor={campos.organizacao} aoMudar={mudar('organizacao')} autoComplete="organization" />
+          </>
+        )}
 
-        <label className="block text-[11px] uppercase tracking-wide text-texto-suave mb-1">Senha</label>
-        <input
-          className={`${campo} mb-6`}
-          type="password"
-          autoComplete="current-password"
-          value={senha}
-          onChange={(e) => setSenha(e.target.value)}
-          required
-        />
+        <Campo rotulo="E-mail" tipo="email" valor={campos.email} aoMudar={mudar('email')} autoComplete="username" />
 
-        {erro && <p className="text-xs text-erro mb-4">{erro}</p>}
+        {modo !== 'esqueci' && (
+          <Campo
+            rotulo={modo === 'cadastrar' ? 'Senha (mínimo 8 caracteres)' : 'Senha'}
+            tipo="password"
+            valor={campos.senha}
+            aoMudar={mudar('senha')}
+            autoComplete={modo === 'cadastrar' ? 'new-password' : 'current-password'}
+            minimo={modo === 'cadastrar' ? 8 : undefined}
+          />
+        )}
+
+        {erro && <p className="text-xs text-erro mb-4" role="alert">{erro}</p>}
+        {aviso && <p className="text-xs text-ok mb-4" role="status">{aviso}</p>}
 
         <button
           type="submit"
@@ -67,9 +87,48 @@ export default function Login({ onEntrar }) {
           className="w-full flex items-center justify-center gap-2 bg-voltagem text-obsidiana font-medium rounded py-2 text-sm hover:brightness-110 disabled:opacity-60"
         >
           {enviando && <Loader2 size={14} className="animate-spin" />}
-          Entrar
+          {modo === 'entrar' ? 'Entrar' : modo === 'cadastrar' ? 'Criar conta' : 'Mandar o link'}
         </button>
+
+        <div className="mt-5 flex flex-col gap-1.5 text-xs text-texto-suave">
+          {modo !== 'entrar' && (
+            <button type="button" className="text-left hover:text-texto" onClick={() => irPara('entrar')}>
+              Já tenho conta — entrar
+            </button>
+          )}
+          {modo !== 'cadastrar' && (
+            <button type="button" className="text-left hover:text-texto" onClick={() => irPara('cadastrar')}>
+              Criar conta para a minha empresa
+            </button>
+          )}
+          {modo === 'entrar' && (
+            <button type="button" className="text-left hover:text-texto" onClick={() => irPara('esqueci')}>
+              Esqueci minha senha
+            </button>
+          )}
+        </div>
       </form>
     </div>
+  );
+}
+
+const ESTILO_CAMPO =
+  'w-full bg-superficie border border-borda rounded px-3 py-2 text-sm ' +
+  'focus:outline-none focus:border-voltagem/60 placeholder:text-texto-suave/50';
+
+export function Campo({ rotulo, tipo = 'text', valor, aoMudar, autoComplete, minimo }) {
+  return (
+    <label className="block mb-4">
+      <span className="block text-[11px] uppercase tracking-wide text-texto-suave mb-1">{rotulo}</span>
+      <input
+        className={ESTILO_CAMPO}
+        type={tipo}
+        autoComplete={autoComplete}
+        value={valor}
+        onChange={aoMudar}
+        minLength={minimo}
+        required
+      />
+    </label>
   );
 }

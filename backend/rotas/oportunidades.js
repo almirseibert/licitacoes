@@ -3,6 +3,7 @@
 const express = require('express');
 const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
+const escopo = require('../servicos/escopo');
 const estrategicas = require('../jobs/estrategicas');
 const monitor = require('../servicos/monitor');
 
@@ -22,20 +23,25 @@ rotas.get('/', async (req, res) => {
 
   try {
     const [retomada] = await pool.query(
+      // A situação e a observação da organização (Seção 1b) se sobrepõem às
+      // do catálogo: o descarte de uma organização não some da tela da outra.
       `SELECT o.*,
+              COALESCE(oo.situacao, o.situacao) AS situacao,
+              COALESCE(oo.observacao, o.observacao) AS observacao,
               DATEDIFF(CURDATE(), o.encerrada_em) AS dias_desde,
               n.objeto AS nova_objeto, n.fim_propostas AS nova_fim
          FROM oportunidades_retomada o
+         LEFT JOIN org_oportunidades oo ON oo.oportunidade_id = o.id AND oo.organizacao_id = ?
          LEFT JOIN licitacoes n ON n.id = o.nova_licitacao_id
         WHERE o.encerrada_em >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
-          ${situacao ? 'AND o.situacao = ?' : "AND o.situacao <> 'descartada'"}
+          ${situacao ? 'AND COALESCE(oo.situacao, o.situacao) = ?' : "AND COALESCE(oo.situacao, o.situacao) <> 'descartada'"}
         ORDER BY o.valor_estimado DESC
         LIMIT 300`,
-      situacao ? [dias, situacao] : [dias]
+      situacao ? [req.organizacaoId, dias, situacao] : [req.organizacaoId, dias]
     );
 
     const baixa = await estrategicas.baixaConcorrencia({ dias });
-    const urgentes = await estrategicas.iminencia({});
+    const urgentes = await estrategicas.iminencia({ organizacaoId: req.organizacaoId });
 
     const desertas = retomada.filter((o) => o.tipo === 'deserta');
     const fracassadas = retomada.filter((o) => o.tipo === 'fracassada');
@@ -112,23 +118,28 @@ rotas.patch('/:id', async (req, res) => {
     return res.status(400).json({ erro: `Situação inválida. Use uma de: ${SITUACOES.join(', ')}.` });
   }
   try {
-    const partes = [];
-    const valores = [];
-    if (situacao !== undefined) {
-      partes.push('situacao = ?');
-      valores.push(situacao);
+    if (situacao === undefined && observacao === undefined) {
+      return res.status(400).json({ erro: 'Nada para atualizar.' });
     }
-    if (observacao !== undefined) {
-      partes.push('observacao = ?');
-      valores.push(observacao || null);
-    }
-    if (!partes.length) return res.status(400).json({ erro: 'Nada para atualizar.' });
+    const [[existe]] = await pool.query('SELECT id FROM oportunidades_retomada WHERE id = ?', [req.params.id]);
+    if (!existe) return res.status(404).json({ erro: 'Oportunidade não encontrada.' });
 
-    const [r] = await pool.query(
-      `UPDATE oportunidades_retomada SET ${partes.join(', ')} WHERE id = ?`,
-      [...valores, req.params.id]
+    // A decisão é da organização (Seção 1b): grava em `org_oportunidades`.
+    await pool.query(
+      `INSERT INTO org_oportunidades (organizacao_id, oportunidade_id, situacao, observacao)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE
+         situacao = IF(?, VALUES(situacao), situacao),
+         observacao = IF(?, VALUES(observacao), observacao)`,
+      [
+        req.organizacaoId,
+        req.params.id,
+        situacao === undefined ? null : situacao,
+        observacao === undefined ? null : observacao || null,
+        situacao !== undefined,
+        observacao !== undefined,
+      ]
     );
-    if (!r.affectedRows) return res.status(404).json({ erro: 'Oportunidade não encontrada.' });
     res.json({ ok: true });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível salvar a oportunidade.', erro);
@@ -155,7 +166,7 @@ rotas.post('/:id/acompanhar', async (req, res) => {
     }
 
     const [licitacoes] = await pool.query(
-      `SELECT id FROM licitacoes
+      `SELECT id FROM ${escopo.daOrganizacao(req.organizacaoId, { todas: true })} l
         WHERE orgao_cnpj = ? AND descartada = 0
           AND (fim_propostas IS NULL OR fim_propostas >= DATE_SUB(NOW(), INTERVAL 30 DAY))
         LIMIT 200`,
@@ -163,7 +174,7 @@ rotas.post('/:id/acompanhar', async (req, res) => {
     );
 
     for (const licitacao of licitacoes) {
-      await monitor.ligar({ licitacaoId: licitacao.id, motivo: 'orgao' });
+      await monitor.ligar({ organizacaoId: req.organizacaoId, licitacaoId: licitacao.id, motivo: 'orgao' });
     }
 
     res.json({
