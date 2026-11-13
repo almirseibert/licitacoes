@@ -9,6 +9,7 @@ const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const arquivos = require('../servicos/arquivos');
 const upload = require('../servicos/upload');
+const limites = require('../servicos/limites');
 const { PADROES, sugerirValidade, semaforo, tituloPadrao } = require('../regras/validades');
 const { CATALOGO } = require('../regras/exigencias');
 
@@ -82,6 +83,8 @@ rotas.post('/', (req, res) => {
       const codigo = String(corpo.codigo || '').trim();
       if (!codigo) return res.status(400).json({ erro: 'Escolha o tipo de documento.' });
       if (!req.file) return res.status(400).json({ erro: 'Anexe o arquivo do documento.' });
+      const estouro = await limites.conferir(req.organizacaoId, 'cofre_gb', { acrescimo: req.file.size });
+      if (estouro) return res.status(402).json(estouro);
 
       const perfilId = await perfilAlvo(req.organizacaoId, corpo.perfil_id);
       const titulo = String(corpo.titulo || tituloPadrao(codigo)).slice(0, 160);

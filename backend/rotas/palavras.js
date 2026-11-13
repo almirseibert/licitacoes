@@ -1,6 +1,7 @@
 // /api/palavras — CRUD das palavras-chave e das excluídas (seções 4.2 e 11.4),
 // mais o "Simular", que testa um termo antes de ativá-lo.
 const express = require('express');
+const { exigirLimite } = require('../servicos/limites');
 const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const { coletarFonte } = require('../jobs/coletar');
@@ -75,7 +76,7 @@ function limpar(corpo, { exigirTudo }) {
   return campos;
 }
 
-rotas.post('/', async (req, res) => {
+rotas.post('/', exigirLimite('palavras_chave'), async (req, res) => {
   try {
     const campos = limpar(req.body || {}, { exigirTudo: true });
     campos.organizacao_id = req.organizacaoId;

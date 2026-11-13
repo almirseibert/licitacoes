@@ -4,6 +4,7 @@ const pool = require('../config/db');
 const regras = require('../regras/monitor');
 const alertas = require('./alertas');
 const escopo = require('./escopo');
+const limites = require('./limites');
 
 /**
  * Registra um evento na linha do tempo (seção 21.4).
@@ -74,6 +75,14 @@ async function desligar(organizacaoId, licitacaoId, motivo = null) {
  * (seção 21.2): o que está em disputa, o favorito, e as encerradas recentes
  * que alimentam a base de preços.
  */
+async function podeAcompanhar(organizacaoId) {
+  const dados = await limites.daOrganizacao(organizacaoId);
+  if (!dados) return false;
+  if (dados.isenta) return true;
+  if (!dados.situacao.pode_escrever || !limites.temRecurso(dados.plano, 'acompanhamentos')) return false;
+  return !(await limites.conferir(organizacaoId, 'monitoramentos'));
+}
+
 async function ligarOsQueFaltam({ limite = 500 } = {}) {
   const [candidatas] = await pool.query(
     `SELECT l.id, l.organizacao_id, l.etapa, l.fim_propostas, l.favorito, l.pontuacao
@@ -101,6 +110,8 @@ async function ligarOsQueFaltam({ limite = 500 } = {}) {
   for (const licitacao of candidatas) {
     const cadencia = regras.cadenciaDe(licitacao, agora);
     if (!cadencia) continue;
+    // Seção 3: sem acompanhamentos no plano (ou no teto), nada de monitor automático.
+    if (!(await podeAcompanhar(licitacao.organizacao_id))) continue;
     const motivo = regras.ETAPAS_DISPUTANDO.includes(licitacao.etapa)
       ? 'disputando'
       : licitacao.favorito

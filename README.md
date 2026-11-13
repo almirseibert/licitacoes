@@ -121,6 +121,35 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
     para `claro`/`escuro`/`null`, 400 para `"azul"` e corpo vazio, 401 sem token; só a linha do
     próprio usuário muda. `testes/tema.test.js` refaz a conta de contraste dos tokens a cada
     `npm test` (58/58).
+- **Seção 3 — planos e cobrança, entregue em 13/11/2026.** Migração `020_planos.sql`: `planos`
+  (catálogo; recursos e limites em JSON — `null` = sem teto, chave ausente = 0), `assinaturas`
+  (uma por organização: plano, ciclo, `pago_ate`, provedor, pedido em aberto),
+  `assinatura_eventos` (livro de tudo, idempotência do webhook) e `uso_mensal` (IA e exportações).
+  Essencial R$ 149/mês · Profissional R$ 299 · Avançado R$ 499 (anual = 10 meses); organização
+  nova nasce em **teste de 15 dias no Avançado**. `backend/servicos/limites.js`: situação da
+  assinatura (teste / teste vencido e assinatura vencida = só leitura / suspensa = 402 em tudo;
+  5 dias de carência após o `pago_ate`), `assinaturaValida`, `exigirRecurso('<módulo>')` e
+  `exigirLimite('<limite>')` — 402 com `{ erro, upgrade: { plano_sugerido } }` dizendo o plano mais
+  barato que resolve. A operadora não tem teto. `backend/servicos/cobranca.js`: provedor `manual`
+  (o cliente pede pela tela, o administrador ativa) e `POST /api/cobranca/webhook/:provedor`
+  fechado até `COBRANCA_PROVEDOR` ≠ manual e `COBRANCA_WEBHOOK_SEGREDO` definido (HMAC-SHA256 do
+  corpo cru em `X-Assinatura`). Telas **Assinatura**, **Uso do plano** e **Organizações** (só para
+  admin da operadora — o backend diz `superadmin`); cadeado no menu para o módulo fora do plano e
+  aviso no topo para teste/assinatura vencidos.
+  - **Aceite medido** (MariaDB 10.11, 150 licitações reais, duas organizações novas pela API,
+    roteiro de 44 conferências, **44/44**): Essencial recebe 402 em IA, oportunidades, contratos,
+    concorrentes, diagnóstico, preço de referência, relatório, leitura de edital e monitor, com o
+    plano sugerido certo; Radar 200. Limites estourados no ponto exato: 3º usuário, 2º perfil,
+    31ª palavra-chave, 21ª exportação do mês (a 1ª contou 1), upload que passa de 1 GB. Pedido de
+    Profissional anual apareceu no superadmin; ativar somou 12 meses ao já pago (2026-12-13 →
+    2027-12-13) e liberou IA e o 3º usuário. Suspensa: Radar e convite 402, Assinatura 200;
+    teste vencido: GET 200, POST 402; +7 dias reabriu. Cliente no `/api/admin` 403. Webhook:
+    404 no manual, 401 com assinatura errada, 200 com a certa (ativou no banco), repetido
+    idempotente. O painel do superadmin listou o uso real (org A: 3 usuários, 30 palavras,
+    20 exportações, 1 GB). Monitor automático: organização no Essencial com favorita não ganhou
+    monitor, a do Avançado ganhou. Lint limpo, 67/67 testes (`testes/limites.test.js`).
+  - Pendente (Seção 3b no plano): trava contra corrida no limite, cache do plano por processo,
+    gateway real, e-mail ao administrador no pedido.
 - `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
   ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
 
@@ -936,6 +965,11 @@ alertas e limpeza são todos dele. A API funciona sem o worker — só não anda
 ```
 POST   /api/auth/login              GET /api/auth/eu
 PATCH  /api/auth/tema               { tema: 'claro' | 'escuro' | null } — preferência do usuário
+GET    /api/assinatura              plano, situação, recursos, catálogo   GET /api/assinatura/uso
+POST   /api/assinatura/pedido       { plano, ciclo } — só o dono; o administrador ativa
+GET    /api/admin/organizacoes      superadmin: todas, com uso          GET .../:id/eventos
+POST   /api/admin/organizacoes/:id/acao  { acao: ativar|suspender|reativar|estender_teste }
+POST   /api/cobranca/webhook/:provedor   pública, HMAC em X-Assinatura; fechada no provedor manual
 GET    /api/licitacoes              ?busca&grupo&uf&modalidade&valor_min&valor_max
                                     &pontuacao_min&prazo_dias&exclusivo_me&etapa&ordem&pagina
 GET    /api/licitacoes/filtros      opções dos seletores do Radar

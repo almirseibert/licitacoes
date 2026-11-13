@@ -146,6 +146,16 @@ export const api = {
 
   eu: () => requisitar('/auth/eu'),
 
+  // ------------------------------------------- planos e cobrança (Seção 3)
+  assinatura: () => requisitar('/assinatura'),
+  usoDoPlano: () => requisitar('/assinatura/uso'),
+  pedirPlano: (plano, ciclo) =>
+    requisitar('/assinatura/pedido', { method: 'POST', body: JSON.stringify({ plano, ciclo }) }),
+  adminOrganizacoes: () => requisitar('/admin/organizacoes'),
+  adminEventos: (id) => requisitar(`/admin/organizacoes/${id}/eventos`),
+  adminAcao: (id, corpo) =>
+    requisitar(`/admin/organizacoes/${id}/acao`, { method: 'POST', body: JSON.stringify(corpo) }),
+
   // Seção 2: preferência de tema do usuário ('claro' | 'escuro' | null).
   salvarTema: (tema) => requisitar('/auth/tema', { method: 'PATCH', body: JSON.stringify({ tema }) }),
 

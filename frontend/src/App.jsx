@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users } from 'lucide-react';
+import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock } from 'lucide-react';
 import { api, obterToken, obterUsuario, obterOrganizacao, guardarSessao, encerrarSessao } from './servicos/api';
 import Login from './paginas/Login';
 import Convite from './paginas/Convite';
@@ -19,6 +19,8 @@ import Calendario from './paginas/Calendario';
 import Orgaos from './paginas/Orgaos';
 import Contratos from './paginas/Contratos';
 import Relatorio from './paginas/Relatorio';
+import Assinatura from './paginas/Assinatura';
+import Organizacoes from './paginas/Organizacoes';
 import Alertas from './componentes/Alertas';
 import AlternarTema from './componentes/AlternarTema';
 import { definirTema, seguirSistema, temaGuardado } from './servicos/tema';
@@ -28,18 +30,25 @@ const TELAS = [
   { chave: 'funil', rotulo: 'Funil', icone: KanbanSquare },
   { chave: 'fontes', rotulo: 'Fontes', icone: Database },
   { chave: 'palavras', rotulo: 'Palavras-chave', icone: Tags },
-  { chave: 'precos', rotulo: 'Preço de referência', icone: TrendingDown },
-  { chave: 'oportunidades', rotulo: 'Oportunidades', icone: Sparkles },
+  { chave: 'precos', rotulo: 'Preço de referência', icone: TrendingDown, recurso: 'historico' },
+  { chave: 'oportunidades', rotulo: 'Oportunidades', icone: Sparkles, recurso: 'estrategicas' },
   { chave: 'calendario', rotulo: 'Calendário', icone: CalendarRange },
-  { chave: 'contratos', rotulo: 'Contratos', icone: FileCheck2 },
-  { chave: 'orgaos', rotulo: 'Órgãos', icone: Landmark },
-  { chave: 'diagnostico', rotulo: 'Diagnóstico', icone: Stethoscope },
-  { chave: 'relatorio', rotulo: 'Relatório mensal', icone: BarChart3 },
+  { chave: 'contratos', rotulo: 'Contratos', icone: FileCheck2, recurso: 'contratos' },
+  { chave: 'orgaos', rotulo: 'Órgãos', icone: Landmark, recurso: 'concorrentes' },
+  { chave: 'diagnostico', rotulo: 'Diagnóstico', icone: Stethoscope, recurso: 'relatorios' },
+  { chave: 'relatorio', rotulo: 'Relatório mensal', icone: BarChart3, recurso: 'relatorios' },
   { chave: 'cofre', rotulo: 'Documentos', icone: FolderLock },
   { chave: 'modelos', rotulo: 'Declarações', icone: FileSignature },
   { chave: 'equipe', rotulo: 'Equipe', icone: Users },
   { chave: 'configuracoes', rotulo: 'Configurações', icone: SlidersHorizontal },
+  { chave: 'assinatura', rotulo: 'Assinatura', icone: CreditCard },
+  { chave: 'uso', rotulo: 'Uso do plano', icone: Gauge },
+  // Só aparece quando o backend diz `superadmin` (Seção 3).
+  { chave: 'organizacoes', rotulo: 'Organizações', icone: Building2, soSuperadmin: true },
 ];
+
+// Situações em que vale um aviso fixo no topo (Seção 3).
+const AVISAR = ['teste_vencido', 'vencida', 'suspensa'];
 
 // Links que chegam por e-mail (Seção 1b): /convite/<token> e
 // /redefinir-senha/<token>. O painel não tem roteador; o caminho é lido uma vez.
@@ -60,6 +69,9 @@ export default function App() {
   const [link, setLink] = useState(linkDeEmail);
   const [organizacao, setOrganizacao] = useState(obterOrganizacao);
   const [organizacoes, setOrganizacoes] = useState([]);
+  // Plano da organização (Seção 3): recursos para o cadeado do menu, situação
+  // para o aviso e `superadmin` para o menu de Organizações — tudo do backend.
+  const [plano, setPlano] = useState(null);
 
   useEffect(seguirSistema, []);
 
@@ -79,7 +91,11 @@ export default function App() {
         if (atual) setOrganizacao(atual);
       })
       .catch(() => {});
+    api.assinatura().then(setPlano).catch(() => {});
   }, [usuario]);
+
+  const temRecurso = (recurso) =>
+    !recurso || !plano || plano.isenta || (plano.plano && plano.plano.recursos.includes(recurso));
 
   const entrar = (u) => {
     voltarParaRaiz();
@@ -138,7 +154,7 @@ export default function App() {
         </div>
 
         <div className="flex-1 py-2">
-          {TELAS.map(({ chave, rotulo, icone: Icone }) => (
+          {TELAS.filter((t) => !t.soSuperadmin || (plano && plano.superadmin)).map(({ chave, rotulo, icone: Icone, recurso }) => (
             <button
               key={chave}
               onClick={() => setTela(chave)}
@@ -150,6 +166,9 @@ export default function App() {
             >
               <Icone size={16} />
               <span className="hidden md:inline">{rotulo}</span>
+              {!temRecurso(recurso) && (
+                <Lock size={11} className="ml-auto hidden md:inline" aria-label="fora do seu plano" />
+              )}
             </button>
           ))}
         </div>
@@ -170,7 +189,16 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="flex-1 min-w-0 overflow-hidden">
+      <main className="flex-1 min-w-0 overflow-hidden flex flex-col">
+        {plano && !plano.isenta && AVISAR.includes(plano.situacao.codigo) && (
+          <p role="alert" className="shrink-0 px-4 py-2 text-xs border-b border-borda text-atencao bg-atencao/[0.06]">
+            {plano.situacao.mensagem}{' '}
+            {tela !== 'assinatura' && (
+              <button className="underline" onClick={() => setTela('assinatura')}>Ver planos</button>
+            )}
+          </p>
+        )}
+        <div className="flex-1 min-h-0">
         {tela === 'radar' && <Radar abrir={licitacaoAberta} aoAbrir={setLicitacaoAberta} />}
         {tela === 'fontes' && <Fontes />}
         {tela === 'palavras' && <Palavras />}
@@ -196,6 +224,10 @@ export default function App() {
         {tela === 'relatorio' && <Relatorio />}
         {tela === 'equipe' && <Equipe />}
         {tela === 'configuracoes' && <Configuracoes />}
+        {tela === 'assinatura' && <Assinatura aba="assinatura" key="assinatura" />}
+        {tela === 'uso' && <Assinatura aba="uso" key="uso" />}
+        {tela === 'organizacoes' && <Organizacoes />}
+        </div>
       </main>
     </div>
   );

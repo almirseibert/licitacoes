@@ -2,6 +2,7 @@
 // que alimenta a checagem de objeto social da seção 6.2.
 // Os documentos do cofre (seções 9 e 17) ficam em rotas/cofre.js.
 const express = require('express');
+const { exigirLimite } = require('../servicos/limites');
 const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 
@@ -68,7 +69,7 @@ rotas.get('/perfis', async (req, res) => {
   }
 });
 
-rotas.post('/perfis', async (req, res) => {
+rotas.post('/perfis', exigirLimite('perfis_empresa'), async (req, res) => {
   try {
     const campos = limpar(req.body || {}, { exigirTudo: true });
     const colunas = ['organizacao_id', ...Object.keys(campos)];

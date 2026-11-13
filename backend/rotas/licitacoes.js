@@ -18,6 +18,7 @@ const jobIa = require('../jobs/ia-resumos');
 const questionamento = require('../servicos/questionamento');
 const jobBaixar = require('../jobs/baixar');
 const escopo = require('../servicos/escopo');
+const limites = require('../servicos/limites');
 
 const rotas = express.Router();
 
@@ -147,12 +148,13 @@ rotas.get('/', async (req, res) => {
 // Por que Excel e não CSV: o Radar tem objeto longo, valor em real e data com
 // hora, e o CSV entrega os três errados — o Excel quebra a linha no ponto e
 // vírgula do objeto, lê 1.234,56 como texto e inverte dia com mês.
-rotas.get('/exportar', async (req, res) => {
+rotas.get('/exportar', limites.exigirLimite('exportacoes_mes'), async (req, res) => {
   try {
     const { onde, valores } = montarFiltros(req.query);
     const ordem = ORDENACOES[req.query.ordem] || ORDENACOES.relevancia;
 
     const r = await exportar.radarEmExcel({ organizacaoId: req.organizacaoId, onde, valores, ordem });
+    await limites.registrarUso(req.organizacaoId, 'exportacoes_mes');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${r.arquivo}"`);
     res.setHeader('X-Linhas', String(r.linhas));
@@ -165,7 +167,7 @@ rotas.get('/exportar', async (req, res) => {
 
 // GET /api/licitacoes/relatorio — quantas disputei, quantas ganhei e o desconto
 // médio das minhas propostas (Fase 14). `?formato=xlsx` baixa a planilha.
-rotas.get('/relatorio', async (req, res) => {
+rotas.get('/relatorio', limites.exigirRecurso('relatorios'), async (req, res) => {
   const meses = Math.min(Math.max(Number(req.query.meses || 12), 1), 60);
 
   try {
@@ -656,6 +658,20 @@ rotas.post('/:id/monitorar', async (req, res) => {
       return res.json({ ok: true, mensagem: 'Monitoramento desligado.' });
     }
 
+    // Seção 3: ligar ou checar é do plano com acompanhamentos; desligar sempre pode.
+    const plano = await limites.daOrganizacao(req.organizacaoId);
+    if (!plano.isenta && !limites.temRecurso(plano.plano, 'acompanhamentos')) {
+      return res.status(402).json(limites.erroRecurso(plano.plano, plano.planos, 'acompanhamentos'));
+    }
+    const [[jaAtivo]] = await pool.query(
+      'SELECT id FROM monitoramentos WHERE organizacao_id = ? AND licitacao_id = ? AND ativo = 1',
+      [req.organizacaoId, req.params.id]
+    );
+    if (!jaAtivo) {
+      const estouro = await limites.conferir(req.organizacaoId, 'monitoramentos');
+      if (estouro) return res.status(402).json(estouro);
+    }
+
     const monitoramento = await servicoMonitor.ligar({
       organizacaoId: req.organizacaoId,
       licitacaoId: Number(req.params.id),
@@ -693,7 +709,7 @@ rotas.post('/:id/monitorar', async (req, res) => {
 });
 
 // GET /api/licitacoes/:id/ia — a sugestão da leitura assistida (seção 23).
-rotas.get('/:id/ia', async (req, res) => {
+rotas.get('/:id/ia', limites.exigirRecurso('ia'), async (req, res) => {
   try {
     const [[l]] = await pool.query(
       `SELECT l.id, l.ia_resumo, l.ia_em, COALESCE(o.ia_situacao, l.ia_situacao) AS ia_situacao
@@ -716,13 +732,21 @@ rotas.get('/:id/ia', async (req, res) => {
 });
 
 // POST /api/licitacoes/:id/ia — lê agora (ou lê de novo, com forcar).
-rotas.post('/:id/ia', async (req, res) => {
+rotas.post('/:id/ia', limites.exigirRecurso('ia'), async (req, res) => {
   try {
+    // Edital já lido sai do cache sem custo: só a leitura nova passa pelo limite.
+    const [[lido]] = await pool.query('SELECT ia_resumo IS NOT NULL AS sim FROM licitacoes WHERE id = ?', [req.params.id]);
+    if (!(lido && lido.sim && !(req.body && req.body.forcar))) {
+      const estouro = await limites.conferir(req.organizacaoId, 'ia_resumos_mes');
+      if (estouro) return res.status(402).json(estouro);
+    }
     const r = await jobIa.resumirLicitacao({
       licitacaoId: Number(req.params.id),
       forcar: Boolean(req.body && req.body.forcar),
     });
     if (!r.ok) return res.status(r.desligada ? 409 : 422).json({ erro: r.motivo });
+    // Leitura do cache não custa nada ao serviço: não conta no limite do mês.
+    if (!r.cache) await limites.registrarUso(req.organizacaoId, 'ia_resumos_mes');
 
     res.json({
       ...r,
@@ -738,7 +762,7 @@ rotas.post('/:id/ia', async (req, res) => {
 
 // PATCH /api/licitacoes/:id/ia — confirmar ou recusar a sugestão.
 // A IA nunca muda pontuação, etapa ou preço: só esta coluna (seção 23.4).
-rotas.patch('/:id/ia', async (req, res) => {
+rotas.patch('/:id/ia', limites.exigirRecurso('ia'), async (req, res) => {
   const situacao = req.body && req.body.situacao;
   if (!['confirmado', 'recusado', 'sugerido'].includes(situacao)) {
     return res.status(400).json({ erro: 'Use situacao: confirmado, recusado ou sugerido.' });

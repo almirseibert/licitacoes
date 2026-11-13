@@ -5,6 +5,7 @@ const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const arquivos = require('../servicos/arquivos');
 const upload = require('../servicos/upload');
+const limites = require('../servicos/limites');
 const envio = require('../servicos/envio');
 const pacote = require('../servicos/pacote');
 
@@ -218,6 +219,8 @@ rotas.post('/anexos', (req, res) => {
     if (erroUpload) return res.status(400).json({ erro: upload.tratarErro(erroUpload) });
     try {
       if (!req.file) return res.status(400).json({ erro: 'Anexe o arquivo.' });
+      const estouro = await limites.conferir(req.organizacaoId, 'cofre_gb', { acrescimo: req.file.size });
+      if (estouro) return res.status(402).json(estouro);
       const titulo = String((req.body && req.body.titulo) || req.file.originalname || 'Anexo').slice(0, 160);
       const [[existe]] = await pool.query('SELECT id FROM licitacoes WHERE id = ?', [req.params.id]);
       if (!existe) return res.status(404).json({ erro: 'Licitação não encontrada.' });

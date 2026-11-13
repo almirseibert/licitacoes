@@ -16,6 +16,8 @@ const { autenticar, confirmarVinculo, esquecerVinculo, exigirPapel, NIVEL_PAPEL 
 const { responderErro } = require('../middlewares/responder-erro');
 const email = require('../servicos/email');
 const fila = require('../servicos/fila');
+const limites = require('../servicos/limites');
+const cobranca = require('../servicos/cobranca');
 const {
   papelValido,
   gerarTokenConvite,
@@ -99,6 +101,8 @@ rotas.post('/cadastro', async (req, res) => {
       'INSERT INTO organizacao_membros (organizacao_id, usuario_id, papel) VALUES (?, ?, ?)',
       [org.insertId, usuario.insertId, 'dono']
     );
+    // Seção 3: toda organização nova nasce com a assinatura do teste grátis.
+    await cobranca.abrirTeste(conexao, org.insertId);
 
     await conexao.commit();
 
@@ -243,7 +247,7 @@ rotas.post('/trocar-organizacao', autenticar, async (req, res) => {
  * a organização do token de quem chama, nunca para outra (ninguém convida
  * gente para uma organização que não é a sua).
  */
-rotas.post('/convites', autenticar, confirmarVinculo, exigirPapel('admin'), async (req, res) => {
+rotas.post('/convites', autenticar, confirmarVinculo, exigirPapel('admin'), limites.assinaturaValida, limites.exigirLimite('usuarios'), async (req, res) => {
   const { email: emailConvite, papel } = req.body || {};
   if (!emailConvite || !String(emailConvite).trim()) {
     return res.status(400).json({ erro: 'Informe o e-mail de quem você quer convidar.' });

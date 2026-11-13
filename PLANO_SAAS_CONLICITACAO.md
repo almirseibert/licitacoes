@@ -26,7 +26,7 @@ cofre de senha de portal e a assinatura digital (ver a tabela de divergências n
 
 | Fase | Seções | O que o cliente ganha | Marco |
 |---|---|---|---|
-| **A — Fundação SaaS** | 0 ✅, 1 (1a ✅, 1b ✅, 1c), 2 ✅, 3 | Conta própria, equipe, dados isolados, tema claro/escuro, plano e cobrança | Dá para cobrar e isolar clientes |
+| **A — Fundação SaaS** | 0 ✅, 1 (1a ✅, 1b ✅, 1c), 2 ✅, 3 ✅ | Conta própria, equipe, dados isolados, tema claro/escuro, plano e cobrança | Dá para cobrar e isolar clientes |
 | **B — Paridade de captação** | 4, 7, 8, 9, 10 | Boletim diário, banco de licitações completo, gestão com tarefas, avisos por tipo, documentos | Substitui o uso diário do ConLicitação na captação |
 | **C — IA e inteligência** | 5, 11, 12, 13, 14, 15, 17 | Pergunte ao Edital, resumo com checklist, acompanhamentos, contratos e atas, concorrentes e mercado, API, onboarding | **Versão 1 vendável** — fim da Fase C |
 | **D — Estratégia e automação** | 6, 16 | Monitor de chat, alerta de deserta por segmento, consultor jurídico | Planos mais caros |
@@ -175,31 +175,51 @@ primeira medição pegou a faixa "Baixa" do Funil escuro em 3,73:1 — corrigida
 
 ---
 
-## Seção 3 — Planos e cobrança
-- [ ] Seed de `planos` (limites em JSON: usuários, perfis de busca, perguntas de IA/mês,
-      monitores de chat, GB no cofre, recursos ligados/desligados) e `assinaturas`.
-- [ ] `servicos/limites.js` + middleware `exigirRecurso('<recurso>')`; erro no formato
-      `{erro, detalhe}` com sugestão de upgrade quando o limite estoura.
-- [ ] Teste grátis de 15 dias; telas "Assinatura" e "Uso do plano".
-- [ ] `servicos/cobranca.js` com provedor inicial "manual" (administrador ativa o plano) e
-      webhook preparado para gateway a escolher depois (Asaas ou Stripe) — nenhuma chave no git.
-- [ ] Painel do superadmin (Studio Mythos): organizações, planos, uso, suspensão.
-- [ ] Três planos **de fato diferentes** (a referência lista os mesmos módulos nos três e cobra de
-      R$ 2.871 a R$ 5.409 por ano — o espaço para diferenciar existe). Preços **propostos em
-      13/11/2026** (até então só havia a estrutura dos planos, sem número; estes valores ficam
-      abaixo da referência no plano de entrada e são revisáveis antes do lançamento):
-      **Essencial R$ 149/mês ou R$ 1.490/ano** · **Profissional R$ 299/mês ou R$ 2.990/ano** ·
-      **Avançado R$ 499/mês ou R$ 4.990/ano** (anual = 10 meses pagos). Teste grátis de **15 dias**,
-      decidido, sem cartão. Estrutura:
-      **Essencial** (captação: Radar, boletim, gestão, documentos, declarações, alertas) ·
-      **Profissional** (+ Pergunte ao Edital, resumo, acompanhamentos, contratos e atas,
-      concorrentes, histórico, API) · **Avançado** (+ estratégicas, mercado, consultor jurídico,
-      relatórios). O recurso de cada plano vive em `planos.recursos` (JSON), nunca em `if` no código.
-- [ ] Limites por plano: usuários, perfis de busca, perguntas e resumos de IA por mês,
-      exportações, GB no cofre, tokens de API.
+## Seção 3 — Planos e cobrança — ✅ feito em 13/11/2026
+- [x] Seed de `planos` (limites em JSON: usuários, palavras-chave, perfis de empresa, leituras e
+      perguntas de IA/mês, exportações/mês, GB no cofre, acompanhamentos, monitores de chat, tokens
+      de API; recursos ligados/desligados) e `assinaturas` — migração `020_planos.sql`, com
+      `assinatura_eventos` e `uso_mensal`. **Decisão registrada:** "perfis de busca" virou o limite
+      de palavras-chave (é a busca que o painel tem) + perfis de empresa.
+- [x] `servicos/limites.js` + `exigirRecurso('<recurso>')`, `exigirLimite('<limite>')` e
+      `assinaturaValida`; 402 `{erro, upgrade:{plano_sugerido}}` com o plano mais barato que resolve.
+- [x] Teste grátis de 15 dias (no Avançado, sem cartão); telas "Assinatura" e "Uso do plano".
+- [x] `servicos/cobranca.js` com provedor "manual" e webhook `POST /api/cobranca/webhook/:provedor`
+      (HMAC do corpo cru, idempotente, fechado sem `COBRANCA_PROVEDOR`/`COBRANCA_WEBHOOK_SEGREDO`).
+- [x] Painel do superadmin (admin/dono da operadora): organizações, plano, uso, ativar, suspender,
+      reativar, estender teste, livro de eventos.
+- [x] Três planos diferentes por `planos.recursos`: Essencial (radar, boletim, gestão, documentos,
+      declarações, alertas) · Profissional (+ ia, acompanhamentos, contratos, concorrentes,
+      histórico, api) · Avançado (+ estratégicas, mercado, consultor jurídico, relatórios).
+      Mapa nas rotas: `/api/ia` e `/licitacoes/:id/ia` → ia; monitor → acompanhamentos;
+      `/api/contratos` → contratos; `/api/concorrentes`, `/api/dossies` → concorrentes;
+      `/api/precos-referencia` → histórico; `/api/oportunidades` → estratégicas; `/api/diagnostico`
+      e `/licitacoes/relatorio` → relatórios. O monitor automático do worker também respeita o plano.
+- [x] Limites por plano conferidos nas rotas: convites (usuários), palavras, perfis, leitura de IA
+      (só a nova; cache não conta), exportação, upload no cofre e anexo, monitor.
 
-**Aceite:** organização que estoura o limite de um recurso recebe o erro certo e o painel
-do superadmin lista uso real das organizações de teste.
+**Aceite (medido):** roteiro de 44 conferências pela API real contra MariaDB 10.11 (150 licitações
+reais, duas organizações novas + operadora + webhook numa 2ª instância), **44/44**. Essencial: 402
+em 9 rotas de módulo, com plano sugerido certo; limites no ponto exato (3º usuário, 2º perfil, 31ª
+palavra, 21ª exportação, upload acima de 1 GB). Pedido → ativação Profissional anual somou 12 meses
+(2027-12-13). Suspensa 402 / Assinatura 200; teste vencido GET 200 / POST 402. Cliente no superadmin
+403. Webhook 404 (manual) / 401 (HMAC errado) / 200 / repetido idempotente. O superadmin listou o uso
+real das 4 organizações. Migração aplicada em banco zerado. Lint limpo, 67/67 testes.
+**Não verificado:** gateway real (não escolhido) e o `semear` no banco zerado (falha no `CAST(? AS
+JSON)` do MariaDB — limite conhecido do ambiente, não desta seção). A skill `security-review` não
+roda neste ambiente (sem `origin/HEAD`); a revisão de segurança foi feita à mão.
+
+**Seção 3b — pendente:**
+- [ ] Corrida no limite: requisições simultâneas passam todas pela conferência (trava por
+      `SELECT … FOR UPDATE` em `uso_mensal` ou contagem dentro da transação).
+- [ ] Cache do plano é por processo (15 s): com mais de uma instância, suspensão e ativação demoram
+      até 15 s nas outras.
+- [ ] `conferir` lê o uso inteiro para um limite; a lista do superadmin consulta organização por
+      organização — agrupar quando passar de algumas dezenas de clientes.
+- [ ] Rotas de `/api/auth` (equipe, tema) não passam por `assinaturaValida` — só o convite passa.
+- [ ] Avisar o administrador por e-mail quando o cliente pede um plano; tradução do payload do
+      gateway escolhido (Asaas ou Stripe) para o formato normalizado de `processarEventoGateway`.
+- [ ] Menu: o cadeado lê o plano no login; depois de trocar de plano, só atualiza ao recarregar.
 
 ---
 

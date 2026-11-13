@@ -40,6 +40,13 @@ module.exports = {
     de: process.env.SMTP_DE || '',
     para: process.env.ALERTA_PARA || '',
   },
+  // Seção 3 do plano SaaS: 'manual' = o administrador ativa o plano pela tela.
+  // O webhook do gateway (Asaas ou Stripe, a escolher) só abre com provedor
+  // diferente de 'manual' E segredo definido — nenhuma chave no git.
+  cobranca: {
+    provedor: process.env.COBRANCA_PROVEDOR || 'manual',
+    segredoWebhook: process.env.COBRANCA_WEBHOOK_SEGREDO || '',
+  },
   jwt: {
     get segredo() { return obrigatorio('JWT_SECRET'); },
     expira: process.env.JWT_EXPIRA || '8h',
