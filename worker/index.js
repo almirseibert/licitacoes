@@ -31,6 +31,7 @@ const dossies = require('../backend/jobs/dossies');
 const contratos = require('../backend/jobs/contratos');
 const limpar = require('../backend/jobs/limpar');
 const sancoesMensais = require('../backend/jobs/sancoes-mensais');
+const boletim = require('../backend/jobs/boletim');
 
 const sinal = { parar: false };
 
@@ -252,6 +253,19 @@ async function rodarDeHoraEmHora() {
             `, ${marcos.viraram_vigentes} vigente(s), ${marcos.encerrados} encerrado(s).`
         );
       }
+    }
+
+    // Boletim diário (Seção 4 do plano SaaS): cada filtro tem os seus horários
+    // (padrão 7h, 12h e 18h); aqui só se pergunta qual venceu e não saiu.
+    // Try próprio: falha do boletim não pula os jobs diários abaixo.
+    try {
+      const boletins = await boletim.rodar({});
+      for (const b of boletins.boletins.filter((x) => x.total_itens)) {
+        console.log(`Boletim: org ${b.organizacao_id}, "${b.perfil}" ${b.horario}h — ${b.total_itens} licitação(ões), e-mail ${b.email}.`);
+      }
+      for (const e of boletins.erros.slice(0, 3)) console.log(`Boletim com erro: ${e}`);
+    } catch (erro) {
+      console.error('Falha no boletim:', erro.message);
     }
 
     // Recorrências (seção 24): detecção semanal no domingo, aviso diário às 08h.

@@ -150,6 +150,40 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
     monitor, a do Avançado ganhou. Lint limpo, 67/67 testes (`testes/limites.test.js`).
   - Pendente (Seção 3b no plano): trava contra corrida no limite, cache do plano por processo,
     gateway real, e-mail ao administrador no pedido.
+- **Seção 4 — boletim diário por e-mail, entregue em 13/11/2026.** Migração `021_boletins.sql`:
+  `perfis_busca` ("Meus filtros": palavras, exclusões, UFs, municípios, modalidades, faixa de
+  valor, nota mínima, horários), `boletins`, `boletim_itens` (UNIQUE filtro × licitação — a
+  mesma licitação nunca vai duas vezes no mesmo filtro), `boletim_leituras` e
+  `boletim_descadastros`; limite `perfis_busca` por plano (1 / 5 / 20).
+  - O filtro roda no nosso banco (`backend/regras/boletim.js`), sobre o objeto **e** o texto
+    extraído do edital — nunca no `palavraChave` do PNCP. Palavra casa no começo da palavra
+    ("monitor" pega "monitores", "ti" não casa dentro de "gestião"); exclusão só no objeto;
+    sem valor informado a licitação entra com a lacuna; filtro sem palavra não gera boletim.
+  - `backend/jobs/boletim.js` roda de hora em hora no worker e solta o boletim no último horário
+    vencido do filtro (padrão 7h, 12h, 18h, fuso de São Paulo), uma vez por filtro × dia ×
+    horário; e-mail por pessoa da equipe com link de descadastro assinado (HMAC com
+    `JWT_SECRET`; o GET só confirma, o POST descadastra). Toda organização ganha um "Filtro
+    principal" com as palavras-chave e exclusões que já tinha.
+  - Tela **Boletins** (`frontend/src/paginas/Boletins.jsx`): calendário do mês com boletins
+    numerados por dia, legenda não lido / lido / lido por outro membro, filtro por filtro,
+    status e UF, "marcar boletins do filtro como lidos"; aba "Meus filtros"; receber ou não o
+    e-mail vale por pessoa.
+  - `npm run boletim -- --org=<id> --simular` mostra o que sairia agora sem gravar;
+    sem `--simular` gera e envia já; `-- --dias=N` muda a janela (padrão 3 dias).
+  - **Aceite medido** (MariaDB 10.11, 150 licitações reais do PNCP, SMTP local de teste):
+    simulação do filtro principal da organização 1 deu **11 de 150**, exatamente a conferência
+    independente por SQL `LIKE` (12) menos 1 em que o termo só aparece no meio da palavra
+    ("videomonitoramento"). Roteiro pela API com duas organizações novas: **41/41** — filtro com
+    "monitor, periféricos", exclusão "glicose", UF RS trouxe os 7 esperados; filtro SC 0; boletim
+    nº 1 com 7 itens e 1 e-mail; segunda rodada na mesma hora "já gerado"; nova simulação e slot
+    da hora seguinte com **0 itens** (nada repetido); palavra nova trouxe só o item novo (nº 2).
+    Isolamento: a outra organização recebeu 404 ao editar, apagar, ler ou marcar o que era da
+    primeira, e "marcar todos" dela marcou 0. Essencial: 2º filtro → 402 com Profissional
+    sugerido. Leitura por outro membro, descadastro pelo link (token forjado 404) e recadastro
+    conferidos. Lint limpo, 76/76 testes (`testes/boletim.test.js`).
+  - Não verificado: casamento no texto do edital com edital baixado de verdade (o PNCP não
+    respondeu neste ambiente; o caminho foi conferido com um texto inserido numa licitação real)
+    e envio por SMTP de produção.
 - `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
   ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
 
@@ -908,6 +942,7 @@ linha de comando serve para rodar um agora e ver o número:
 | `npm run contratos` | marcos do contrato e a faixa da LC 123 |
 | `npm run limpar` | `.tmp` com mais de 24 h e arquivos de descartada com mais de 180 dias |
 | `npm run sancoes` | CEIS/CNEP do próprio CNPJ e dos concorrentes recorrentes |
+| `npm run boletim` | boletim diário; `-- --org=<id> --simular` mostra sem gravar, sem `--simular` envia já |
 
 O `npm run limpar` aceita `-- --dias=365` e `-- --horas=48`; o `npm run sancoes` aceita
 `-- --quantos=25`. A limpeza apaga os **arquivos** da licitação descartada, não a ficha:
@@ -967,6 +1002,12 @@ POST   /api/auth/login              GET /api/auth/eu
 PATCH  /api/auth/tema               { tema: 'claro' | 'escuro' | null } — preferência do usuário
 GET    /api/assinatura              plano, situação, recursos, catálogo   GET /api/assinatura/uso
 POST   /api/assinatura/pedido       { plano, ciclo } — só o dono; o administrador ativa
+GET    /api/boletins?mes=&perfil_id=&status=&uf=   calendário do mês (status por pessoa)
+GET    /api/boletins/:id            itens do boletim       POST /api/boletins/:id/lido  { lido }
+POST   /api/boletins/marcar-lidos   mesmo filtro da lista
+GET    /api/boletins/perfis         "Meus filtros"         POST/PUT/DELETE /api/boletins/perfis/:id
+PUT    /api/boletins/perfis/:id/email  { receber } — só para quem está logado
+GET    /api/boletins/descadastro/:token  página de confirmação; POST descadastra (sem login)
 GET    /api/admin/organizacoes      superadmin: todas, com uso          GET .../:id/eventos
 POST   /api/admin/organizacoes/:id/acao  { acao: ativar|suspender|reativar|estender_teste }
 POST   /api/cobranca/webhook/:provedor   pública, HMAC em X-Assinatura; fechada no provedor manual

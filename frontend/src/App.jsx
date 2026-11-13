@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock } from 'lucide-react';
+import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock, Newspaper } from 'lucide-react';
 import { api, obterToken, obterUsuario, obterOrganizacao, guardarSessao, encerrarSessao } from './servicos/api';
 import Login from './paginas/Login';
 import Convite from './paginas/Convite';
@@ -8,6 +8,7 @@ import Equipe from './paginas/Equipe';
 import Radar from './paginas/Radar';
 import Fontes from './paginas/Fontes';
 import Palavras from './paginas/Palavras';
+import Boletins from './paginas/Boletins';
 import Configuracoes from './paginas/Configuracoes';
 import Cofre from './paginas/Cofre';
 import Modelos from './paginas/Modelos';
@@ -28,6 +29,7 @@ import { definirTema, seguirSistema, temaGuardado } from './servicos/tema';
 const TELAS = [
   { chave: 'radar', rotulo: 'Radar', icone: IconeRadar },
   { chave: 'funil', rotulo: 'Funil', icone: KanbanSquare },
+  { chave: 'boletins', rotulo: 'Boletins', icone: Newspaper, recurso: 'boletim' },
   { chave: 'fontes', rotulo: 'Fontes', icone: Database },
   { chave: 'palavras', rotulo: 'Palavras-chave', icone: Tags },
   { chave: 'precos', rotulo: 'Preço de referência', icone: TrendingDown, recurso: 'historico' },
@@ -202,6 +204,7 @@ export default function App() {
         {tela === 'radar' && <Radar abrir={licitacaoAberta} aoAbrir={setLicitacaoAberta} />}
         {tela === 'fontes' && <Fontes />}
         {tela === 'palavras' && <Palavras />}
+        {tela === 'boletins' && <Boletins />}
         {tela === 'cofre' && <Cofre />}
         {tela === 'modelos' && <Modelos />}
         {tela === 'funil' && <Funil aoAbrir={setLicitacaoAberta} />}

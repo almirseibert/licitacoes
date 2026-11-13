@@ -14,6 +14,7 @@ const BYTES_POR_GB = 1024 ** 3;
 const NOMES_LIMITE = {
   usuarios: 'usuários na equipe',
   palavras_chave: 'palavras-chave de busca',
+  perfis_busca: 'filtros do boletim',
   perfis_empresa: 'perfis de empresa',
   ia_resumos_mes: 'leituras de edital por IA neste mês',
   ia_perguntas_mes: 'perguntas ao edital neste mês',
@@ -266,11 +267,12 @@ async function uso(organizacaoId, agora = new Date()) {
        + (SELECT COUNT(*) FROM convites WHERE organizacao_id = ? AND aceito_em IS NULL AND expira_em > NOW()) AS usuarios,
        (SELECT COUNT(*) FROM palavras_chave WHERE organizacao_id = ?) AS palavras_chave,
        (SELECT COUNT(*) FROM empresa_perfis WHERE organizacao_id = ?) AS perfis_empresa,
+       (SELECT COUNT(*) FROM perfis_busca WHERE organizacao_id = ?) AS perfis_busca,
        (SELECT COUNT(*) FROM monitoramentos WHERE organizacao_id = ? AND ativo = 1) AS monitoramentos,
        COALESCE((SELECT SUM(tamanho_bytes) FROM empresa_documentos WHERE organizacao_id = ?), 0)
        + COALESCE((SELECT SUM(tamanho_bytes) FROM licitacao_anexos WHERE organizacao_id = ?), 0)
        + COALESCE((SELECT SUM(tamanho_bytes) FROM pacotes WHERE organizacao_id = ?), 0) AS cofre_gb`,
-    [id, id, id, id, id, id, id, id]
+    [id, id, id, id, id, id, id, id, id]
   );
   const [mensais] = await db().query(
     'SELECT recurso, quantidade FROM uso_mensal WHERE organizacao_id = ? AND mes = ?',

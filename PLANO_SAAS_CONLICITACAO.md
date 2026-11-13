@@ -27,7 +27,7 @@ cofre de senha de portal e a assinatura digital (ver a tabela de divergências n
 | Fase | Seções | O que o cliente ganha | Marco |
 |---|---|---|---|
 | **A — Fundação SaaS** | 0 ✅, 1 (1a ✅, 1b ✅, 1c), 2 ✅, 3 ✅ | Conta própria, equipe, dados isolados, tema claro/escuro, plano e cobrança | Dá para cobrar e isolar clientes |
-| **B — Paridade de captação** | 4, 7, 8, 9, 10 | Boletim diário, banco de licitações completo, gestão com tarefas, avisos por tipo, documentos | Substitui o uso diário do ConLicitação na captação |
+| **B — Paridade de captação** | 4 ✅, 7, 8, 9, 10 | Boletim diário, banco de licitações completo, gestão com tarefas, avisos por tipo, documentos | Substitui o uso diário do ConLicitação na captação |
 | **C — IA e inteligência** | 5, 11, 12, 13, 14, 15, 17 | Pergunte ao Edital, resumo com checklist, acompanhamentos, contratos e atas, concorrentes e mercado, API, onboarding | **Versão 1 vendável** — fim da Fase C |
 | **D — Estratégia e automação** | 6, 16 | Monitor de chat, alerta de deserta por segmento, consultor jurídico | Planos mais caros |
 | **E — Ecossistema** | 18 | Seguro garantia, assessoria cadastral, cursos por parceria | Receita complementar |
@@ -223,23 +223,46 @@ roda neste ambiente (sem `origin/HEAD`); a revisão de segurança foi feita à m
 
 ---
 
-## Seção 4 — Boletim diário por e-mail
-- [ ] `perfis_busca` (organizacao_id, palavras, exclusões, UFs, municípios, modalidades,
-      faixa de valor, nota mínima) e `boletins`/`boletim_itens` (histórico).
-- [ ] Filtro de palavra-chave roda no nosso banco sobre objeto **e** texto extraído do
-      edital — nunca confiar no filtro da API do PNCP (ela ignora `palavraChave` em
-      silêncio, achado documentado na seção 0).
-- [ ] `jobs/boletim.js` agendado no worker (7h/12h/18h, configurável por perfil), sem
-      repetir item já enviado, via `servicos/email.js`. WhatsApp opcional.
-- [ ] Tela "Boletins": calendário mensal com boletins numerados por dia, legenda **não lido / lido
-      / lido por outro membro da equipe**, "marcar boletins do filtro como lido", filtro por
-      status/UF, descadastro. `boletim_leituras` (boletim_id, usuario_id, lido_em).
-- [ ] "Meus filtros" = os `perfis_busca`: um filtro inicial por organização, vários depois, com a
-      mesma regra valendo para licitações e para acompanhamentos (Seção 12).
-- [ ] `npm run boletim -- --org=<id> --simular`.
+## Seção 4 — Boletim diário por e-mail — ✅ feito em 13/11/2026
+- [x] `perfis_busca` (organizacao_id, palavras, exclusões, UFs, municípios, modalidades,
+      faixa de valor, nota mínima, horários) e `boletins`/`boletim_itens` (histórico) — migração
+      `021_boletins.sql`, com `boletim_leituras` e `boletim_descadastros`; limite `perfis_busca`
+      por plano (Essencial 1, Profissional 5, Avançado 20).
+- [x] Filtro de palavra-chave no nosso banco sobre objeto **e** texto extraído do edital
+      (`backend/regras/boletim.js`). Palavra casa no começo da palavra (plural entra, "ti" no meio
+      de "gestião" não); exclusão só no objeto; sem valor informado entra com a lacuna; licitação
+      nunca pontuada pela organização não é barrada pela nota mínima; filtro sem palavra não gera.
+- [x] `jobs/boletim.js` no worker de hora em hora: último horário vencido do filtro (padrão
+      7h/12h/18h, fuso de São Paulo), uma vez por filtro × dia × horário, sem repetir item
+      (UNIQUE filtro × licitação no banco), e-mail por pessoa via `servicos/email.js` com link de
+      descadastro assinado. Descartada pela organização não volta.
+- [x] Tela "Boletins": calendário mensal numerado por dia, legenda não lido / lido / lido por
+      outro membro, "marcar boletins do filtro como lidos", filtro por filtro/status/UF,
+      descadastro (link do e-mail ou botão por pessoa).
+- [x] "Meus filtros" = os `perfis_busca`: "Filtro principal" criado com as palavras-chave e
+      exclusões que a organização já tinha; vários conforme o plano.
+- [x] `npm run boletim -- --org=<id> --simular` (e sem `--simular`, gera e envia já).
 
-**Aceite:** rodar `--simular` contra dado real e confirmar que o boletim de cada perfil só
-traz o que casa com suas palavras/UFs, sem duplicar envios anteriores.
+**Aceite (medido):** MariaDB 10.11, 150 licitações reais. Simulação do filtro principal da org 1:
+**11/150**, igual à conferência independente por SQL `LIKE` (12) menos o "videomonitoramento"
+(termo no meio da palavra). Roteiro pela API com duas organizações novas e SMTP local: **41/41** —
+filtro "monitor, periféricos" − "glicose" em RS trouxe os 7 esperados, filtro SC 0; boletim nº 1
+com 7 itens e 1 e-mail; repetição na mesma hora "já gerado"; nova simulação e slot da hora
+seguinte com 0 itens (**nada duplicado**); palavra nova trouxe só o item novo no nº 2, enviado só a
+quem não se descadastrou. Isolamento: 404 em editar/apagar/ler/marcar da outra organização,
+"marcar todos" dela marcou 0. Essencial 2º filtro → 402 (Profissional). Migração em banco zerado.
+Lint limpo, 76/76 testes. Tela conferida com Playwright (1366 px e 390 px, sem rolagem lateral,
+sem erro no console).
+**Não verificado:** texto de edital baixado de verdade (PNCP sem resposta neste ambiente; caminho
+conferido com texto inserido numa licitação real) e SMTP de produção. WhatsApp não feito (opcional).
+
+**Seção 4b — pendente:**
+- [ ] WhatsApp opcional do boletim (`servicos/whatsapp.js`).
+- [ ] Apagar filtro: a regra "ao menos um" é conferida fora de transação (corrida entre duas abas).
+- [ ] E-mail enviado em série por destinatário; status `sem_email` não separa "desligado no
+      filtro" de "SMTP não configurado".
+- [ ] Mesma regra de filtro para os acompanhamentos (Seção 12).
+- [ ] Link de descadastro não expira (vale enquanto a pessoa for da organização).
 
 ---
 

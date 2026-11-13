@@ -192,6 +192,24 @@ export const api = {
 
   removerDaEquipe: (usuarioId) => requisitar(`/auth/equipe/${usuarioId}`, { method: 'DELETE' }),
 
+  // Boletim diário (Seção 4 do plano SaaS).
+  perfisBoletim: () => requisitar('/boletins/perfis'),
+  criarPerfilBoletim: (campos) => requisitar('/boletins/perfis', { method: 'POST', body: JSON.stringify(campos) }),
+  salvarPerfilBoletim: (id, campos) =>
+    requisitar(`/boletins/perfis/${id}`, { method: 'PUT', body: JSON.stringify(campos) }),
+  apagarPerfilBoletim: (id) => requisitar(`/boletins/perfis/${id}`, { method: 'DELETE' }),
+  receberBoletim: (id, receber) =>
+    requisitar(`/boletins/perfis/${id}/email`, { method: 'PUT', body: JSON.stringify({ receber }) }),
+  boletins: (filtro = {}) => {
+    const q = new URLSearchParams(Object.entries(filtro).filter(([, v]) => v !== '' && v != null));
+    return requisitar(`/boletins?${q}`);
+  },
+  boletim: (id) => requisitar(`/boletins/${id}`),
+  marcarBoletim: (id, lido = true) =>
+    requisitar(`/boletins/${id}/lido`, { method: 'POST', body: JSON.stringify({ lido }) }),
+  marcarBoletinsLidos: (filtro) =>
+    requisitar('/boletins/marcar-lidos', { method: 'POST', body: JSON.stringify(filtro) }),
+
   resumo: () => requisitar('/painel/resumo'),
 
   filtros: () => requisitar('/licitacoes/filtros'),

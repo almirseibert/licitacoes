@@ -30,7 +30,8 @@
     "prazos": "node backend/jobs/executar-prazos.js",
     "contratos": "node backend/jobs/executar-contratos.js",
     "limpar": "node backend/jobs/executar-limpeza.js",
-    "sancoes": "node backend/jobs/executar-sancoes.js"
+    "sancoes": "node backend/jobs/executar-sancoes.js",
+    "boletim": "node backend/jobs/executar-boletim.js"
   },
   "engines": {
     "node": ">=20"
