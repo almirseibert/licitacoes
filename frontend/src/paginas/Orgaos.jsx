@@ -154,7 +154,7 @@ function TabelaOrgaos({ linhas, aoAbrir }) {
         </thead>
         <tbody>
           {linhas.map((o) => (
-            <tr key={o.cnpj} className="border-b border-borda/40 hover:bg-white/[0.03]">
+            <tr key={o.cnpj} className="border-b border-borda/40 hover:bg-realce/[0.03]">
               <td className="py-1.5">
                 <button className="text-left hover:text-voltagem flex items-center gap-1.5" onClick={() => aoAbrir(o.cnpj)}>
                   <Building2 size={12} className="text-texto-suave shrink-0" />
@@ -202,7 +202,7 @@ function TabelaConcorrentes({ linhas, aoAbrir }) {
         </thead>
         <tbody>
           {linhas.map((c) => (
-            <tr key={c.cnpj} className="border-b border-borda/40 hover:bg-white/[0.03]">
+            <tr key={c.cnpj} className="border-b border-borda/40 hover:bg-realce/[0.03]">
               <td className="py-1.5">
                 <button className="text-left hover:text-voltagem" onClick={() => aoAbrir(c.cnpj)}>
                   {resumir(c.razao_social || c.empresa, 40)}

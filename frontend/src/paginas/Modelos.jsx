@@ -118,8 +118,8 @@ export default function Modelos() {
             {dados.dados.map((m) => (
               <li
                 key={m.id}
-                className={`px-3 py-2 cursor-pointer hover:bg-white/[0.03] ${
-                  aberto && aberto.id === m.id ? 'bg-white/[0.06]' : ''
+                className={`px-3 py-2 cursor-pointer hover:bg-realce/[0.03] ${
+                  aberto && aberto.id === m.id ? 'bg-realce/[0.06]' : ''
                 }`}
                 onClick={() => abrir(m)}
               >

@@ -100,6 +100,27 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
   - Pendente (Seção 1c no plano): monitor que checa a mesma licitação uma vez por organização,
     correção manual de exigência ainda compartilhada, visão de alertas mais leve, ficha de órgão
     e concorrente que mostra o grupo da operadora.
+- **Seção 2 — tema claro/escuro, entregue em 13/11/2026.** As cores do Voltage Obsidian viraram
+  variáveis CSS (`frontend/src/estilo.css`, trios RGB em `:root`/`[data-tema='escuro']` e
+  `[data-tema='claro']`) que o `tailwind.config.js` lê como `rgb(var(--cor-x) / alfa)`: nenhum
+  componente sabe do tema, e `bg-voltagem/10` continua valendo. Dois tokens novos: `realce`
+  (película de hover/selecionado, que era `bg-white/…` e sumia no claro) e `apagado` (faixa
+  "Baixa" da pontuação, que estava em 2,5:1 no escuro). Alternador no rodapé da navegação e na
+  tela de login (`componentes/AlternarTema.jsx`, `servicos/tema.js`); o `index.html` aplica o tema
+  antes do primeiro pintar. Preferência em `usuarios.tema_preferido` (migração
+  `019_tema_preferido.sql`, `PATCH /api/auth/tema`, devolvida no login e no `/eu`), com
+  `localStorage` de reserva e `prefers-color-scheme` no primeiro acesso; sair apaga a escolha
+  local para o próximo do navegador não herdá-la.
+  - **Aceite medido** (MariaDB 10.11 zerado, 150 licitações reais do PNCP de RS/SC, Playwright):
+    primeiro acesso com o sistema em claro abriu claro; o login trouxe o escuro salvo no banco; o
+    clique trocou para claro **sem recarregar** (marcador na `window` sobreviveu) e o banco passou
+    a `claro`; recarregar manteve; outro navegador com o sistema em escuro abriu escuro e virou
+    claro no login. Contraste medido em todo texto visível (cor contra o fundo composto):
+    Radar 518 textos, Funil 380, Documentos 22 — **0 abaixo de 4,5:1 nos dois temas**, mínimo
+    6,43 / 5,04 / 6,96 no escuro e 4,64 / 4,79 / 5,98 no claro. API: `PATCH /api/auth/tema` 200
+    para `claro`/`escuro`/`null`, 400 para `"azul"` e corpo vazio, 401 sem token; só a linha do
+    próprio usuário muda. `testes/tema.test.js` refaz a conta de contraste dos tokens a cada
+    `npm test` (58/58).
 - `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
   ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
 
@@ -914,6 +935,7 @@ alertas e limpeza são todos dele. A API funciona sem o worker — só não anda
 
 ```
 POST   /api/auth/login              GET /api/auth/eu
+PATCH  /api/auth/tema               { tema: 'claro' | 'escuro' | null } — preferência do usuário
 GET    /api/licitacoes              ?busca&grupo&uf&modalidade&valor_min&valor_max
                                     &pontuacao_min&prazo_dias&exclusivo_me&etapa&ordem&pagina
 GET    /api/licitacoes/filtros      opções dos seletores do Radar

@@ -20,6 +20,8 @@ import Orgaos from './paginas/Orgaos';
 import Contratos from './paginas/Contratos';
 import Relatorio from './paginas/Relatorio';
 import Alertas from './componentes/Alertas';
+import AlternarTema from './componentes/AlternarTema';
+import { definirTema, seguirSistema, temaGuardado } from './servicos/tema';
 
 const TELAS = [
   { chave: 'radar', rotulo: 'Radar', icone: IconeRadar },
@@ -59,6 +61,8 @@ export default function App() {
   const [organizacao, setOrganizacao] = useState(obterOrganizacao);
   const [organizacoes, setOrganizacoes] = useState([]);
 
+  useEffect(seguirSistema, []);
+
   // A lista de organizações do usuário vem do backend (nada de permissão
   // decidida no frontend): é ela que alimenta o seletor de troca.
   useEffect(() => {
@@ -67,6 +71,10 @@ export default function App() {
       .eu()
       .then((r) => {
         setOrganizacoes(r.organizacoes || []);
+        // O tema salvo no usuário manda sobre o do navegador (Seção 2); se ele
+        // nunca salvou, a escolha feita aqui (ex.: na tela de login) sobe ao banco.
+        if (r.tema) definirTema(r.tema);
+        else if (temaGuardado()) api.salvarTema(temaGuardado()).catch(() => {});
         const atual = (r.organizacoes || []).find((o) => o.id === r.usuario.organizacao_id);
         if (atual) setOrganizacao(atual);
       })
@@ -136,7 +144,7 @@ export default function App() {
               onClick={() => setTela(chave)}
               className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
                 tela === chave
-                  ? 'text-texto bg-white/[0.06] border-l-2 border-texto'
+                  ? 'text-texto bg-realce/[0.06] border-l-2 border-texto'
                   : 'text-texto-suave hover:text-texto border-l-2 border-transparent'
               }`}
             >
@@ -152,10 +160,13 @@ export default function App() {
 
         <div className="border-t border-borda p-3">
           <p className="text-[11px] text-texto-suave truncate hidden md:block mb-2">{usuario.nome || usuario.email}</p>
-          <button onClick={sair} className="flex items-center gap-2 text-xs text-texto-suave hover:text-texto">
-            <LogOut size={14} />
-            <span className="hidden md:inline">sair</span>
-          </button>
+          <div className="flex flex-col md:flex-row md:justify-between gap-2">
+            <button onClick={sair} className="flex items-center gap-2 text-xs text-texto-suave hover:text-texto">
+              <LogOut size={14} />
+              <span className="hidden md:inline">sair</span>
+            </button>
+            <AlternarTema />
+          </div>
         </div>
       </nav>
 

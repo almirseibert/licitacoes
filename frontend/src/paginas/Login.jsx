@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { api, guardarSessao } from '../servicos/api';
+import AlternarTema from '../componentes/AlternarTema';
+import { definirTema } from '../servicos/tema';
 
 /**
  * Entrada do painel, multiempresa (PLANO_SAAS_CONLICITACAO.md, Seção 1b):
@@ -38,6 +40,7 @@ export default function Login({ onEntrar }) {
           ? await api.cadastrar(campos)
           : await api.login(campos.email, campos.senha);
       guardarSessao(r.token, r.usuario, r.organizacao);
+      definirTema(r.tema); // Seção 2: já no login, sem esperar o /eu
       onEntrar(r.usuario);
     } catch (e) {
       setErro(e.message);
@@ -53,7 +56,8 @@ export default function Login({ onEntrar }) {
   };
 
   return (
-    <div className="min-h-screen grid place-items-center px-4">
+    <div className="min-h-screen grid place-items-center px-4 relative">
+      <div className="absolute top-4 right-4"><AlternarTema /></div>
       <form onSubmit={enviar} className="w-full max-w-sm">
         <h1 className="font-titulo text-2xl mb-1">{titulos[modo][0]}</h1>
         <p className="text-xs text-texto-suave mb-6">{titulos[modo][1]}</p>
@@ -114,7 +118,7 @@ export default function Login({ onEntrar }) {
 
 const ESTILO_CAMPO =
   'w-full bg-superficie border border-borda rounded px-3 py-2 text-sm ' +
-  'focus:outline-none focus:border-voltagem/60 placeholder:text-texto-suave/50';
+  'focus:outline-none focus:border-voltagem/60 placeholder:text-texto-suave/70';
 
 export function Campo({ rotulo, tipo = 'text', valor, aoMudar, autoComplete, minimo }) {
   return (

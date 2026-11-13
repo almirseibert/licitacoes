@@ -1,6 +1,8 @@
 // Cliente da API. Guarda o token do painel e a organização em que ele atua
 // no localStorage (Seção 1 do PLANO_SAAS_CONLICITACAO.md: login próprio,
 // multiempresa — o token vale para UMA organização por vez).
+import { esquecerTema } from './tema';
+
 const BASE = import.meta.env.VITE_API_URL || '/api';
 const CHAVE_TOKEN = 'licitacoes.token';
 const CHAVE_USUARIO = 'licitacoes.usuario';
@@ -36,6 +38,7 @@ export function encerrarSessao() {
   localStorage.removeItem(CHAVE_TOKEN);
   localStorage.removeItem(CHAVE_USUARIO);
   localStorage.removeItem(CHAVE_ORGANIZACAO);
+  esquecerTema();
 }
 
 async function requisitar(caminho, opcoes = {}) {
@@ -142,6 +145,9 @@ export const api = {
     requisitar('/auth/cadastro', { method: 'POST', publica: true, body: JSON.stringify(campos) }),
 
   eu: () => requisitar('/auth/eu'),
+
+  // Seção 2: preferência de tema do usuário ('claro' | 'escuro' | null).
+  salvarTema: (tema) => requisitar('/auth/tema', { method: 'PATCH', body: JSON.stringify({ tema }) }),
 
   trocarOrganizacao: (organizacaoId) =>
     requisitar('/auth/trocar-organizacao', {

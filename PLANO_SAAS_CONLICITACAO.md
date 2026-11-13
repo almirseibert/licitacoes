@@ -26,7 +26,7 @@ cofre de senha de portal e a assinatura digital (ver a tabela de divergências n
 
 | Fase | Seções | O que o cliente ganha | Marco |
 |---|---|---|---|
-| **A — Fundação SaaS** | 0 ✅, 1 (1a ✅, 1b ✅, 1c), 2, 3 | Conta própria, equipe, dados isolados, tema claro/escuro, plano e cobrança | Dá para cobrar e isolar clientes |
+| **A — Fundação SaaS** | 0 ✅, 1 (1a ✅, 1b ✅, 1c), 2 ✅, 3 | Conta própria, equipe, dados isolados, tema claro/escuro, plano e cobrança | Dá para cobrar e isolar clientes |
 | **B — Paridade de captação** | 4, 7, 8, 9, 10 | Boletim diário, banco de licitações completo, gestão com tarefas, avisos por tipo, documentos | Substitui o uso diário do ConLicitação na captação |
 | **C — IA e inteligência** | 5, 11, 12, 13, 14, 15, 17 | Pergunte ao Edital, resumo com checklist, acompanhamentos, contratos e atas, concorrentes e mercado, API, onboarding | **Versão 1 vendável** — fim da Fase C |
 | **D — Estratégia e automação** | 6, 16 | Monitor de chat, alerta de deserta por segmento, consultor jurídico | Planos mais caros |
@@ -145,16 +145,33 @@ admin/dono recusado (403) antes de qualquer escrita no banco.
 
 ---
 
-## Seção 2 — Tema claro/escuro no painel
-- [ ] Tokens de cor do Voltage Obsidian em variáveis CSS (`:root` para claro,
-      `[data-tema="escuro"]` para escuro), sem reescrever componente por componente.
-- [ ] Alternador no cabeçalho do frontend; preferência salva por usuário (coluna
-      `usuarios.tema_preferido` ou `localStorage` como fallback) e respeita
-      `prefers-color-scheme` no primeiro acesso.
-- [ ] Conferir contraste em tabelas, gráficos e badges de etapa do funil nos dois temas.
+## Seção 2 — Tema claro/escuro no painel — ✅ feito em 13/11/2026
+- [x] Tokens de cor do Voltage Obsidian em variáveis CSS, sem reescrever componente por
+      componente. **Divergência registrada:** o `:root` ficou com o **escuro** (o tema da spec,
+      seção 15) e o claro em `[data-tema="claro"]` — sem atributo, nada muda para quem já usa.
+      Tokens novos `realce` (hover, era `bg-white/…`) e `apagado` (faixa "Baixa").
+- [x] Alternador no rodapé da navegação (o painel não tem cabeçalho; a navegação lateral é o
+      cabeçalho dele) e na tela de login; `usuarios.tema_preferido` (migração 019,
+      `PATCH /api/auth/tema`) com `localStorage` de reserva e `prefers-color-scheme` no primeiro
+      acesso; o `index.html` aplica antes do primeiro pintar.
+- [x] Contraste conferido em tabelas, anel de pontuação e etapas do funil nos dois temas
+      (`testes/tema.test.js` nos tokens + medição no navegador).
 
-**Aceite:** alternância sem recarregar a página, preferência mantida entre sessões,
-contraste adequado nos dois temas nas telas de painel, funil e cofre.
+**Aceite (medido):** contra MariaDB zerado (019 aplicada), 150 licitações reais do PNCP e
+Playwright: alternância **sem recarregar** (marcador na `window` sobreviveu), banco gravou
+`claro`; recarregar manteve; outro navegador (sistema escuro) virou claro no login; sair
+limpou o `localStorage`. Contraste de todo texto visível: Radar 518, Funil 380, Documentos 22 —
+**0 abaixo de 4,5:1 nos dois temas** (mínimos: escuro 6,43/5,04/6,96; claro 4,64/4,79/5,98). A
+primeira medição pegou a faixa "Baixa" do Funil escuro em 3,73:1 — corrigida. API: 200 para
+`claro`/`escuro`/`null`, 400 para valor inválido, 401 sem token. Lint limpo, 58/58 testes.
+
+**Seção 2b — pendente:**
+- [ ] Se o `PATCH /api/auth/tema` falhar (rede), a escolha vale só nesta sessão e o próximo login
+      volta ao que está no banco — avisar ou reenviar.
+- [ ] Gráficos: o painel ainda não tem gráfico com cor própria (o Relatório é tabela); quando a
+      Seção 8/13/15 trouxer, usar os tokens, não hex.
+- [ ] Telas fora do aceite (Proposta, Envio, Contratos…) só foram vistas por amostra; o PDF da
+      proposta e o checklist seguem no Voltage escuro de propósito (documento, não tela).
 
 ---
 

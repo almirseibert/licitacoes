@@ -130,7 +130,7 @@ function Marcador({ ativo, onClick, children }) {
       onClick={onClick}
       className={`px-2 py-1 rounded border transition-colors ${
         ativo
-          ? 'border-texto-suave/70 text-texto bg-white/[0.06]'
+          ? 'border-texto-suave/70 text-texto bg-realce/[0.06]'
           : 'border-borda text-texto-suave hover:text-texto'
       }`}
     >

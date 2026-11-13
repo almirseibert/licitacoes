@@ -2,8 +2,47 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/* Tema (Seção 2 do PLANO_SAAS_CONLICITACAO.md). Cada cor é um trio RGB que o
+   tailwind.config.js lê como `rgb(var(--cor-x) / alfa)`; os componentes não sabem
+   do tema. O escuro é o Voltage Obsidian da seção 15 da spec. O claro foi medido
+   (WCAG, testes/tema.test.js): texto >= 7:1; texto-suave, voltagem, ok, atenção e
+   erro >= 4,5:1 sobre o fundo e a superfície; `apagado` também. `realce` é a película do hover/selecionado: branco no
+   escuro, tinta no claro. `apagado` é a faixa "Baixa" da pontuação. */
+:root,
+[data-tema='escuro'] {
   color-scheme: dark;
+  --cor-obsidiana: 10 14 26;      /* #0A0E1A */
+  --cor-superficie: 17 24 39;     /* #111827 */
+  --cor-borda: 31 41 55;          /* #1F2937 */
+  --cor-navy: 1 31 65;            /* #011F41 */
+  --cor-voltagem: 34 211 238;     /* #22D3EE */
+  --cor-texto: 229 231 235;       /* #E5E7EB */
+  --cor-texto-suave: 148 163 184; /* #94A3B8 */
+  --cor-ok: 52 211 153;           /* #34D399 */
+  --cor-atencao: 251 191 36;      /* #FBBF24 */
+  --cor-erro: 248 113 113;        /* #F87171 */
+  --cor-apagado: 122 138 160;     /* #7A8AA0 — o #475569 antigo dava 2,5:1 */
+  --cor-realce: 255 255 255;
+  --cor-rolagem: 31 41 55;
+  --cor-rolagem-foco: 51 65 85;
+}
+
+[data-tema='claro'] {
+  color-scheme: light;
+  --cor-obsidiana: 244 246 250;   /* #F4F6FA — fundo */
+  --cor-superficie: 255 255 255;
+  --cor-borda: 203 213 225;       /* #CBD5E1 */
+  --cor-navy: 226 232 240;        /* #E2E8F0 — cabeçalho de tabela */
+  --cor-voltagem: 14 116 144;     /* #0E7490 */
+  --cor-texto: 15 23 42;          /* #0F172A */
+  --cor-texto-suave: 71 85 105;   /* #475569 */
+  --cor-ok: 4 120 87;             /* #047857 */
+  --cor-atencao: 180 83 9;        /* #B45309 */
+  --cor-erro: 185 28 28;          /* #B91C1C */
+  --cor-apagado: 96 112 134;      /* #607086 */
+  --cor-realce: 15 23 42;
+  --cor-rolagem: 203 213 225;
+  --cor-rolagem-foco: 148 163 184;
 }
 
 body {
@@ -18,7 +57,7 @@ body {
   @apply px-3 py-[7px] border-t border-borda align-middle;
 }
 .tabela-densa tbody tr:hover {
-  @apply bg-white/[0.03];
+  @apply bg-realce/[0.03];
 }
 
 /* Edição em linha, sem modal (seções 11.3 e 11.4): o campo só se revela ao focar,
@@ -62,6 +101,6 @@ body {
 }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: #0A0E1A; }
-::-webkit-scrollbar-thumb { background: #1F2937; border-radius: 6px; }
-::-webkit-scrollbar-thumb:hover { background: #334155; }
+::-webkit-scrollbar-track { background: rgb(var(--cor-obsidiana)); }
+::-webkit-scrollbar-thumb { background: rgb(var(--cor-rolagem)); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: rgb(var(--cor-rolagem-foco)); }

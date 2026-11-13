@@ -52,12 +52,16 @@ export function restante(fim) {
   return { texto, horas, critico: horas < 24, encerrado: false };
 }
 
-/** Faixas da seção 6: 80+ alta, 55-79 analisar, 30-54 talvez, <30 baixa. */
+/**
+ * Faixas da seção 6: 80+ alta, 55-79 analisar, 30-54 talvez, <30 baixa.
+ * A cor é a variável do tema (estilo.css), não o hex: assim acompanha o claro/escuro.
+ */
+const cor = (token) => `rgb(var(--cor-${token}))`;
 export function faixaPontuacao(pontuacao) {
-  if (pontuacao >= 80) return { chave: 'alta', rotulo: 'Prioridade alta', cor: '#22D3EE' };
-  if (pontuacao >= 55) return { chave: 'analisar', rotulo: 'Vale analisar', cor: '#E5E7EB' };
-  if (pontuacao >= 30) return { chave: 'talvez', rotulo: 'Talvez', cor: '#94A3B8' };
-  return { chave: 'baixa', rotulo: 'Baixa', cor: '#475569' };
+  if (pontuacao >= 80) return { chave: 'alta', rotulo: 'Prioridade alta', cor: cor('voltagem') };
+  if (pontuacao >= 55) return { chave: 'analisar', rotulo: 'Vale analisar', cor: cor('texto') };
+  if (pontuacao >= 30) return { chave: 'talvez', rotulo: 'Talvez', cor: cor('texto-suave') };
+  return { chave: 'baixa', rotulo: 'Baixa', cor: cor('apagado') };
 }
 
 export function resumir(texto, tamanho = 160) {

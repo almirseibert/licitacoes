@@ -135,7 +135,7 @@ rotas.post('/login', async (req, res) => {
   const emailLimpo = String(emailUsuario).trim().toLowerCase();
   try {
     const [linhas] = await pool.query(
-      'SELECT id, nome, email, senha_hash, ativo FROM usuarios WHERE email = ? LIMIT 1',
+      'SELECT id, nome, email, senha_hash, ativo, tema_preferido FROM usuarios WHERE email = ? LIMIT 1',
       [emailLimpo]
     );
     if (!linhas.length) return res.status(401).json({ erro: 'E-mail ou senha incorretos.' });
@@ -162,6 +162,7 @@ rotas.post('/login', async (req, res) => {
       usuario: { id: usuario.id, nome: usuario.nome, email: usuario.email, papel: principal.papel },
       organizacao: { id: principal.id, nome: principal.nome, status: principal.status },
       organizacoes,
+      tema: usuario.tema_preferido,
     });
   } catch (erro) {
     return responderErro(res, 500, 'Não foi possível entrar agora.', erro);
@@ -170,10 +171,35 @@ rotas.post('/login', async (req, res) => {
 
 rotas.get('/eu', autenticar, async (req, res) => {
   try {
-    const organizacoes = await organizacoesDoUsuario(req.usuario.id);
-    res.json({ usuario: req.usuario, organizacoes });
+    const [organizacoes, [linhas]] = await Promise.all([
+      organizacoesDoUsuario(req.usuario.id),
+      pool.query('SELECT tema_preferido FROM usuarios WHERE id = ?', [req.usuario.id]),
+    ]);
+    const tema = linhas.length ? linhas[0].tema_preferido : null;
+    res.json({ usuario: req.usuario, organizacoes, tema });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível carregar sua sessão.', erro);
+  }
+});
+
+// --------------------------------------------------------------------- tema
+/**
+ * PATCH /api/auth/tema — { tema: 'claro' | 'escuro' | null } (Seção 2 do plano SaaS).
+ * Preferência pessoal: vale para o usuário em toda organização, e o leitor também
+ * escolhe a sua (não é dado da organização, por isso fica fora do `leitorSoLe`).
+ * `null` volta a seguir o sistema operacional.
+ */
+const TEMAS = ['claro', 'escuro'];
+rotas.patch('/tema', autenticar, confirmarVinculo, async (req, res) => {
+  const { tema } = req.body || {};
+  if (tema !== null && !TEMAS.includes(tema)) {
+    return res.status(400).json({ erro: 'Tema inválido: use "claro", "escuro" ou nenhum.' });
+  }
+  try {
+    await pool.query('UPDATE usuarios SET tema_preferido = ? WHERE id = ?', [tema, req.usuario.id]);
+    res.json({ tema });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível salvar o tema.', erro);
   }
 });
 
