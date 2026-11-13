@@ -133,7 +133,7 @@ decidiu de outro jeito. A decisão do repositório vale; a linha abaixo diz por 
 | Documentos "coletando" (certidão automática) | Lembrete de vencimento + botão que abre a página de emissão | Emissão exige CAPTCHA ou gov.br |
 | Monitor de chat "por portal" | Só portal com consulta pública, sem login | Seção 5.4; portal que bloqueia vira `bloqueado` |
 | Fase 0: rotacionar credenciais fixas do monorepo | Não se aplica a este repositório (segredos só em variável de ambiente) | Vale para o monorepo `studiomythos`; se aquelas credenciais vazaram, rotacione lá |
-| Teste grátis de 7 dias | 15 dias, a confirmar | Decisão em aberto do plano |
+| Teste grátis de 7 dias | **15 dias** (decidido em 13/11/2026) | Decisão do dono do produto |
 | Planos Essencial / Profissional / Avançado + automação | Mesmos três níveis, sem o "adicional de automação" enquanto não houver robô | Ver Seção 3 do plano |
 
 ## 5. Perguntas prontas do "Pergunte ao Edital" (contagem observada)

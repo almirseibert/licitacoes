@@ -138,7 +138,12 @@ contraste adequado nos dois temas nas telas de painel, funil e cofre.
       webhook preparado para gateway a escolher depois (Asaas ou Stripe) — nenhuma chave no git.
 - [ ] Painel do superadmin (Studio Mythos): organizações, planos, uso, suspensão.
 - [ ] Três planos **de fato diferentes** (a referência lista os mesmos módulos nos três e cobra de
-      R$ 2.871 a R$ 5.409 por ano — o espaço para diferenciar existe). Proposta, preços a decidir:
+      R$ 2.871 a R$ 5.409 por ano — o espaço para diferenciar existe). Preços **propostos em
+      13/11/2026** (até então só havia a estrutura dos planos, sem número; estes valores ficam
+      abaixo da referência no plano de entrada e são revisáveis antes do lançamento):
+      **Essencial R$ 149/mês ou R$ 1.490/ano** · **Profissional R$ 299/mês ou R$ 2.990/ano** ·
+      **Avançado R$ 499/mês ou R$ 4.990/ano** (anual = 10 meses pagos). Teste grátis de **15 dias**,
+      decidido, sem cartão. Estrutura:
       **Essencial** (captação: Radar, boletim, gestão, documentos, declarações, alertas) ·
       **Profissional** (+ Pergunte ao Edital, resumo, acompanhamentos, contratos e atas,
       concorrentes, histórico, API) · **Avançado** (+ estratégicas, mercado, consultor jurídico,
@@ -377,7 +382,8 @@ conferidos por consulta direta.
 ## Seção 16 — Consultor jurídico (Fase D)
 - [ ] Chat sobre a Lei 14.133 com histórico e "novo chat", **sempre citando o artigo**.
 - [ ] **Base jurídica revisada por advogado antes de publicar**, e aviso fixo "não substitui
-      advogado". Sem revisor definido, a função não sai (decisão em aberto).
+      advogado". **Bloqueada: o advogado revisor ainda não foi definido (13/11/2026).** Sem ele
+      a Seção 16 não sai; as demais seções da Fase D (monitor de chat) seguem normalmente.
 - [ ] Biblioteca "Jurídico Fácil": artigos curtos, busca, filtros por tema. Conteúdo **nosso**.
 
 **Aceite:** 20 perguntas de teste respondidas com artigo correto, conferidas pelo advogado revisor.
