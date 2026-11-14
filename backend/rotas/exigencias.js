@@ -8,6 +8,7 @@ const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const escopo = require('../servicos/escopo');
 const fila = require('../servicos/fila');
+const exigenciasDaOrganizacao = require('../servicos/exigencias');
 const { CATALOGO, PORCODIGO } = require('../regras/exigencias');
 
 const rotas = express.Router({ mergeParams: true });
@@ -68,15 +69,8 @@ rotas.get('/', async (req, res) => {
       [req.organizacaoId]
     );
 
-    const [detectadas] = await pool.query(
-      `SELECT e.codigo, e.detectado, e.trecho, e.pagina, e.confirmado_por_usuario,
-              a.nome_arquivo
-         FROM licitacao_exigencias e
-         LEFT JOIN licitacao_arquivos a ON a.id = e.arquivo_id
-        WHERE e.licitacao_id = ?`,
-      [req.params.id]
-    );
-    const porCodigo = new Map(detectadas.map((d) => [d.codigo, d]));
+    // A leitura do edital (catálogo) com a correção desta organização por cima (Seção 1c).
+    const porCodigo = await exigenciasDaOrganizacao.daLicitacao(req.organizacaoId, licitacao.id);
 
     const dados = CATALOGO.map((item) => {
       const achado = porCodigo.get(item.codigo) || { detectado: 'indefinido' };
@@ -89,7 +83,7 @@ rotas.get('/', async (req, res) => {
         trecho: achado.trecho || null,
         pagina: achado.pagina || null,
         arquivo: achado.nome_arquivo || null,
-        confirmado_por_usuario: Boolean(achado.confirmado_por_usuario),
+        confirmado_por_usuario: Boolean(achado.corrigido),
         ...atendimento(item.codigo, { licitacao, perfil }),
       };
     });
@@ -110,7 +104,8 @@ rotas.get('/', async (req, res) => {
 });
 
 // POST /api/licitacoes/:id/exigencias/:codigo — correção manual (seção 13).
-// O que o usuário confirma passa a ser a verdade: a leitura seguinte não mexe.
+// O que o usuário confirma passa a ser a verdade para a organização dele: a leitura
+// seguinte não mexe, e as outras organizações continuam vendo a leitura do edital.
 rotas.post('/:codigo', async (req, res) => {
   try {
     const { codigo } = req.params;
@@ -121,12 +116,10 @@ rotas.post('/:codigo', async (req, res) => {
       return res.status(400).json({ erro: `Use um de: ${DETECCOES.join(', ')}.` });
     }
 
-    await pool.query(
-      `INSERT INTO licitacao_exigencias (licitacao_id, codigo, detectado, confirmado_por_usuario)
-       VALUES (?, ?, ?, 1)
-       ON DUPLICATE KEY UPDATE detectado = VALUES(detectado), confirmado_por_usuario = 1`,
-      [req.params.id, codigo, detectado]
+    const gravou = await exigenciasDaOrganizacao.corrigir(
+      req.organizacaoId, req.params.id, codigo, detectado, req.usuario && req.usuario.id
     );
+    if (!gravou) return res.status(404).json({ erro: 'Licitação não encontrada.' });
     res.json({ ok: true, mensagem: 'Anotado. A leitura automática não mexe mais nesta linha.' });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível salvar a correção.', erro);
@@ -136,10 +129,8 @@ rotas.post('/:codigo', async (req, res) => {
 // POST /api/licitacoes/:id/exigencias/:codigo/soltar — devolve a linha à leitura automática.
 rotas.post('/:codigo/soltar', async (req, res) => {
   try {
-    await pool.query(
-      'UPDATE licitacao_exigencias SET confirmado_por_usuario = 0 WHERE licitacao_id = ? AND codigo = ?',
-      [req.params.id, req.params.codigo]
-    );
+    if (!PORCODIGO.has(req.params.codigo)) return res.status(400).json({ erro: `Exigência desconhecida: "${req.params.codigo}".` });
+    await exigenciasDaOrganizacao.soltar(req.organizacaoId, req.params.id, req.params.codigo);
     res.json({ ok: true, mensagem: 'Linha volta a seguir a leitura do edital.' });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível soltar a linha.', erro);

@@ -123,22 +123,38 @@ async function ligarOsQueFaltam({ limite = 500 } = {}) {
   return { ligados, candidatas: candidatas.length };
 }
 
-/** As que estão na hora de olhar, na ordem em que importam. */
-async function devidas({ limite = 40 } = {}) {
-  const [linhas] = await pool.query(
-    `SELECT m.*, COALESCE(o.etapa, 'Triagem') AS etapa, l.objeto, l.orgao_nome, l.orgao_cnpj, l.chave_externa, l.fonte_id,
+// Monitoramento ativo com o que a checagem precisa: o catálogo (igual para
+// todas as organizações) e a etapa da organização dona da linha.
+const SELECAO_MONITORAMENTO = `SELECT m.*, COALESCE(o.etapa, 'Triagem') AS etapa, l.objeto, l.orgao_nome, l.orgao_cnpj, l.chave_externa, l.fonte_id,
             l.abertura_propostas, l.fim_propostas, l.situacao, l.valor_estimado, l.pasta,
             l.cnpj_vencedor, l.uf, f.adaptador
        FROM monitoramentos m
        JOIN licitacoes l ON l.id = m.licitacao_id
        LEFT JOIN org_licitacoes o ON o.licitacao_id = m.licitacao_id AND o.organizacao_id = m.organizacao_id
        JOIN fontes f ON f.id = l.fonte_id
-      WHERE m.ativo = 1
+      WHERE m.ativo = 1`;
+
+/** As que estão na hora de olhar, na ordem em que importam. */
+async function devidas({ limite = 40 } = {}) {
+  const [linhas] = await pool.query(
+    `${SELECAO_MONITORAMENTO}
         AND (m.proxima_checagem IS NULL OR m.proxima_checagem <= NOW())
       ORDER BY FIELD(m.motivo, 'disputando') DESC, m.proxima_checagem ASC
       LIMIT ?`,
     [limite]
   );
+  return linhas;
+}
+
+/**
+ * Todos os monitoramentos ativos destas licitações, de todas as organizações,
+ * fora da hora ou não. A ida ao portal é uma por licitação (seção 5.4): quem
+ * monitora a mesma licitação é atendido pela mesma leitura.
+ */
+async function ativosDasLicitacoes(licitacaoIds) {
+  const ids = [...new Set(licitacaoIds.map(Number).filter(Boolean))];
+  if (!ids.length) return [];
+  const [linhas] = await pool.query(`${SELECAO_MONITORAMENTO} AND m.licitacao_id IN (?)`, [ids]);
   return linhas;
 }
 
@@ -186,6 +202,7 @@ module.exports = {
   desligar,
   ligarOsQueFaltam,
   devidas,
+  ativosDasLicitacoes,
   alertarEditalAlterado,
   linhaDoTempo,
 };

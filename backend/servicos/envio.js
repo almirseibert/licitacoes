@@ -17,6 +17,7 @@ const proposta = require('./proposta');
 const { semaforo, tituloPadrao } = require('../regras/validades');
 const declaracao = require('./declaracao');
 const pacote = require('./pacote');
+const exigenciasOrg = require('./exigencias');
 const { PORCODIGO } = require('../regras/exigencias');
 
 // Códigos que são condição, não papel para anexar: cobrá-los do cofre só
@@ -120,11 +121,7 @@ async function montar({ organizacaoId, licitacaoId, kitId = null, perfilId = nul
     [kit.id]
   );
 
-  const [exigencias] = await pool.query(
-    "SELECT codigo, detectado FROM licitacao_exigencias WHERE licitacao_id = ? AND detectado = 'sim'",
-    [licitacaoId]
-  );
-  const exigidos = new Set(exigencias.map((e) => e.codigo));
+  const exigidos = new Set((await exigenciasOrg.exigidas(organizacaoId, licitacaoId)).map((e) => e.codigo));
 
   // Só a versão ativa mais recente de cada código entra na seleção.
   const [documentos] = await pool.query(

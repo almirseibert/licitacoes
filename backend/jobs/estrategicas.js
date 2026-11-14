@@ -364,20 +364,42 @@ async function alertarPorSegmento({ dias = 3, horas = HORAS_IMINENCIA } = {}) {
       GROUP BY organizacao_id, grupo`
   );
 
-  const resumo = { organizacoes: 0, segmentos: 0, desertas: 0, iminentes: 0, sem_recurso: 0 };
-  const vistas = new Set();
+  const resumo = { organizacoes: 0, segmentos: 0, desertas: 0, iminentes: 0, sem_recurso: 0, sem_assinatura: 0 };
+
+  // O que pode haver para avisar, lido uma vez para todas as organizações. A
+  // consulta por segmento, que casa os termos com REGEXP no banco, só roda onde
+  // há candidato: sem oportunidade nova na janela, ou sem prazo acabando na
+  // organização, ela nem é feita.
+  const [[{ n: haNovas }]] = await pool.query(
+    "SELECT COUNT(*) AS n FROM oportunidades_retomada WHERE situacao = 'aguardando' AND criado_em >= DATE_SUB(NOW(), INTERVAL ? DAY)",
+    [dias]
+  );
+  const [prazos] = await pool.query(
+    `SELECT DISTINCT l.organizacao_id FROM ${escopo.porOrganizacao()} l
+      WHERE l.descartada = 0 AND l.fim_propostas BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL ? HOUR)`,
+    [horas]
+  );
+  const comPrazoAcabando = new Set(prazos.map((p) => p.organizacao_id));
+
+  // A conferência do plano é por organização, não por segmento.
+  const podeAvisar = new Map();
+  async function organizacaoPodeAvisar(organizacaoId) {
+    if (podeAvisar.has(organizacaoId)) return podeAvisar.get(organizacaoId);
+    const dados = await limites.daOrganizacao(organizacaoId);
+    let motivo = null;
+    if (!dados) motivo = 'inexistente';
+    else if (!dados.isenta && !dados.situacao.pode_escrever) motivo = 'sem_assinatura'; // teste vencido, atrasada ou suspensa
+    else if (!dados.isenta && !limites.temRecurso(dados.plano, 'estrategicas')) motivo = 'sem_recurso';
+    if (motivo === 'sem_assinatura') resumo.sem_assinatura += 1;
+    if (motivo === 'sem_recurso') resumo.sem_recurso += 1;
+    if (!motivo) resumo.organizacoes += 1;
+    podeAvisar.set(organizacaoId, !motivo);
+    return !motivo;
+  }
 
   for (const g of grupos) {
     const organizacaoId = g.organizacao_id;
-    const dados = await limites.daOrganizacao(organizacaoId);
-    if (!dados) continue;
-    if (!dados.isenta && !limites.temRecurso(dados.plano, 'estrategicas')) {
-      if (!vistas.has(`sem:${organizacaoId}`)) resumo.sem_recurso += 1;
-      vistas.add(`sem:${organizacaoId}`);
-      continue;
-    }
-    if (!vistas.has(organizacaoId)) resumo.organizacoes += 1;
-    vistas.add(organizacaoId);
+    if (!(await organizacaoPodeAvisar(organizacaoId))) continue;
     resumo.segmentos += 1;
 
     const termos = regrasMercado.condicaoDeTermos(regrasMercado.listaJson(g.termos), 'objeto');
@@ -385,12 +407,14 @@ async function alertarPorSegmento({ dias = 3, horas = HORAS_IMINENCIA } = {}) {
     const rotulo = String(g.grupo).slice(0, 60);
 
     // --- deserta/fracassada nova no segmento
-    const [novas] = await pool.query(
-      `SELECT id, tipo, orgao_nome, uf, objeto FROM oportunidades_retomada
-        WHERE situacao = 'aguardando' AND criado_em >= DATE_SUB(NOW(), INTERVAL ? DAY) AND ${termos.sql}
-        ORDER BY id`,
-      [dias, ...termos.valores]
-    );
+    const [novas] = Number(haNovas)
+      ? await pool.query(
+          `SELECT id, tipo, orgao_nome, uf, objeto FROM oportunidades_retomada
+            WHERE situacao = 'aguardando' AND criado_em >= DATE_SUB(NOW(), INTERVAL ? DAY) AND ${termos.sql}
+            ORDER BY id`,
+          [dias, ...termos.valores]
+        )
+      : [[]];
     if (novas.length) {
       const ultima = novas[novas.length - 1];
       const criou = await alertas.criar({
@@ -408,6 +432,7 @@ async function alertarPorSegmento({ dias = 3, horas = HORAS_IMINENCIA } = {}) {
     }
 
     // --- prazo acabando no segmento (da organização, sem o descartado)
+    if (!comPrazoAcabando.has(organizacaoId)) continue;
     const termosL = regrasMercado.condicaoDeTermos(regrasMercado.listaJson(g.termos), 'l.objeto');
     const [iminentes] = await pool.query(
       `SELECT l.id, l.objeto, l.orgao_nome, l.fim_propostas

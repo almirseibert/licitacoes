@@ -3,7 +3,6 @@
 // Todo alerta tem uma `chave` única: `prazo_48h:123`. O job roda de hora em
 // hora e a chave é o que impede o mesmo aviso de aparecer doze vezes.
 const pool = require('../config/db');
-const { daOrganizacao } = require('./escopo');
 
 /**
  * Cria o alerta se ainda não existir.
@@ -50,10 +49,16 @@ async function listar({ organizacaoId, usuarioId = null, lido = null, limite = 6
   }
 
   const [linhas] = await pool.query(
-    `SELECT a.*, l.objeto, l.orgao_nome, l.fim_propostas, l.etapa, l.pontuacao,
+    // Junta direto com o catálogo e com a linha da organização (Seção 1c): sem a
+    // tabela derivada "catálogo inteiro", o custo não cresce com o catálogo.
+    // Sem linha da organização vale o estado de "ainda não olhei".
+    `SELECT a.*, l.objeto, l.orgao_nome, l.fim_propostas,
+            IF(l.id IS NULL, NULL, COALESCE(o.etapa, 'Triagem')) AS etapa,
+            IF(l.id IS NULL, NULL, COALESCE(o.pontuacao, 0)) AS pontuacao,
             d.titulo AS documento_titulo
        FROM alertas a
-       LEFT JOIN ${daOrganizacao(organizacaoId, { todas: true })} l ON l.id = a.licitacao_id
+       LEFT JOIN licitacoes l ON l.id = a.licitacao_id
+       LEFT JOIN org_licitacoes o ON o.licitacao_id = a.licitacao_id AND o.organizacao_id = a.organizacao_id
        LEFT JOIN empresa_documentos d ON d.id = a.documento_id AND d.organizacao_id = a.organizacao_id
       WHERE ${condicoes.join(' AND ')}
       ORDER BY a.lido ASC, a.criado_em DESC

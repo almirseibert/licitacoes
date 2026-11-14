@@ -4,6 +4,7 @@
 const pool = require('../config/db');
 const filtrosRadar = require('../regras/filtros-radar');
 const etiquetas = require('../regras/etiquetas');
+const exigenciasOrg = require('./exigencias');
 
 /** A cidade de onde a organização mede o raio (Configurações), ou null. */
 async function cidadeBase(organizacaoId) {
@@ -40,8 +41,7 @@ const COLUNAS_LISTA = `l.id, l.chave_externa, l.orgao_nome, l.unidade, l.uf, l.m
        l.fim_propostas_original, l.situacao, l.plataforma_disputa, l.link_portal, l.link_disputa,
        l.beneficio_me, l.criado_em, l.arquivos_status,
        (SELECT COUNT(*) FROM licitacao_itens i WHERE i.licitacao_id = l.id) AS total_itens,
-       EXISTS (SELECT 1 FROM licitacao_exigencias ex WHERE ex.licitacao_id = l.id
-                 AND ex.codigo = 'garantia_contrato' AND ex.detectado = 'sim') AS exige_garantia`;
+       ${exigenciasOrg.exigidaSql({ licitacao: 'l.id', organizacao: 'l.organizacao_id', codigos: ['garantia_contrato'] })} AS exige_garantia`;
 
 function comEtiquetas(linhas) {
   const agora = new Date();

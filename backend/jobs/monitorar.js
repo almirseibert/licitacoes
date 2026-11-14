@@ -175,54 +175,71 @@ async function moverPeloResultado(licitacao) {
   return { etapa, vencedor: principal.fornecedor_vencedor, valor: Number(principal.total) || null };
 }
 
-/** Uma checagem completa de uma licitação. */
-async function checar(monitoramento, { agora = new Date() } = {}) {
-  const licitacao = monitoramento;
-  const adaptador = adaptadores.obter(monitoramento.adaptador);
-  const resumo = { licitacao_id: licitacao.licitacao_id, eventos: [], alertas: 0 };
-  const id = licitacao.licitacao_id;
-  const organizacaoId = monitoramento.organizacao_id;
+/**
+ * Uma checagem completa de uma licitação para TODAS as organizações que a
+ * monitoram (Seção 1c). O portal é lido uma vez — detalhe, lista de arquivos,
+ * resultado, download da versão nova — e o que mudou é espalhado: o evento do
+ * catálogo é gravado uma vez, e cada organização recebe o seu alerta e o seu
+ * próximo horário, pelos hashes e pela etapa dela. A seção 5.4 manda ir devagar:
+ * N organizações na mesma licitação não podem virar N idas ao portal.
+ *
+ * @param {object[]} grupo monitoramentos ativos da MESMA licitação (uma linha por organização)
+ * @returns {Promise<object[]>} um resumo por linha de `grupo`, na mesma ordem; `erro` quando a
+ *          parte daquela organização falhou (a leitura do portal que falha lança, para todas)
+ */
+async function checarLicitacao(grupo, { agora = new Date() } = {}) {
+  const base = grupo[0];
+  const id = base.licitacao_id;
+  const adaptador = adaptadores.obter(base.adaptador);
+  const resumos = grupo.map((m) => ({ licitacao_id: id, organizacao_id: m.organizacao_id, eventos: [], alertas: 0 }));
+  const paraTodas = (evento) => resumos.forEach((r) => r.eventos.push(evento));
+  const alertarEditalAlterado = async (indice, { fim_propostas: fim }, oQueMudou) => {
+    const m = grupo[indice];
+    const criado = await servico.alertarEditalAlterado(
+      { id, organizacao_id: m.organizacao_id, orgao_nome: base.orgao_nome, fim_propostas: fim },
+      oQueMudou
+    );
+    if (criado) resumos[indice].alertas += 1;
+  };
 
   // ---------------------------------------------------- detalhe: datas e situação
   let detalhe = null;
   if (typeof adaptador.detalhar === 'function') {
-    detalhe = await adaptador.detalhar({ chaveExterna: licitacao.chave_externa });
+    detalhe = await adaptador.detalhar({ chaveExterna: base.chave_externa });
   }
 
   if (detalhe) {
     const hashNovo = regras.hashDatas(detalhe);
-    if (monitoramento.hash_datas && hashNovo !== monitoramento.hash_datas) {
-      const antes = licitacao.fim_propostas ? new Date(licitacao.fim_propostas).toLocaleString('pt-BR') : 'sem data';
+    const quemVeMudanca = grupo.map((m, i) => i).filter((i) => grupo[i].hash_datas && hashNovo !== grupo[i].hash_datas);
+    if (quemVeMudanca.length) {
+      const antes = base.fim_propostas ? new Date(base.fim_propostas).toLocaleString('pt-BR') : 'sem data';
       const depois = detalhe.fim_propostas ? new Date(detalhe.fim_propostas).toLocaleString('pt-BR') : 'sem data';
       await servico.registrarEvento({
         licitacaoId: id,
         tipo: 'data_alterada',
         descricao: `O prazo das propostas mudou de ${antes} para ${depois}.`,
-        dados: { antes: licitacao.fim_propostas, depois: detalhe.fim_propostas },
+        dados: { antes: base.fim_propostas, depois: detalhe.fim_propostas },
         ocorridoEm: agora,
         chave: `data_alterada:${id}:${hashNovo.slice(0, 16)}`,
       });
-      resumo.eventos.push('data_alterada');
-      if (await servico.alertarEditalAlterado(
-        { id, organizacao_id: organizacaoId, orgao_nome: licitacao.orgao_nome, fim_propostas: detalhe.fim_propostas },
-        { hash: hashNovo, resumo: `o prazo passou de ${antes} para ${depois}` }
-      )) {
-        resumo.alertas += 1;
+      paraTodas('data_alterada');
+      for (const i of quemVeMudanca) {
+        await alertarEditalAlterado(i, detalhe, { hash: hashNovo, resumo: `o prazo passou de ${antes} para ${depois}` });
       }
     }
 
     // Situação nova vira evento próprio: deserta, fracassada, anulada, suspensa.
     const situacaoNova = detalhe.situacao || null;
-    if (situacaoNova && situacaoNova !== licitacao.situacao) {
+    if (situacaoNova && situacaoNova !== base.situacao) {
       await servico.registrarEvento({
         licitacaoId: id,
         tipo: 'situacao',
-        descricao: `Situação no portal: ${licitacao.situacao || 'não informada'} → ${situacaoNova}.`,
-        dados: { antes: licitacao.situacao, depois: situacaoNova },
+        descricao: `Situação no portal: ${base.situacao || 'não informada'} → ${situacaoNova}.`,
+        dados: { antes: base.situacao, depois: situacaoNova },
         ocorridoEm: agora,
         chave: `situacao:${id}:${situacaoNova}`,
       });
-      resumo.eventos.push('situacao');
+      paraTodas('situacao');
     }
 
     await pool.query(
@@ -234,19 +251,22 @@ async function checar(monitoramento, { agora = new Date() } = {}) {
         WHERE id = ?`,
       [detalhe.situacao, detalhe.abertura_propostas, detalhe.fim_propostas, detalhe.valor_homologado, id]
     );
-    await pool.query('UPDATE monitoramentos SET hash_datas = ? WHERE organizacao_id = ? AND licitacao_id = ?', [
-      regras.hashDatas(detalhe),
-      organizacaoId,
-      id,
-    ]);
+    for (const m of grupo) {
+      await pool.query('UPDATE monitoramentos SET hash_datas = ? WHERE organizacao_id = ? AND licitacao_id = ?', [
+        hashNovo,
+        m.organizacao_id,
+        id,
+      ]);
+    }
   }
 
   // ---------------------------------------------------------- arquivos: o edital
   if (typeof adaptador.listarArquivos === 'function') {
-    const doPortal = await adaptador.listarArquivos({ chaveExterna: licitacao.chave_externa });
+    const doPortal = await adaptador.listarArquivos({ chaveExterna: base.chave_externa });
     const hashNovo = regras.hashArquivos(doPortal);
+    const quemVeMudanca = grupo.map((m, i) => i).filter((i) => grupo[i].hash_arquivos && hashNovo !== grupo[i].hash_arquivos);
 
-    if (monitoramento.hash_arquivos && hashNovo !== monitoramento.hash_arquivos) {
+    if (quemVeMudanca.length) {
       const [gravados] = await pool.query(
         `SELECT sequencial, MAX(versao) AS versao, SUBSTRING_INDEX(GROUP_CONCAT(titulo ORDER BY versao DESC), ',', 1) AS titulo
            FROM licitacao_arquivos WHERE licitacao_id = ? GROUP BY sequencial`,
@@ -271,48 +291,49 @@ async function checar(monitoramento, { agora = new Date() } = {}) {
         ocorridoEm: agora,
         chave: `edital_alterado:${id}:${hashNovo.slice(0, 16)}`,
       });
-      resumo.eventos.push('edital_alterado');
+      paraTodas('edital_alterado');
 
-      if (await servico.alertarEditalAlterado(
-        { id, organizacao_id: organizacaoId, orgao_nome: licitacao.orgao_nome, fim_propostas: licitacao.fim_propostas },
-        { hash: hashNovo, resumo: texto }
-      )) {
-        resumo.alertas += 1;
+      for (const i of quemVeMudanca) {
+        await alertarEditalAlterado(i, base, { hash: hashNovo, resumo: texto });
       }
 
       // Só baixa de novo o que já havia sido baixado: licitação cuja
       // documentação nunca desceu não vira download por causa do monitor.
-      if (licitacao.pasta) {
+      // O arquivo é do catálogo: baixa uma vez, e todas as organizações o têm.
+      if (base.pasta) {
         for (const arquivo of [...mudanca.novos, ...mudanca.trocados]) {
           const anterior = gravados.find((g) => Number(g.sequencial) === Number(arquivo.sequencial));
           const versao = anterior ? Number(anterior.versao) + 1 : 1;
           try {
             const baixado = await baixarNovaVersao({
               licitacaoId: id,
-              pasta: licitacao.pasta,
+              pasta: base.pasta,
               arquivo,
               adaptador,
               versao,
             });
-            resumo.eventos.push(`baixado:${baixado.nome}`);
+            paraTodas(`baixado:${baixado.nome}`);
           } catch (erro) {
-            resumo.eventos.push(`falha ao baixar ${arquivo.titulo}: ${erro.message}`);
+            paraTodas(`falha ao baixar ${arquivo.titulo}: ${erro.message}`);
           }
         }
       }
     }
 
-    await pool.query('UPDATE monitoramentos SET hash_arquivos = ? WHERE organizacao_id = ? AND licitacao_id = ?', [
-      hashNovo,
-      organizacaoId,
-      id,
-    ]);
+    for (const m of grupo) {
+      await pool.query('UPDATE monitoramentos SET hash_arquivos = ? WHERE organizacao_id = ? AND licitacao_id = ?', [
+        hashNovo,
+        m.organizacao_id,
+        id,
+      ]);
+    }
   }
 
   // -------------------------------------------------------------- resultado
   // Só depois do fim das propostas: antes disso não existe resultado nenhum e
   // a chamada seria desperdício de requisição no portal.
-  const passouDoFim = licitacao.fim_propostas && new Date(licitacao.fim_propostas) < agora;
+  const passouDoFim = base.fim_propostas && new Date(base.fim_propostas) < agora;
+  let resultado = null;
   if (passouDoFim) {
     const r = await encerradas.registrarResultados({ licitacaoId: id }).catch((erro) => ({
       gravados: 0,
@@ -320,6 +341,7 @@ async function checar(monitoramento, { agora = new Date() } = {}) {
     }));
 
     if (r.gravados) {
+      resultado = r;
       await servico.registrarEvento({
         licitacaoId: id,
         tipo: 'resultado',
@@ -328,54 +350,96 @@ async function checar(monitoramento, { agora = new Date() } = {}) {
         ocorridoEm: agora,
         chave: `resultado:${id}:${r.gravados}`,
       });
-      resumo.eventos.push('resultado');
-
-      const movido = await moverPeloResultado({ id, organizacao_id: organizacaoId, etapa: licitacao.etapa });
-      if (movido && movido.etapa) {
-        resumo.eventos.push(`card → ${movido.etapa}`);
-        await alertas.criar({
-          organizacaoId,
-          tipo: 'resultado',
-          nivel: movido.etapa === 'Ganhamos' ? 'info' : 'atencao',
-          chave: `resultado:${id}`,
-          licitacaoId: id,
-          mensagem:
-            movido.etapa === 'Ganhamos'
-              ? `Ganhamos: ${licitacao.orgao_nome || 'órgão'} homologou para a sua empresa.`
-              : `Perdemos para ${movido.vencedor || 'outro fornecedor'} — ${licitacao.orgao_nome || 'órgão'}.`,
-        });
-        resumo.alertas += 1;
-      }
-      if (movido && movido.aviso) resumo.eventos.push(movido.aviso);
+      paraTodas('resultado');
     }
   }
 
-  // ------------------------------------------------- próxima volta, ou o fim
-  const [[atual]] = await pool.query(
-    `SELECT id, etapa, fim_propostas FROM ${escopo.daOrganizacao(organizacaoId, { todas: true })} l WHERE id = ?`,
-    [id]
-  );
-  const cadencia = regras.cadenciaDe(atual, agora);
-  if (!cadencia) {
-    await servico.desligar(organizacaoId, id);
-    resumo.proxima = null;
-  } else {
-    const proxima = regras.proximaChecagem(cadencia, agora);
-    await pool.query(
-      'UPDATE monitoramentos SET proxima_checagem = ?, checagens = checagens + 1, ultimo_erro = NULL WHERE id = ?',
-      [proxima, monitoramento.id]
-    );
-    resumo.proxima = proxima;
-    resumo.cadencia = cadencia.chave;
+  // ------------------------------------- o que é de cada organização: card, alerta, próxima volta
+  for (let i = 0; i < grupo.length; i += 1) {
+    const monitoramento = grupo[i];
+    const resumo = resumos[i];
+    const organizacaoId = monitoramento.organizacao_id;
+    try {
+      if (resultado) {
+        const movido = await moverPeloResultado({ id, organizacao_id: organizacaoId, etapa: monitoramento.etapa });
+        if (movido && movido.etapa) {
+          resumo.eventos.push(`card → ${movido.etapa}`);
+          await alertas.criar({
+            organizacaoId,
+            tipo: 'resultado',
+            nivel: movido.etapa === 'Ganhamos' ? 'info' : 'atencao',
+            chave: `resultado:${id}`,
+            licitacaoId: id,
+            mensagem:
+              movido.etapa === 'Ganhamos'
+                ? `Ganhamos: ${base.orgao_nome || 'órgão'} homologou para a sua empresa.`
+                : `Perdemos para ${movido.vencedor || 'outro fornecedor'} — ${base.orgao_nome || 'órgão'}.`,
+          });
+          resumo.alertas += 1;
+        }
+        if (movido && movido.aviso) resumo.eventos.push(movido.aviso);
+      }
+
+      const [[atual]] = await pool.query(
+        `SELECT id, etapa, fim_propostas FROM ${escopo.daOrganizacao(organizacaoId, { todas: true })} l WHERE id = ?`,
+        [id]
+      );
+      const cadencia = regras.cadenciaDe(atual, agora);
+      if (!cadencia) {
+        await servico.desligar(organizacaoId, id);
+        resumo.proxima = null;
+      } else {
+        const proxima = regras.proximaChecagem(cadencia, agora);
+        await pool.query(
+          'UPDATE monitoramentos SET proxima_checagem = ?, checagens = checagens + 1, ultimo_erro = NULL WHERE id = ?',
+          [proxima, monitoramento.id]
+        );
+        resumo.proxima = proxima;
+        resumo.cadencia = cadencia.chave;
+      }
+    } catch (erro) {
+      resumo.erro = erro.message;
+    }
   }
 
-  return resumo;
+  return resumos;
+}
+
+/**
+ * Checagem pedida por uma organização ("checar agora"): vai ao portal uma vez
+ * e atende, junto, as outras organizações que monitoram a mesma licitação.
+ * Devolve o resumo da organização que pediu.
+ */
+async function checar(monitoramento, { agora = new Date() } = {}) {
+  const irmaos = (await servico.ativosDasLicitacoes([monitoramento.licitacao_id])).filter(
+    (m) => m.id !== monitoramento.id
+  );
+  const resumos = await checarLicitacao([monitoramento, ...irmaos], { agora });
+  // A parte que falhou para as OUTRAS organizações não some: fica no monitor delas, como na rodada.
+  for (let i = 1; i < resumos.length; i += 1) {
+    if (resumos[i].erro) await adiar(irmaos[i - 1].id, resumos[i].erro);
+  }
+  if (resumos[0].erro) throw new Error(resumos[0].erro);
+  return resumos[0];
+}
+
+/** Erro não trava a fila: adia esta e segue. Portal fora do ar é temporário, e insistir no mesmo minuto só piora. */
+async function adiar(monitoramentoId, mensagem) {
+  await pool.query(
+    `UPDATE monitoramentos
+        SET proxima_checagem = DATE_ADD(NOW(), INTERVAL 3 HOUR),
+            checagens = checagens + 1,
+            ultimo_erro = ?
+      WHERE id = ?`,
+    [recortar(mensagem, 255), monitoramentoId]
+  );
 }
 
 /**
  * Uma rodada do monitor: liga o que falta e checa o que está na hora.
  * `limite` existe porque cada checagem são de duas a quatro requisições ao
- * portal, e a seção 5.4 manda andar devagar.
+ * portal, e a seção 5.4 manda andar devagar — e a licitação monitorada por
+ * várias organizações custa essas requisições uma vez só (Seção 1c).
  */
 async function monitorar({ limite = 25 } = {}) {
   const agora = new Date();
@@ -384,32 +448,43 @@ async function monitorar({ limite = 25 } = {}) {
 
   const resumo = {
     ligados: ligados.ligados,
-    checadas: 0,
+    checadas: 0, // licitações lidas no portal (uma ida por licitação)
+    monitoramentos: 0, // linhas de organização atendidas por essas leituras
     eventos: 0,
     alertas: 0,
     encerrados: 0,
     erros: [],
   };
 
-  for (const monitoramento of pendentes) {
+  // A hora de uma organização puxa as outras que monitoram a mesma licitação:
+  // ler o portal de novo daqui a pouco para elas seria requisição jogada fora.
+  const atendidas = await servico.ativosDasLicitacoes(pendentes.map((m) => m.licitacao_id));
+  const porLicitacao = new Map();
+  for (const m of [...pendentes, ...atendidas]) {
+    if (!porLicitacao.has(m.licitacao_id)) porLicitacao.set(m.licitacao_id, new Map());
+    porLicitacao.get(m.licitacao_id).set(m.id, m);
+  }
+
+  for (const [licitacaoId, linhas] of porLicitacao) {
+    const grupo = [...linhas.values()];
     try {
-      const r = await checar(monitoramento, { agora });
+      const resumos = await checarLicitacao(grupo, { agora });
       resumo.checadas += 1;
-      resumo.eventos += r.eventos.filter((e) => !e.startsWith('baixado:')).length;
-      resumo.alertas += r.alertas;
-      if (r.proxima === null) resumo.encerrados += 1;
+      resumo.monitoramentos += grupo.length;
+      // O evento do catálogo é um só, por mais organizações que o recebam.
+      resumo.eventos += resumos[0].eventos.filter((e) => !e.startsWith('baixado:')).length;
+      for (let i = 0; i < resumos.length; i += 1) {
+        const r = resumos[i];
+        resumo.alertas += r.alertas;
+        if (r.proxima === null) resumo.encerrados += 1;
+        if (r.erro) {
+          resumo.erros.push(`licitação ${licitacaoId} (organização ${r.organizacao_id}): ${r.erro}`);
+          await adiar(grupo[i].id, r.erro);
+        }
+      }
     } catch (erro) {
-      resumo.erros.push(`licitação ${monitoramento.licitacao_id}: ${erro.message}`);
-      // Erro não trava a fila: adia esta e segue. Portal fora do ar é
-      // temporário, e insistir no mesmo minuto só piora.
-      await pool.query(
-        `UPDATE monitoramentos
-            SET proxima_checagem = DATE_ADD(NOW(), INTERVAL 3 HOUR),
-                checagens = checagens + 1,
-                ultimo_erro = ?
-          WHERE id = ?`,
-        [recortar(erro.message, 255), monitoramento.id]
-      );
+      resumo.erros.push(`licitação ${licitacaoId}: ${erro.message}`);
+      for (const m of grupo) await adiar(m.id, erro.message);
     }
   }
 
@@ -423,6 +498,7 @@ function registrarNaFila() {
 module.exports = {
   monitorar,
   checar,
+  checarLicitacao,
   diferencaDeArquivos,
   baixarNovaVersao,
   moverPeloResultado,

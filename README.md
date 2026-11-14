@@ -97,9 +97,15 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
     ambiente, então a coleta pelo adaptador não rodou de ponta a ponta — as 450 licitações
     vieram da API de consulta do PNCP e a pontuação foi feita pelo `repontuar` novo. E-mail
     (convite e senha) não foi enviado: não há SMTP no ambiente de teste.
-  - Pendente (Seção 1c no plano): monitor que checa a mesma licitação uma vez por organização,
-    correção manual de exigência ainda compartilhada, visão de alertas mais leve, ficha de órgão
-    e concorrente que mostra o grupo da operadora.
+  - Pendências da 1b fechadas na **Seção 1c** (abaixo).
+- **Seção 1c — achados da revisão da 1b, código entregue em 14/11/2026.** O monitor vai **uma vez** ao
+  portal por licitação, por mais organizações que a monitorem, e cada uma recebe o próprio alerta, card e
+  próxima checagem (`jobs/monitorar.js: checarLicitacao`). A exigência confirmada à mão passou a ser da
+  organização (migração `037_org_exigencias.sql`, `servicos/exigencias.js`): a leitura do edital segue do
+  catálogo e nunca mexe na correção. `alertas.listar` junta direto com o catálogo; a ficha do concorrente
+  calcula menor preço e grupos pelo grupo da organização, e as recorrências não gravam mais o grupo da
+  operadora. **Aceite medido**: ver o plano (Seção 1c) — 36/36 conferências pela API real, 260/260 testes.
+  **Não verificado**: coleta do PNCP de ponta a ponta, MySQL 8, custo em catálogo grande.
 - **Seção 2 — tema claro/escuro, entregue em 13/11/2026.** As cores do Voltage Obsidian viraram
   variáveis CSS (`frontend/src/estilo.css`, trios RGB em `:root`/`[data-tema='escuro']` e
   `[data-tema='claro']`) que o `tailwind.config.js` lê como `rgb(var(--cor-x) / alfa)`: nenhum
@@ -406,6 +412,9 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
   a cada 5 min dentro da janela da sessão. Vagas pelo limite `monitores_chat` (plano avançado). Rotas
   `/api/chat/*`. Regras puras em `backend/regras/chat.js` (`testes/chat.test.js`). **Aceite medido**: ver o
   plano (Seção 6) — **medido contra portal de teste local**, nenhum portal real lido.
+  **6b (14/11/2026):** alerta por segmento só para assinatura que pode escrever, com uma conferência de plano por
+  organização; teste automatizado de isolamento do chat (`testes/chat-isolamento.test.js`). Seguem pendentes a
+  conferência portal a portal e a chave de mensagem repetida em portal sem hora (ver o plano).
 - **Seção 18 — Ecossistema, código entregue em 14/11/2026 (aceite — serviço vendido a cliente ativo — pendente).**
   Migração `035_servicos_parceiros.sql` (`parceiros`, compartilhada; `servico_pedidos`, por organização). Serviços:
   seguro garantia, assessoria cadastral, cursos, clipping e bolsa de empregos, **sempre por parceiro cadastrado

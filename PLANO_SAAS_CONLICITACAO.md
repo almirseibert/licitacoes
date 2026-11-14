@@ -26,10 +26,10 @@ cofre de senha de portal e a assinatura digital (ver a tabela de divergências n
 
 | Fase | Seções | O que o cliente ganha | Marco |
 |---|---|---|---|
-| **A — Fundação SaaS** | 0 ✅, 1 (1a ✅, 1b ✅, 1c), 2 ✅, 3 ✅ | Conta própria, equipe, dados isolados, tema claro/escuro, plano e cobrança | Dá para cobrar e isolar clientes |
+| **A — Fundação SaaS** | 0 ✅, 1 (1a ✅, 1b ✅, 1c ✅ código), 2 ✅, 3 ✅ | Conta própria, equipe, dados isolados, tema claro/escuro, plano e cobrança | Dá para cobrar e isolar clientes |
 | **B — Paridade de captação** | 4 ✅, 7 ✅, 8 ✅, 9 ✅, 10 ✅ | Boletim diário, banco de licitações completo, gestão com tarefas, avisos por tipo, documentos | Substitui o uso diário do ConLicitação na captação |
 | **C — IA e inteligência** | 5 ✅, 11 (11b), 12 ✅ (12b), 13 ✅ (13b), 14 ✅ (14b), 15 ✅ (15b), 17 ✅ (17b) | Pergunte ao Edital, resumo com checklist, acompanhamentos, contratos e atas, concorrentes e mercado, API, onboarding | **Versão 1 vendável** — fim da Fase C |
-| **D — Estratégia e automação** | 6, 16 | Monitor de chat, alerta de deserta por segmento, consultor jurídico | Planos mais caros |
+| **D — Estratégia e automação** | 6 (6b), 16 | Monitor de chat, alerta de deserta por segmento, consultor jurídico | Planos mais caros |
 | **E — Ecossistema** | 18 (código ✅; aceite 18b) | Seguro garantia, assessoria cadastral, cursos por parceria | Receita complementar |
 
 Ordem de dependência: **1b antes de tudo** (sem pontuação por organização o resto herda o
@@ -126,16 +126,40 @@ sem erro. Lint limpo, 50/50 testes.
 **Não verificado:** coleta pelo adaptador do PNCP de ponta a ponta (a busca `/api/search` não
 responde deste ambiente; os dados vieram da API de consulta) e envio real de e-mail (sem SMTP).
 
-**Seção 1c — pendente (achados da revisão da 1b):**
-- [ ] Monitor: a mesma licitação monitorada por N organizações vai N vezes ao portal — checar uma
-      vez por licitação e espalhar o evento (conduta 5.4).
-- [ ] `licitacao_exigencias.confirmado_por_usuario` ainda é do catálogo: a correção manual de uma
-      organização vale para todas (CLAUDE.md lista como decisão do usuário).
-- [ ] `alertas.listar` junta com a visão do catálogo inteiro; trocar por LEFT JOIN direto em
-      `org_licitacoes` antes de o catálogo crescer.
-- [ ] Ficha de concorrente/órgão e recorrências usam o grupo da organização operadora.
+**Seção 1c — código feito em 14/11/2026; a coleta pelo PNCP de ponta a ponta segue pendente (achados da revisão da 1b):**
+- [x] Monitor: a licitação monitorada por N organizações vai **uma vez** ao portal (detalhe, arquivos,
+      resultado, download da versão nova); o evento do catálogo é gravado uma vez e cada organização recebe o
+      próprio alerta, o próprio card (Ganhamos/Perdemos) e a própria próxima checagem. A hora de uma
+      organização puxa as outras que monitoram a mesma licitação; "checar agora" também atende as irmãs.
+      (`jobs/monitorar.js: checarLicitacao`, `servicos/monitor.js: ativosDasLicitacoes`.)
+- [x] Exigência confirmada à mão é da organização: migração `037_org_exigencias.sql` (`org_exigencias`; as
+      confirmações antigas foram para a organização 1, o edital delas é relido, e `confirmado_por_usuario`
+      saiu do catálogo). A leitura do edital segue do catálogo e nunca escreve na correção
+      (`servicos/exigencias.js`; Radar, kit de envio e seguro garantia leem a visão da organização).
+- [x] `alertas.listar` junta direto com `licitacoes` e `org_licitacoes` (sem a tabela derivada do catálogo).
+- [x] Ficha do concorrente: "menor preço por grupo" e "grupos em que disputa" calculados na leitura pelo grupo
+      da organização; `recorrencias.grupo` deixou de ser gravado (nenhuma tela o lia). O job de dossiês grava
+      NULL nessas colunas (lacuna, não valor).
 - [ ] Rodar a coleta pelo adaptador do PNCP (busca textual) num ambiente que alcance
       `/api/search` e conferir as linhas de `org_licitacoes` criadas por organização.
+- [ ] Medir o custo de `exigidaSql` (Radar) e da ficha do concorrente com um catálogo grande — aqui só com
+      centenas de linhas.
+
+**Aceite medido da Seção 1c (14/11/2026, MariaDB 10.11, banco zerado migra até a 037, API real, duas organizações):**
+roteiro de **36 conferências, 36/36** — correção de exigência de A não aparece para B (nem no Radar, nem em
+"licitações com garantia"), sobrevive a nova leitura do catálogo, "soltar" só devolve a de quem soltou, 404
+para licitação inexistente e 400 para código fora do catálogo; alertas com/sem licitação e isolados;
+ficha do concorrente com o menor preço de cada organização no grupo dela (Obras 800 × TI 800); duas
+organizações na mesma licitação = **1** `detalhar` e **1** `listarArquivos` por rodada (antes eram 2), mesmo
+quando só uma estava na hora; eventos do catálogo 2 linhas (não 4) e 2 alertas vermelhos por organização;
+rodada sem mudança = 1 ida e 0 alertas; portal fora do ar = 1 tentativa, as duas adiadas 3 h com o erro;
+resultado lido uma vez e A → Ganhamos, B → Perdemos, cada uma com o próprio alerta. Migração 037 conferida
+com dados antigos: 3 confirmações copiadas para a organização 1, relidas só as de edital baixado, coluna
+apagada, `recorrencias.grupo` NULL. Lint limpo, **260/260** testes (3 novos em `testes/exigencias-org.test.js`).
+`code-review`: 10 achados, 4 corrigidos (erro de organização irmã no "checar agora", `'{}'`/`'[]'` no catálogo,
+junção direta na ficha, listas de `IN` desnecessárias); deixados: baseline sem hash (já era assim por
+organização), alerta de estratégica condicionado a `pode_escrever` (pedido pelo plano; confirmar).
+**Não verificado:** coleta pelo PNCP de ponta a ponta; MySQL 8; custo em catálogo grande.
 
 **Aceite da Seção 1a (medido):** duas organizações criadas por `/api/auth/cadastro`; a
 organização 2 só viu sua própria palavra-chave em `/api/palavras`, recebeu 404 ao tentar editar
@@ -377,12 +401,22 @@ Compras.gov.br está atrás de CAPTCHA e esta sessão não tem rede para os outr
 monitorada mostra mensagem chegando" **não foi atendido**; só o caminho completo contra o portal de teste.
 Também não: e-mail/WhatsApp reais; MySQL 8.
 
-**Seção 6b — pendente:**
+**Seção 6b — feito em 14/11/2026 o que é código; o aceite com portal real segue pendente:**
 - [ ] Conferir, portal a portal (BLL, Licitanet, Portal de Compras Públicas, BNC, CELIC-RS), se existe
       consulta pública do chat sem login; onde houver, configurar `config.chat` na fonte e fazer o aceite real.
+      **Não feito**: esta sessão não alcança esses portais.
 - [ ] Mensagem repetida em portal sem hora e com janela rolante pode ser perdida (a chave usa a ocorrência).
-- [ ] Alerta por segmento: consultas por grupo (N+1) e `pode_escrever` da assinatura.
-- [ ] Teste automatizado de isolamento por organização do chat (hoje só o roteiro manual).
+      **Deixado de propósito**: corrigir exige saber como o portal real rola a janela e em que ordem lista; sem
+      isso, trocar a chave troca uma perda rara por duplicata de alerta frequente. Fazer junto do aceite real.
+- [x] Alerta por segmento: o plano da organização é conferido uma vez por organização (não por segmento),
+      assinatura sem `pode_escrever` (teste vencido, atrasada, suspensa) não recebe e é contada em
+      `sem_assinatura`, e a consulta por segmento só roda onde há candidato (oportunidade nova na janela /
+      prazo acabando na organização). Conferido: 4/4 contra MariaDB (deserta + prazo < 24 h avisam cada
+      organização, segmento sem casamento não avisa, segunda rodada 0 repetidos, teste vencido não recebe).
+- [x] Teste automatizado de isolamento do chat (`testes/chat-isolamento.test.js`, 5 casos, sem banco): um banco
+      falso anota cada consulta e confere que toda consulta a `chat_mensagens`/`monitoramentos` — pelas funções do
+      serviço e pelas rotas — leva `organizacao_id` no SQL e a organização nos valores. Mutação conferida: tirar o
+      filtro de `lerTodas` derruba o teste.
 
 ---
 

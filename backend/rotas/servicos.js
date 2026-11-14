@@ -9,6 +9,7 @@ const email = require('../servicos/email');
 const regras = require('../regras/servicos');
 const { CATALOGO } = require('../regras/exigencias');
 const escopo = require('../servicos/escopo');
+const exigenciasOrg = require('../servicos/exigencias');
 const { parceirosAtivos, parceiroAtivo } = require('../servicos/parceiros');
 
 // As exigências que ligam ao seguro garantia vêm do catálogo (campo `servico`), não de uma lista aqui.
@@ -29,12 +30,9 @@ async function licitacaoDaOrganizacao(organizacaoId, id) {
   return l || null;
 }
 
-async function garantiasDaLicitacao(licitacaoId) {
-  const [linhas] = await pool.query(
-    "SELECT codigo, detectado FROM licitacao_exigencias WHERE licitacao_id = ? AND codigo IN ('garantia_proposta','garantia_contrato')",
-    [licitacaoId]
-  );
-  return regras.garantiasDasExigencias(linhas);
+async function garantiasDaLicitacao(organizacaoId, licitacaoId) {
+  const mapa = await exigenciasOrg.daLicitacao(organizacaoId, licitacaoId, { codigos: ['garantia_proposta', 'garantia_contrato'] });
+  return regras.garantiasDasExigencias([...mapa.values()]);
 }
 
 /** Monta o que iria ao parceiro; devolve `{ erro, status }` quando a licitação não é da organização. */
@@ -45,7 +43,7 @@ async function prepararDados(req, v) {
       [req.organizacaoId]
     ),
     v.licitacaoId ? licitacaoDaOrganizacao(req.organizacaoId, v.licitacaoId) : null,
-    v.licitacaoId ? garantiasDaLicitacao(v.licitacaoId) : null,
+    v.licitacaoId ? garantiasDaLicitacao(req.organizacaoId, v.licitacaoId) : null,
   ]);
   if (v.licitacaoId && !licitacao) return { erro: 'Licitação não encontrada.', status: 404 };
   const dados = regras.montarDados({
@@ -92,10 +90,8 @@ rotas.get('/licitacoes-com-garantia', async (req, res) => {
       `SELECT l.id, l.orgao_nome, l.numero_compra
          FROM ${escopo.daOrganizacao(req.organizacaoId)} l
         WHERE l.descartada = 0 AND (l.abertura_propostas IS NULL OR l.abertura_propostas >= NOW())
-          AND EXISTS (SELECT 1 FROM licitacao_exigencias e WHERE e.licitacao_id = l.id AND e.detectado = 'sim'
-                       AND e.codigo IN (?))
-        ORDER BY l.abertura_propostas IS NULL, l.abertura_propostas ASC LIMIT 50`,
-      [CODIGOS_DE_GARANTIA]
+          AND ${exigenciasOrg.exigidaSql({ licitacao: 'l.id', organizacao: 'l.organizacao_id', codigos: CODIGOS_DE_GARANTIA })}
+        ORDER BY l.abertura_propostas IS NULL, l.abertura_propostas ASC LIMIT 50`
     );
     res.json({ licitacoes: linhas });
   } catch (erro) {

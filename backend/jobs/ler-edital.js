@@ -4,8 +4,10 @@
 // Roda depois do download. Nunca vai à internet: trabalha só com o que está no
 // volume, então é barato repetir sempre que o edital mudar ou o catálogo crescer.
 //
-// O que o usuário corrigiu à mão (`confirmado_por_usuario`) nunca é
-// sobrescrito: a máquina erra, e quem conferiu no PDF tem a palavra final.
+// A leitura é do catálogo e vale para todos. O que o usuário corrigiu à mão
+// mora em `org_exigencias` (Seção 1c) e passa na frente na visão dele: a
+// máquina erra, e quem conferiu no PDF tem a palavra final — este job nunca
+// escreve lá.
 const fs = require('fs');
 const path = require('path');
 
@@ -147,10 +149,10 @@ async function lerEdital({ licitacaoId }) {
       `INSERT INTO licitacao_exigencias (licitacao_id, codigo, detectado, trecho, pagina, arquivo_id)
        VALUES (?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
-         detectado  = IF(confirmado_por_usuario = 1, detectado, VALUES(detectado)),
-         trecho     = IF(confirmado_por_usuario = 1, trecho, VALUES(trecho)),
-         pagina     = IF(confirmado_por_usuario = 1, pagina, VALUES(pagina)),
-         arquivo_id = IF(confirmado_por_usuario = 1, arquivo_id, VALUES(arquivo_id))`,
+         detectado  = VALUES(detectado),
+         trecho     = VALUES(trecho),
+         pagina     = VALUES(pagina),
+         arquivo_id = VALUES(arquivo_id)`,
       [licitacaoId, achado.codigo, achado.detectado, achado.trecho, achado.pagina, achado.arquivo_id]
     );
   }
@@ -170,7 +172,7 @@ async function gravarIndefinido(licitacaoId) {
     await pool.query(
       `INSERT INTO licitacao_exigencias (licitacao_id, codigo, detectado)
        VALUES (?, ?, 'indefinido')
-       ON DUPLICATE KEY UPDATE detectado = IF(confirmado_por_usuario = 1, detectado, 'indefinido')`,
+       ON DUPLICATE KEY UPDATE detectado = 'indefinido'`,
       [licitacaoId, exigencia.codigo]
     );
   }

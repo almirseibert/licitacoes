@@ -9,7 +9,6 @@
 // por órgão: a primeira versão fazia cinco idas ao banco para cada um dos 1.344
 // órgãos e passava de cinco minutos. Agrupado, são oito consultas no total.
 const pool = require('../config/db');
-const escopo = require('../servicos/escopo');
 const fila = require('../servicos/fila');
 const regrasPreco = require('../regras/preco');
 
@@ -62,11 +61,10 @@ async function gravarEmLotes(sql, linhas) {
  * A tela diz isso — "disputou" aqui significa "apareceu no resultado".
  */
 async function agregarConcorrentes() {
-  // Seção 1b: `concorrentes` é catálogo. O grupo usado aqui é o da
-  // classificação da organização operadora (o grupo vem das palavras-chave), e
-  // o "encontrou você" deixou de ser gravado: é de cada organização e a ficha
-  // o calcula na hora (rotas/dossies.js).
-  const grupoOperadora = `LEFT JOIN org_licitacoes og ON og.licitacao_id = l.id AND og.organizacao_id = ${escopo.ORGANIZACAO_OPERADORA}`;
+  // `concorrentes` é catálogo. O que depende de quem olha não é gravado aqui:
+  // o "encontrou você" (Seção 1b) e, desde a Seção 1c, o grupo das palavras-chave
+  // — "menor preço por grupo" e "grupos em que disputa" — são calculados na
+  // leitura, pela visão de cada organização (rotas/dossies.js).
 
   const [base] = await pool.query(
     `SELECT p.cnpj,
@@ -83,13 +81,10 @@ async function agregarConcorrentes() {
 
   const cnpjs = base.map((c) => c.cnpj);
 
-  // Uma consulta para todos: itens vencidos, com o estimado ao lado para o
-  // desconto e o grupo para o menor preço.
+  // Uma consulta para todos: itens vencidos, com o estimado ao lado para o desconto.
   const [vencidos] = await pool.query(
-    `SELECT i.cnpj_vencedor AS cnpj, i.valor_homologado, i.valor_total_estimado, og.grupo
+    `SELECT i.cnpj_vencedor AS cnpj, i.valor_homologado, i.valor_total_estimado
        FROM licitacao_itens i
-       JOIN licitacoes l ON l.id = i.licitacao_id
-       ${grupoOperadora}
       WHERE i.cnpj_vencedor IN (?)`,
     [cnpjs]
   );
@@ -99,18 +94,9 @@ async function agregarConcorrentes() {
       WHERE p.cnpj IN (?) AND l.uf IS NOT NULL`,
     [cnpjs]
   );
-  const [grupos] = await pool.query(
-    `SELECT p.cnpj, og.grupo, COUNT(DISTINCT l.id) AS n
-       FROM propostas_concorrentes p JOIN licitacoes l ON l.id = p.licitacao_id
-       ${grupoOperadora}
-      WHERE p.cnpj IN (?) AND og.grupo IS NOT NULL
-      GROUP BY p.cnpj, og.grupo ORDER BY n DESC`,
-    [cnpjs]
-  );
 
   const porVencidos = porChave(vencidos, 'cnpj');
   const porUf = porChave(ufs, 'cnpj');
-  const porGrupo = porChave(grupos, 'cnpj');
 
   const linhas = base.map((c) => {
     const itens = porVencidos.get(c.cnpj) || [];
@@ -119,16 +105,6 @@ async function agregarConcorrentes() {
         regrasPreco.descontoDe({ valor_estimado: i.valor_total_estimado, valor_homologado: i.valor_homologado })
       )
       .filter((d) => d !== null);
-
-    // Menor preço por grupo: o piso que ele pratica, e o número que decide se
-    // vale montar proposta naquele objeto (seção 26.4).
-    const menorPorGrupo = {};
-    for (const i of itens) {
-      const grupo = i.grupo || 'Geral';
-      const valor = Number(i.valor_homologado);
-      if (!Number.isFinite(valor) || valor <= 0) continue;
-      if (!menorPorGrupo[grupo] || valor < menorPorGrupo[grupo]) menorPorGrupo[grupo] = valor;
-    }
 
     return [
       c.cnpj,
@@ -141,9 +117,9 @@ async function agregarConcorrentes() {
       itens.length,
       media(descontos),
       descontos.length ? regrasPreco.mediana(descontos) : null,
-      JSON.stringify(menorPorGrupo),
+      null, // menor preço por grupo: da organização, calculado na ficha (Seção 1c)
       JSON.stringify((porUf.get(c.cnpj) || []).map((u) => u.uf)),
-      JSON.stringify((porGrupo.get(c.cnpj) || []).map((g) => ({ grupo: g.grupo, licitacoes: Number(g.n) }))),
+      null, // grupos em que disputa: idem
       Number(c.desclassificacoes || 0),
       0, // encontros: por organização, na ficha (rotas/dossies.js)
       0,

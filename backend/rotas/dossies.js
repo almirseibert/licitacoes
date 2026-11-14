@@ -144,12 +144,32 @@ rotas.get('/concorrentes/:cnpj', async (req, res) => {
     c.encontros = Number(encontro.encontros || 0);
     c.encontros_perdidos = Number(encontro.perdidos || 0);
 
+    // O grupo vem das palavras-chave de cada organização (Seção 1c): o menor
+    // preço por grupo e os grupos em que ele disputa são calculados na visão de
+    // quem pergunta. Licitação que a organização ainda não classificou é "Geral".
+    const [menores] = await pool.query(
+      `SELECT COALESCE(o.grupo, 'Geral') AS grupo, MIN(i.valor_homologado) AS menor
+         FROM licitacao_itens i
+         LEFT JOIN org_licitacoes o ON o.licitacao_id = i.licitacao_id AND o.organizacao_id = ?
+        WHERE i.cnpj_vencedor = ? AND i.valor_homologado > 0
+        GROUP BY COALESCE(o.grupo, 'Geral')`,
+      [req.organizacaoId, cnpj]
+    );
+    const [gruposDoConcorrente] = await pool.query(
+      `SELECT o.grupo, COUNT(DISTINCT p.licitacao_id) AS n
+         FROM propostas_concorrentes p
+         JOIN org_licitacoes o ON o.licitacao_id = p.licitacao_id AND o.organizacao_id = ?
+        WHERE p.cnpj = ? AND o.grupo IS NOT NULL
+        GROUP BY o.grupo ORDER BY n DESC`,
+      [req.organizacaoId, cnpj]
+    );
+
     res.json({
       concorrente: {
         ...c,
-        menor_preco_json: lerJson(c.menor_preco_json, {}),
+        menor_preco_json: Object.fromEntries(menores.map((m) => [m.grupo, Number(m.menor)])),
         ufs: lerJson(c.ufs, []),
-        grupos: lerJson(c.grupos, []),
+        grupos: gruposDoConcorrente.map((g) => ({ grupo: g.grupo, licitacoes: Number(g.n) })),
         sancoes: lerJson(c.sancoes, []),
       },
       licitacoes,

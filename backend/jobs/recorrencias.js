@@ -127,20 +127,17 @@ async function detectarRecorrencias({ anos = ANOS } = {}) {
   // diante) e o radar tem o que está aberto agora. Recorrência que só aparece
   // numa das duas é recorrência pela metade.
   const [contratacoes] = await pool.query(
-    `SELECT orgao_cnpj, orgao_nome, uf, grupo, objeto, assinatura_objeto,
+    `SELECT orgao_cnpj, orgao_nome, uf, objeto, assinatura_objeto,
             valor_estimado, valor_homologado, desconto,
             COALESCE(encerrada_em, publicada_em) AS quando, NULL AS vencedor
        FROM historico_precos
       WHERE orgao_cnpj IS NOT NULL AND assinatura_objeto IS NOT NULL AND assinatura_objeto <> ''
         AND COALESCE(encerrada_em, publicada_em) >= DATE_SUB(CURDATE(), INTERVAL ? YEAR)
       UNION ALL
-     SELECT l.orgao_cnpj, l.orgao_nome, l.uf, og.grupo, l.objeto, l.assinatura_objeto,
+     SELECT l.orgao_cnpj, l.orgao_nome, l.uf, l.objeto, l.assinatura_objeto,
             l.valor_estimado, l.valor_homologado, NULL AS desconto,
             DATE(COALESCE(l.fim_propostas, l.criado_em)) AS quando, l.vencedor
        FROM licitacoes l
-       -- Seção 1b: o grupo (das palavras-chave) é de cada organização; a
-       -- recorrência é do catálogo e usa a classificação da operadora.
-       LEFT JOIN org_licitacoes og ON og.licitacao_id = l.id AND og.organizacao_id = ${escopo.ORGANIZACAO_OPERADORA}
       WHERE l.orgao_cnpj IS NOT NULL AND l.assinatura_objeto IS NOT NULL AND l.assinatura_objeto <> ''
         AND COALESCE(l.fim_propostas, l.criado_em) >= DATE_SUB(CURDATE(), INTERVAL ? YEAR)
       ORDER BY orgao_cnpj, quando`,
@@ -189,13 +186,13 @@ async function detectarRecorrencias({ anos = ANOS } = {}) {
 
       const [r] = await pool.query(
         `INSERT INTO recorrencias
-           (orgao_cnpj, orgao_nome, assinatura_objeto, objeto_exemplo, grupo, uf, ocorrencias,
+           (orgao_cnpj, orgao_nome, assinatura_objeto, objeto_exemplo, uf, ocorrencias,
             primeira_em, ultima_em, mes_tipico, intervalo_medio_dias, valor_medio, desconto_medio,
             ultimo_vencedor, ultimo_valor, proxima_prevista, confianca)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE
            orgao_nome = VALUES(orgao_nome), objeto_exemplo = VALUES(objeto_exemplo),
-           grupo = VALUES(grupo), uf = VALUES(uf), ocorrencias = VALUES(ocorrencias),
+           uf = VALUES(uf), ocorrencias = VALUES(ocorrencias),
            primeira_em = VALUES(primeira_em), ultima_em = VALUES(ultima_em),
            mes_tipico = VALUES(mes_tipico), intervalo_medio_dias = VALUES(intervalo_medio_dias),
            valor_medio = VALUES(valor_medio), desconto_medio = VALUES(desconto_medio),
@@ -206,7 +203,6 @@ async function detectarRecorrencias({ anos = ANOS } = {}) {
           recortar(ultimo.orgao_nome, 255),
           recortar(grupo.assinatura, 255),
           ultimo.objeto,
-          recortar(ultimo.grupo, 60),
           ultimo.uf,
           itens.length,
           datas[0],
