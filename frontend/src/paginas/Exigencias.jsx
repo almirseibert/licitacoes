@@ -11,7 +11,7 @@ import { dataHora } from '../servicos/formato';
  * segundos em vez de reler o PDF. Discordou? Corrige na hora, e a leitura
  * automática não mexe mais naquela linha.
  */
-export default function Exigencias({ id }) {
+export default function Exigencias({ id, aoCotarSeguro = null }) {
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState(null);
   const [aviso, setAviso] = useState(null);
@@ -143,6 +143,11 @@ export default function Exigencias({ id }) {
                     </td>
                     <td className="text-xs">
                       <Pedido detectado={d.detectado} pagina={d.pagina} arquivo={d.arquivo} />
+                      {aoCotarSeguro && d.detectado === 'sim' && d.codigo.startsWith('garantia_') && (
+                        <button className="block text-[11px] underline text-texto-suave hover:text-texto" onClick={aoCotarSeguro}>
+                          Cotar seguro garantia
+                        </button>
+                      )}
                     </td>
                     <td className="text-xs">
                       <Possui situacao={d.situacao} nota={d.nota} />

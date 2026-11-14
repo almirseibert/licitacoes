@@ -183,6 +183,23 @@ export const api = {
     return requisitar(`/auditoria${q ? `?${q}` : ''}`);
   },
   lgpd: () => requisitar('/lgpd'),
+
+  // ------------------- serviços complementares por parceria (Seção 18)
+  servicosCatalogo: () => requisitar('/servicos/catalogo'),
+  servicosLicitacoes: () => requisitar('/servicos/licitacoes-com-garantia'),
+  servicosPrevia: (servico, licitacaoId) =>
+    requisitar(`/servicos/previa?servico=${encodeURIComponent(servico)}${licitacaoId ? `&licitacao_id=${licitacaoId}` : ''}`),
+  servicosPedidos: () => requisitar('/servicos/pedidos'),
+  pedirServico: (corpo) => requisitar('/servicos/pedidos', { method: 'POST', body: JSON.stringify(corpo) }),
+  cancelarPedidoServico: (id) => requisitar(`/servicos/pedidos/${id}/cancelar`, { method: 'POST' }),
+  adminParceiros: () => requisitar('/admin/parceiros'),
+  adminNovoParceiro: (corpo) => requisitar('/admin/parceiros', { method: 'POST', body: JSON.stringify(corpo) }),
+  adminAlterarParceiro: (id, corpo) => requisitar(`/admin/parceiros/${id}`, { method: 'PATCH', body: JSON.stringify(corpo) }),
+  adminPedidosServico: (status = '') => requisitar(`/admin/servicos/pedidos${status ? `?status=${status}` : ''}`),
+  adminAtualizarPedidoServico: (id, corpo) =>
+    requisitar(`/admin/servicos/pedidos/${id}`, { method: 'POST', body: JSON.stringify(corpo) }),
+  adminReenviarPedidoServico: (id) => requisitar(`/admin/servicos/pedidos/${id}/reenviar`, { method: 'POST' }),
+  adminVendasServico: () => requisitar('/admin/servicos/vendas'),
   baixarMeusDados: () => salvarComo('/lgpd/exportar', 'meus-dados.json'),
   pedirExclusao: (confirmacao, senha) =>
     requisitar('/lgpd/exclusao', { method: 'POST', body: JSON.stringify({ confirmacao, senha }) }),

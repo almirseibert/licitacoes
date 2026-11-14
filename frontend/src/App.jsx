@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock, Newspaper, LayoutDashboard, ListTodo, ScrollText, BookMarked, BellRing, PieChart, Plug, Trophy, Rocket, LifeBuoy, Activity, ShieldCheck, History, MessagesSquare } from 'lucide-react';
+import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock, Newspaper, LayoutDashboard, ListTodo, ScrollText, BookMarked, BellRing, PieChart, Plug, Trophy, Rocket, LifeBuoy, Activity, ShieldCheck, History, MessagesSquare, Handshake } from 'lucide-react';
 import { api, obterToken, obterUsuario, obterOrganizacao, guardarSessao, encerrarSessao } from './servicos/api';
 import Login from './paginas/Login';
 import Convite from './paginas/Convite';
@@ -36,6 +36,8 @@ import Status from './paginas/Status';
 import Privacidade from './paginas/Privacidade';
 import Auditoria from './paginas/Auditoria';
 import Legal from './paginas/Legal';
+import Servicos from './paginas/Servicos';
+import Parceiros from './paginas/Parceiros';
 import AceiteTermos from './componentes/AceiteTermos';
 import PesquisaNps from './componentes/PesquisaNps';
 import Alertas from './componentes/Alertas';
@@ -67,6 +69,8 @@ const TELAS = [
   { chave: 'desempenho', rotulo: 'Meu desempenho', icone: Trophy, recurso: 'relatorios' },
   { chave: 'relatorio', rotulo: 'Relatório mensal', icone: BarChart3, recurso: 'relatorios' },
   { chave: 'cofre', rotulo: 'Documentos', icone: FolderLock },
+  // Seção 18: seguro garantia, assessoria cadastral e demais serviços por parceria.
+  { chave: 'servicos', rotulo: 'Serviços', icone: Handshake },
   { chave: 'modelos', rotulo: 'Declarações', icone: FileSignature },
   { chave: 'equipe', rotulo: 'Equipe', icone: Users },
   // Seção 14: token de API e webhook de novas oportunidades.
@@ -82,6 +86,7 @@ const TELAS = [
   { chave: 'auditoria', rotulo: 'Auditoria', icone: History, soAdmin: true },
   // Só aparece quando o backend diz `superadmin` (Seção 3).
   { chave: 'organizacoes', rotulo: 'Organizações', icone: Building2, soSuperadmin: true },
+  { chave: 'parceiros', rotulo: 'Parceiros', icone: Handshake, soSuperadmin: true },
 ];
 
 // Seção 12: as três telas do mercado são o mesmo componente, por tipo de lista.
@@ -279,7 +284,7 @@ export default function App() {
         {tela === 'dashboard' && <Dashboard aoIr={irPara} />}
         {tela === 'monitor_chat' && <MonitorChat aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />}
         {tela === 'tarefas' && <Tarefas aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />}
-        {tela === 'radar' && <Radar abrir={licitacaoAberta} aoAbrir={setLicitacaoAberta} />}
+        {tela === 'radar' && <Radar abrir={licitacaoAberta} aoAbrir={setLicitacaoAberta} aoIr={irPara} />}
         {tela === 'fontes' && <Fontes />}
         {tela === 'palavras' && <Palavras />}
         {tela === 'boletins' && <Boletins />}
@@ -320,6 +325,8 @@ export default function App() {
         {tela === 'assinatura' && <Assinatura aba="assinatura" key="assinatura" />}
         {tela === 'uso' && <Assinatura aba="uso" key="uso" />}
         {tela === 'organizacoes' && <Organizacoes />}
+        {tela === 'parceiros' && <Parceiros />}
+        {tela === 'servicos' && <Servicos key={parametros.licitacao_id || 'servicos'} inicial={parametros.servico ? parametros : null} />}
         {tela === 'primeiros_passos' && <Assistente estado={onb} aoConcluir={recarregarOnb} aoIr={irPara} />}
         {tela === 'ajuda' && <Ajuda key={parametros.aba || 'guias'} abaInicial={parametros.aba} superadmin={Boolean(plano && plano.superadmin)} aoIr={irPara} />}
         {tela === 'status' && <Status aoIr={irPara} />}

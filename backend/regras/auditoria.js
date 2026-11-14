@@ -29,6 +29,14 @@ const REGRAS = [
 
   ['PATCH', `^/licitacoes/${ID}$`, 'alterou_licitacao', 'licitacao', ['etapa', 'favorito', 'descartada']],
 
+  ['POST', '^/servicos/pedidos$', 'pediu_servico', 'servico', ['servico']],
+  ['POST', `^/servicos/pedidos/${ID}/cancelar$`, 'cancelou_pedido_servico', 'servico', []],
+
+  ['POST', '^/admin/parceiros$', 'cadastrou_parceiro', 'parceiro', []],
+  ['PATCH', `^/admin/parceiros/${ID}$`, 'alterou_parceiro', 'parceiro', ['ativo']],
+  ['POST', `^/admin/servicos/pedidos/${ID}$`, 'atualizou_pedido_servico', 'servico', ['status']],
+  ['POST', `^/admin/servicos/pedidos/${ID}/reenviar$`, 'reenviou_pedido_servico', 'servico', []],
+
   ['POST', '^/integracoes/tokens$', 'criou_token_api', 'integracao', []],
   ['DELETE', `^/integracoes/tokens/${ID}$`, 'revogou_token_api', 'integracao', []],
   ['POST', '^/integracoes/webhooks$', 'criou_webhook', 'integracao', []],

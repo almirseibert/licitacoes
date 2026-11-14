@@ -230,6 +230,23 @@ const GUIAS = [
     video: null,
   },
   {
+    id: 'servicos',
+    ferramenta: 'Serviços',
+    tela: 'servicos',
+    titulo: 'Seguro garantia e outros serviços de parceiros',
+    resumo: 'O painel encaminha o seu pedido a um parceiro; preço, contrato e atendimento são dele.',
+    passos: [
+      'Em Serviços, escolha o que precisa. Cada serviço mostra se já há parceiro habilitado.',
+      'No seguro garantia, escolha a licitação (a lista traz os editais lidos que exigem garantia). Na aba Exigências de uma licitação também há o atalho "Cotar seguro garantia".',
+      'Confira a prévia: é exatamente o que será enviado ao parceiro. Campo que falta aparece como ____________ — nada é inventado.',
+      'Marque o aceite do termo de vínculo e envie. O parceiro responde direto ao seu e-mail; acompanhe a situação em "Seus pedidos".',
+      'Sem parceiro habilitado, "Tenho interesse" só registra a demanda: nenhum dado seu sai do painel.',
+    ],
+    dica: 'O painel não emite apólice, não faz corretagem e não entra na contratação. Só administradores e o dono pedem serviços.',
+    palavras: ['seguro', 'garantia', 'apolice', 'corretora', 'parceiro', 'crc', 'cadastral', 'curso', 'clipping', 'vagas', 'servicos'],
+    video: null,
+  },
+  {
     id: 'suporte',
     ferramenta: 'Suporte',
     tela: 'solicitacoes',

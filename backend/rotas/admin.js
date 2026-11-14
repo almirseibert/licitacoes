@@ -20,6 +20,8 @@ function exigirSuperadmin(req, res, next) {
   return res.status(403).json({ erro: 'Área restrita à administração do serviço.' });
 }
 rotas.use(exigirSuperadmin);
+// Seção 18: parceiros, andamento dos pedidos e vendas dos serviços complementares.
+rotas.use(require('./admin-servicos'));
 
 function idValido(valor) {
   try {

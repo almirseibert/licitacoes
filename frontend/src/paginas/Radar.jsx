@@ -45,7 +45,7 @@ function lerFiltrosSalvos() {
   }
 }
 
-export default function Radar({ abrir = null, aoAbrir = null }) {
+export default function Radar({ abrir = null, aoAbrir = null, aoIr = null }) {
   const [filtros, setFiltros] = useState(lerFiltrosSalvos);
   const [opcoes, setOpcoes] = useState({});
   const [resumo, setResumo] = useState(null);
@@ -322,6 +322,7 @@ export default function Radar({ abrir = null, aoAbrir = null }) {
       {aberta && (
         <Detalhe
           id={aberta}
+          aoIr={aoIr}
           onFechar={() => {
             setAberta(null);
             if (aoAbrir) aoAbrir(null);

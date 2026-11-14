@@ -30,7 +30,7 @@ const ETAPAS = [
  * Gaveta de detalhe da licitação (seção 11.2): Resumo, Itens, Pontuação,
  * Arquivos, Exigências, Preço, Concorrentes, Proposta, Montar envio e Histórico.
  */
-export default function Detalhe({ id, onFechar }) {
+export default function Detalhe({ id, onFechar, aoIr = null }) {
   const [licitacao, setLicitacao] = useState(null);
   const [erro, setErro] = useState(null);
   const [aba, setAba] = useState('resumo');
@@ -228,7 +228,7 @@ export default function Detalhe({ id, onFechar }) {
               {aba === 'itens' && <Itens itens={licitacao.itens || []} />}
               {aba === 'pontuacao' && <Pontuacao detalhe={licitacao.pontuacao_detalhe} />}
               {aba === 'arquivos' && <Arquivos id={id} />}
-              {aba === 'exigencias' && <Exigencias id={id} />}
+              {aba === 'exigencias' && <Exigencias id={id} aoCotarSeguro={aoIr ? () => aoIr('servicos', { servico: 'seguro_garantia', licitacao_id: id }) : null} />}
               {aba === 'tarefas' && <Tarefas licitacaoId={id} equipe={equipe} />}
               {aba === 'anexos' && <Anexos id={id} />}
               {aba === 'preco' && <Preco id={id} />}

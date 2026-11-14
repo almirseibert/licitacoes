@@ -406,6 +406,18 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
   a cada 5 min dentro da janela da sessão. Vagas pelo limite `monitores_chat` (plano avançado). Rotas
   `/api/chat/*`. Regras puras em `backend/regras/chat.js` (`testes/chat.test.js`). **Aceite medido**: ver o
   plano (Seção 6) — **medido contra portal de teste local**, nenhum portal real lido.
+- **Seção 18 — Ecossistema, código entregue em 14/11/2026 (aceite — serviço vendido a cliente ativo — pendente).**
+  Migração `035_servicos_parceiros.sql` (`parceiros`, compartilhada; `servico_pedidos`, por organização). Serviços:
+  seguro garantia, assessoria cadastral, cursos, clipping e bolsa de empregos, **sempre por parceiro cadastrado
+  pela operadora** (tela **Parceiros**, só superadmin) — não há parceiro de fábrica. O painel **só encaminha**: não
+  emite apólice nem entra na contratação. Antes de qualquer dado sair, a tela mostra a **prévia exata** (empresa,
+  contato, licitação e garantias exigidas; sem CPF, cofre, pontuação ou funil) e exige o aceite da versão vigente do
+  termo de vínculo; sem parceiro habilitado só se registra **interesse** e nada sai. O e-mail ao parceiro usa o SMTP
+  do painel e a resposta vai direto ao cliente; sem SMTP o pedido fica "aguardando envio" e a operadora reenvia. A
+  operadora marca o andamento e o **valor contratado** (obrigatório para "contratado") e vê as vendas por serviço.
+  Tela **Serviços** (atalho "Cotar seguro garantia" na aba Exigências). Rotas `/api/servicos/*` e
+  `/api/admin/{parceiros,servicos/*}`. Regras puras em `backend/regras/servicos.js` (`testes/servicos.test.js`).
+  **Aceite medido**: ver o plano (Seção 18).
 - `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
   ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
 
@@ -1353,6 +1365,11 @@ GET    /api/status                             — worker, fila, coleta, boletim
 GET    /api/auditoria                          ?entidade=&acao=&usuario=&de=&ate=&pagina= — trilha (admin)
 GET    /api/lgpd                               — situação da exclusão · GET /exportar (admin) · POST/DELETE /exclusao (dono)
 GET    /api/admin/solicitacoes[/:id]           — atendimento (operadora) · POST /:id/responder · GET /api/admin/nps
+GET    /api/servicos/catalogo                  — serviços, parceiro habilitado e pedidos em aberto (seção 18)
+GET    /api/servicos/previa                    ?servico=&licitacao_id= — o que iria ao parceiro (admin)
+POST   /api/servicos/pedidos                   { servico, licitacao_id?, mensagem?, aceite_termo } (admin) · POST /:id/cancelar
+GET    /api/servicos/pedidos · /licitacoes-com-garantia
+GET    /api/admin/parceiros                    operadora: POST, PATCH /:id · GET/POST /servicos/pedidos[/:id[/reenviar]] · GET /servicos/vendas
 GET    /api/acompanhamentos                    publicações posteriores ao edital (filtros; ?favoritas=1)
 GET    /api/contratos                          lista, faturado em 12m e faixa
 GET    /api/gestao/tarefas                     ?visao=atrasadas|hoje|futuras|concluidas&por=mim&licitacao_id=

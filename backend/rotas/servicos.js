@@ -1,0 +1,236 @@
+// /api/servicos — serviços complementares por parceria (Seção 18 do PLANO_SAAS_CONLICITACAO.md).
+// O painel só encaminha o pedido ao parceiro; o lado da operadora (parceiros, andamento,
+// vendas) fica em rotas/admin-servicos.js.
+const express = require('express');
+const pool = require('../config/db');
+const { exigirPapel } = require('../middlewares/autenticar');
+const { responderErro } = require('../middlewares/responder-erro');
+const email = require('../servicos/email');
+const regras = require('../regras/servicos');
+
+const rotas = express.Router();
+
+const COLUNAS_PEDIDO = `p.id, p.servico, p.status, p.mensagem, p.licitacao_id, p.criado_em, p.atualizado_em,
+  p.encaminhado_em, p.valor_contratado, p.termo_versao, par.nome AS parceiro_nome`;
+
+/** Parceiro que atende o serviço agora (o cadastrado há mais tempo e ativo). */
+async function parceiroAtivo(servico) {
+  const [[p]] = await pool.query(
+    'SELECT id, nome, email_pedidos, site FROM parceiros WHERE servico = ? AND ativo = 1 ORDER BY id LIMIT 1',
+    [servico]
+  );
+  return p || null;
+}
+
+/** A licitação precisa ser uma que a organização acompanha — o catálogo é compartilhado. */
+async function licitacaoDaOrganizacao(organizacaoId, id) {
+  const [[l]] = await pool.query(
+    `SELECT l.id, l.orgao_nome, l.modalidade, l.numero_compra, l.objeto, l.uf, l.valor_estimado, l.abertura_propostas
+       FROM licitacoes l JOIN org_licitacoes o ON o.licitacao_id = l.id AND o.organizacao_id = ?
+      WHERE l.id = ?`,
+    [organizacaoId, id]
+  );
+  return l || null;
+}
+
+async function garantiasDaLicitacao(licitacaoId) {
+  const [linhas] = await pool.query(
+    "SELECT codigo, detectado FROM licitacao_exigencias WHERE licitacao_id = ? AND codigo IN ('garantia_proposta','garantia_contrato')",
+    [licitacaoId]
+  );
+  return regras.garantiasDasExigencias(linhas);
+}
+
+/** Monta o que iria ao parceiro; devolve `{ erro, status }` quando a licitação não é da organização. */
+async function prepararDados(req, v) {
+  const empresaPromessa = pool.query(
+    'SELECT razao_social, cnpj, natureza FROM empresa_perfis WHERE organizacao_id = ? ORDER BY padrao DESC, id ASC LIMIT 1',
+    [req.organizacaoId]
+  );
+  let licitacao = null;
+  let garantias = null;
+  if (v.licitacaoId) {
+    licitacao = await licitacaoDaOrganizacao(req.organizacaoId, v.licitacaoId);
+    if (!licitacao) { await empresaPromessa; return { erro: 'Licitação não encontrada.', status: 404 }; }
+    garantias = await garantiasDaLicitacao(licitacao.id);
+  }
+  const [[empresa]] = await empresaPromessa;
+  const dados = regras.montarDados({
+    servico: v.servico, empresa, usuario: req.usuario, licitacao, garantias, mensagem: v.mensagem,
+  });
+  return { dados };
+}
+
+// GET /api/servicos/catalogo — os serviços, se há parceiro e quantos pedidos a organização tem.
+rotas.get('/catalogo', async (req, res) => {
+  try {
+    const [[parceiros], [contagens]] = await Promise.all([
+      pool.query('SELECT servico, nome, site FROM parceiros WHERE ativo = 1 ORDER BY id'),
+      pool.query(
+        `SELECT servico, COUNT(*) AS total FROM servico_pedidos
+          WHERE organizacao_id = ? AND status NOT IN ('cancelado','recusado','contratado') GROUP BY servico`,
+        [req.organizacaoId]
+      ),
+    ]);
+    const abertos = Object.fromEntries(contagens.map((c) => [c.servico, Number(c.total)]));
+    res.json({
+      servicos: Object.entries(regras.SERVICOS).map(([chave, s]) => {
+        const parceiro = parceiros.find((p) => p.servico === chave);
+        return {
+          chave,
+          rotulo: s.rotulo,
+          descricao: s.descricao,
+          usa_licitacao: s.usaLicitacao,
+          disponivel: Boolean(parceiro),
+          parceiro: parceiro ? { nome: parceiro.nome, site: parceiro.site } : null,
+          pedidos_abertos: abertos[chave] || 0,
+        };
+      }),
+    });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível carregar os serviços.', erro);
+  }
+});
+
+// GET /api/servicos/licitacoes-com-garantia — onde o edital exige garantia, para escolher na cotação.
+rotas.get('/licitacoes-com-garantia', async (req, res) => {
+  try {
+    const [linhas] = await pool.query(
+      `SELECT l.id, l.orgao_nome, l.numero_compra, l.objeto, l.uf, l.valor_estimado, l.abertura_propostas,
+              MAX(e.codigo = 'garantia_proposta') AS garantia_proposta, MAX(e.codigo = 'garantia_contrato') AS garantia_contrato
+         FROM licitacoes l
+         JOIN org_licitacoes o ON o.licitacao_id = l.id AND o.organizacao_id = ?
+         JOIN licitacao_exigencias e ON e.licitacao_id = l.id AND e.detectado = 'sim'
+              AND e.codigo IN ('garantia_proposta','garantia_contrato')
+        WHERE o.descartada = 0 AND (l.abertura_propostas IS NULL OR l.abertura_propostas >= NOW())
+        GROUP BY l.id ORDER BY l.abertura_propostas IS NULL, l.abertura_propostas ASC LIMIT 50`,
+      [req.organizacaoId]
+    );
+    res.json({
+      licitacoes: linhas.map((l) => ({ ...l, garantia_proposta: Boolean(l.garantia_proposta), garantia_contrato: Boolean(l.garantia_contrato) })),
+    });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível listar as licitações com garantia.', erro);
+  }
+});
+
+// GET /api/servicos/previa?servico=&licitacao_id= — o que iria ao parceiro, antes do aceite.
+rotas.get('/previa', exigirPapel('admin'), async (req, res) => {
+  const v = regras.validarPedido({ servico: req.query.servico, licitacao_id: req.query.licitacao_id });
+  if (v.erro) return res.status(400).json({ erro: v.erro });
+  try {
+    const [parceiro, r] = await Promise.all([parceiroAtivo(v.dados.servico), prepararDados(req, v.dados)]);
+    if (r.erro) return res.status(r.status).json({ erro: r.erro });
+    res.json({
+      disponivel: Boolean(parceiro),
+      parceiro: parceiro ? { nome: parceiro.nome, site: parceiro.site } : null,
+      linhas: regras.linhasDosDados(r.dados),
+      termo: regras.TERMO_VINCULO,
+      termo_versao: regras.VERSAO_TERMO_PARCEIRO,
+    });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível montar a prévia do pedido.', erro);
+  }
+});
+
+// GET /api/servicos/pedidos
+rotas.get('/pedidos', async (req, res) => {
+  try {
+    const [linhas] = await pool.query(
+      `SELECT ${COLUNAS_PEDIDO} FROM servico_pedidos p LEFT JOIN parceiros par ON par.id = p.parceiro_id
+        WHERE p.organizacao_id = ? ORDER BY p.id DESC LIMIT 200`,
+      [req.organizacaoId]
+    );
+    res.json({ pedidos: linhas.map(regras.comProtocolo) });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível carregar os pedidos.', erro);
+  }
+});
+
+// POST /api/servicos/pedidos — { servico, licitacao_id?, mensagem?, aceite_termo }
+// Sem parceiro habilitado, só registra o interesse (nada sai do painel e não pede aceite).
+rotas.post('/pedidos', exigirPapel('admin'), async (req, res) => {
+  const v = regras.validarPedido(req.body);
+  if (v.erro) return res.status(400).json({ erro: v.erro });
+  try {
+    const parceiro = await parceiroAtivo(v.dados.servico);
+    if (parceiro && !regras.aceiteValido(v.dados.aceite)) {
+      return res.status(400).json({ erro: 'Aceite o termo de vínculo para enviar o pedido ao parceiro.' });
+    }
+    const r = await prepararDados(req, v.dados);
+    if (r.erro) return res.status(r.status).json({ erro: r.erro });
+
+    // Mesmo serviço e mesma licitação já em aberto: duplo clique ou pedido repetido não manda o e-mail duas vezes.
+    const [[repetido]] = await pool.query(
+      `SELECT id FROM servico_pedidos WHERE organizacao_id = ? AND servico = ? AND licitacao_id <=> ?
+          AND status IN ('interesse','solicitado','encaminhado','em_atendimento') LIMIT 1`,
+      [req.organizacaoId, v.dados.servico, v.dados.licitacaoId]
+    );
+    if (repetido) {
+      return res.status(409).json({ erro: 'Já existe um pedido em aberto para este serviço e esta licitação. Veja em "Seus pedidos".' });
+    }
+
+    const agora = new Date();
+    // Com parceiro e aceite o pedido já nasce "solicitado": se algo falhar antes do envio, a
+    // operadora ainda consegue reenviar (um pedido "interesse" com parceiro ficaria preso).
+    const [ins] = await pool.query(
+      `INSERT INTO servico_pedidos (organizacao_id, usuario_id, servico, parceiro_id, licitacao_id, status, mensagem,
+                                    dados_enviados, termo_versao, consentimento_em)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        req.organizacaoId, req.usuario.id, v.dados.servico, parceiro ? parceiro.id : null, v.dados.licitacaoId,
+        parceiro ? 'solicitado' : 'interesse', v.dados.mensagem, parceiro ? JSON.stringify(r.dados) : null,
+        parceiro ? regras.VERSAO_TERMO_PARCEIRO : null, parceiro ? agora : null,
+      ]
+    );
+    const pedido = { id: ins.insertId, servico: v.dados.servico, criado_em: agora, termo_versao: regras.VERSAO_TERMO_PARCEIRO };
+
+    let enviado = false;
+    if (parceiro) {
+      const envio = await email.enviarTransacional(regras.montarEmail({ pedido, parceiro, dados: r.dados }));
+      enviado = envio.enviado;
+      if (enviado) {
+        await pool.query(
+          "UPDATE servico_pedidos SET status = 'encaminhado', encaminhado_em = ? WHERE id = ? AND organizacao_id = ?",
+          [agora, pedido.id, req.organizacaoId]
+        );
+      }
+      // O interesse que a organização deixou antes foi substituído por este pedido de verdade.
+      await pool.query(
+        "UPDATE servico_pedidos SET status = 'cancelado' WHERE organizacao_id = ? AND servico = ? AND status = 'interesse' AND id <> ?",
+        [req.organizacaoId, v.dados.servico, pedido.id]
+      );
+    }
+    const status = regras.statusInicial({ temParceiro: Boolean(parceiro), emailEnviado: enviado });
+    res.status(201).json({
+      id: pedido.id,
+      protocolo: regras.protocolo(pedido.id, agora),
+      status,
+      mensagem: {
+        interesse: 'Ainda não há parceiro habilitado para este serviço. Seu interesse ficou registrado e nada foi enviado a ninguém.',
+        encaminhado: `Pedido enviado a ${parceiro && parceiro.nome}. Ele responde direto ao seu e-mail.`,
+        solicitado: 'Pedido registrado, mas o e-mail ao parceiro ainda não saiu. A equipe do painel vai reenviar.',
+      }[status],
+    });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível registrar o pedido agora.', erro);
+  }
+});
+
+// POST /api/servicos/pedidos/:id/cancelar
+rotas.post('/pedidos/:id/cancelar', exigirPapel('admin'), async (req, res) => {
+  try {
+    const id = Number(req.params.id) || 0;
+    const [[p]] = await pool.query('SELECT status FROM servico_pedidos WHERE id = ? AND organizacao_id = ?', [id, req.organizacaoId]);
+    if (!p) return res.status(404).json({ erro: 'Pedido não encontrado.' });
+    if (!regras.CANCELAVEIS.has(p.status)) {
+      return res.status(409).json({ erro: `Um pedido "${regras.STATUS[p.status]}" não pode mais ser cancelado.` });
+    }
+    await pool.query("UPDATE servico_pedidos SET status = 'cancelado' WHERE id = ? AND organizacao_id = ?", [id, req.organizacaoId]);
+    res.json({ ok: true });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível cancelar o pedido.', erro);
+  }
+});
+
+module.exports = rotas;

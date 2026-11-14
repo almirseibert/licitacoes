@@ -59,6 +59,9 @@ app.use('/api/status', ...comToken, require('./rotas/status'));
 app.use('/api/lgpd', ...comToken, require('./rotas/lgpd'));
 app.use('/api/auditoria', ...comToken, require('./rotas/auditoria'));
 
+// Seção 18: serviços complementares por parceria (encaminha o pedido; não emite nada).
+app.use('/api/servicos', ...protegida, require('./rotas/servicos'));
+
 app.use('/api/licitacoes', ...protegida, require('./rotas/licitacoes'));
 app.use('/api/fontes', ...protegida, require('./rotas/fontes'));
 app.use('/api/palavras', ...protegida, require('./rotas/palavras'));
