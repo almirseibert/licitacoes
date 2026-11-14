@@ -208,6 +208,9 @@ function Pedido({ servico, licitacaoInicial, aoFechar, aoEnviar }) {
               <input type="checkbox" className="mt-0.5" checked={aceito} onChange={(e) => setAceito(e.target.checked)} />
               <span>{previa.termo}</span>
             </label>
+            {!previa.termo_revisado_por_advogado && (
+              <p className="text-[11px] text-atencao mb-3">Este termo de vínculo ainda não foi revisado por advogado.</p>
+            )}
           </>
         ) : (
           <p className="text-xs text-texto-suave mb-3 border border-borda rounded p-2">

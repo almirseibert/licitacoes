@@ -44,7 +44,25 @@ test('auditoria: PATCH de licitação sem campo de controle, GET e rota desconhe
   assert.equal(aud.classificar('GET', '/empresa/documentos'), null);
   assert.equal(aud.classificar('POST', '/licitacoes/pesquisas', {}), null);
   assert.equal(aud.classificar('PATCH', '/licitacoes/abc', { etapa: 'x' }), null); // id não numérico
-  assert.equal(aud.classificar('POST', '/palavras', {}), null);
+  assert.equal(aud.classificar('POST', '/palavras/simular', {}), null, 'simular não grava nada');
+  assert.equal(aud.classificar('GET', '/palavras'), null);
+});
+
+test('auditoria (17b): palavra-chave, ajustes, pesos e proposta entram — com o id e sem o conteúdo', () => {
+  const p = aud.classificar('POST', '/palavras', { termo: 'notebook', peso: 3 }, { id: 9 });
+  assert.equal(p.acao, 'criou_palavra_chave');
+  assert.equal(p.entidade_id, '9');
+  assert.equal(p.detalhe, null, 'o termo digitado não vai para a trilha');
+  assert.equal(aud.classificar('DELETE', '/palavras/excluidas/4').acao, 'removeu_palavra_excluida');
+  assert.equal(aud.classificar('PATCH', '/configuracoes/pesos', { prazo: 10 }).detalhe, null);
+  assert.equal(aud.classificar('POST', '/configuracoes/pesos/prazo_curto/restaurar').acao, 'restaurou_peso');
+  assert.equal(aud.classificar('POST', '/configuracoes/repontuar').acao, 'repontuou');
+  const g = aud.classificar('POST', '/licitacoes/12/propostas/3/saida', { formato: 'pdf' });
+  assert.equal(g.acao, 'gerou_proposta');
+  assert.equal(g.entidade_id, '12');
+  assert.equal(aud.classificar('POST', '/licitacoes/12/propostas', {}, { id: 3 }).acao, 'criou_proposta');
+  assert.equal(aud.classificar('DELETE', '/licitacoes/12/propostas/3').acao, 'removeu_proposta');
+  for (const acao of ['criou_palavra_chave', 'alterou_ajustes', 'gerou_proposta', 'repontuou']) assert.notEqual(aud.rotulo(acao), acao, `${acao} sem rótulo`);
 });
 
 test('auditoria: caminho com outra caixa também é auditado (o Express roteia sem ligar para caixa)', () => {

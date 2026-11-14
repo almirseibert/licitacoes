@@ -353,7 +353,12 @@ rotas.get('/convites/:token', async (req, res) => {
  * organizações da pessoa. O link prova que o convite existe, não quem é você.
  */
 rotas.post('/convites/:token/aceitar', async (req, res) => {
-  const { nome, senha } = req.body || {};
+  const { nome, senha, aceitou_termos: aceitouTermos } = req.body || {};
+  // Seção 17b: aceitar o convite é aceitar os termos e a política (como criar a conta); o aceite
+  // fica gravado no servidor, não só no modal que o painel mostra por cima.
+  if (aceitouTermos !== true) {
+    return res.status(400).json({ erro: 'Para aceitar o convite, leia e aceite os termos de uso e a política de privacidade.' });
+  }
   const conexao = await pool.getConnection();
   try {
     await conexao.beginTransaction();
@@ -409,6 +414,7 @@ rotas.post('/convites/:token/aceitar', async (req, res) => {
       [convite.organizacao_id, usuarioId, convite.papel]
     );
     await conexao.query('UPDATE convites SET aceito_em = NOW() WHERE id = ?', [convite.id]);
+    await onboarding.aceitarTermos({ usuarioId, organizacaoId: convite.organizacao_id, ip: req.ip }, conexao);
 
     await conexao.commit();
 

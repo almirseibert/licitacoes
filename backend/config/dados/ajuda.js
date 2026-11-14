@@ -131,6 +131,22 @@ const GUIAS = [
     video: null,
   },
   {
+    id: 'juridico',
+    ferramenta: 'Jurídico',
+    tela: 'juridico',
+    titulo: 'Consultor jurídico e Jurídico Fácil',
+    resumo: 'Pergunte sobre a Lei 14.133 e leia guias curtos; toda resposta cita o artigo.',
+    passos: [
+      'Em Jurídico › Consultor, escreva a dúvida (prazo de recurso, garantia, multa, ME e EPP…) ou toque num exemplo.',
+      'Leia a resposta e o artigo citado; "Artigos da base consultados" mostra o resumo de cada um.',
+      'Use "novo chat" para mudar de assunto. Cada pessoa vê só as próprias conversas.',
+      'Em Jurídico Fácil, busque guias curtos por tema, sem gastar a cota de IA.',
+    ],
+    dica: 'Não substitui advogado. A base é um resumo escrito para o painel: confira o artigo na lei antes de agir.',
+    palavras: ['juridico', 'lei', '14133', 'artigo', 'advogado', 'recurso', 'impugnacao', 'multa', 'sancao', 'garantia', 'prazo'],
+    video: null,
+  },
+  {
     id: 'contratos',
     ferramenta: 'Meus contratos',
     tela: 'contratos',

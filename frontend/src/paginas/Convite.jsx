@@ -13,6 +13,7 @@ const PAPEIS = { admin: 'administrador', membro: 'membro', leitor: 'leitor (só 
 export default function Convite({ token, onEntrar, onSair }) {
   const [convite, setConvite] = useState(null);
   const [erro, setErro] = useState(null);
+  const [aceitouTermos, setAceitouTermos] = useState(false);
   const [campos, setCampos] = useState({ nome: '', senha: '' });
   const [enviando, setEnviando] = useState(false);
 
@@ -25,7 +26,7 @@ export default function Convite({ token, onEntrar, onSair }) {
     setEnviando(true);
     setErro(null);
     try {
-      const r = await api.aceitarConvite(token, campos);
+      const r = await api.aceitarConvite(token, { ...campos, aceitou_termos: aceitouTermos });
       guardarSessao(r.token, r.usuario, null);
       onEntrar(r.usuario);
     } catch (e) {
@@ -74,10 +75,15 @@ export default function Convite({ token, onEntrar, onSair }) {
               </>
             )}
 
+            <label className="flex items-start gap-2 text-xs mb-4">
+              <input type="checkbox" className="mt-0.5" checked={aceitouTermos} onChange={(e) => setAceitouTermos(e.target.checked)} />
+              <span>Li e aceito os termos de uso e a política de privacidade.</span>
+            </label>
+
             {erro && <p className="text-xs text-erro mb-4" role="alert">{erro}</p>}
             <button
               type="submit"
-              disabled={enviando}
+              disabled={enviando || !aceitouTermos}
               className="w-full flex items-center justify-center gap-2 bg-voltagem text-obsidiana font-medium rounded py-2 text-sm hover:brightness-110 disabled:opacity-60"
             >
               {enviando && <Loader2 size={14} className="animate-spin" />}

@@ -42,7 +42,24 @@ function tabelasDaOrganizacao() {
   return tabelasEmCache;
 }
 
-async function exportar(organizacaoId) {
+/** As linhas da organização numa tabela, uma a uma (nada de montar a tabela inteira em memória). */
+async function* linhasDe(tabela, organizacaoId) {
+  const conexao = await pool.getConnection();
+  try {
+    const fluxo = conexao.connection.query({ sql: `SELECT * FROM \`${tabela}\` WHERE organizacao_id = ?`, values: [organizacaoId] }).stream();
+    for await (const linha of fluxo) yield linha;
+  } finally {
+    conexao.release();
+  }
+}
+
+/**
+ * Escreve a cópia dos dados em JSON, aos poucos: `escrever(texto)` recebe cada pedaço (e pode
+ * devolver uma promessa — é onde a resposta espera o `drain`). A memória não cresce com o
+ * tamanho da organização. Os avisos vão por último, porque só no fim se sabe que colunas foram
+ * omitidas por parecerem credenciais.
+ */
+async function exportarEmFluxo(organizacaoId, escrever) {
   const [[org]] = await pool.query(
     'SELECT id, nome, cnpj, status, teste_ate, criado_em FROM organizacoes WHERE id = ?',
     [organizacaoId]
@@ -53,33 +70,29 @@ async function exportar(organizacaoId) {
     [organizacaoId]
   );
 
-  const tabelas = {};
-  const truncadas = [];
+  await escrever(`{"gerado_em":${JSON.stringify(new Date().toISOString())},"organizacao":${JSON.stringify(org)},"equipe":${JSON.stringify(membros)},"tabelas":{`);
   const omitidas = new Set();
+  let primeiraTabela = true;
   for (const nome of await tabelasDaOrganizacao()) {
     if (regras.TABELAS_FORA_DA_EXPORTACAO.has(nome) || nome === 'organizacao_membros') continue;
-    const [linhas] = await pool.query(`SELECT * FROM \`${nome}\` WHERE organizacao_id = ? LIMIT ?`, [
-      organizacaoId, regras.LINHAS_POR_TABELA + 1,
-    ]);
-    if (linhas.length > regras.LINHAS_POR_TABELA) {
-      linhas.pop();
-      truncadas.push(nome);
+    let primeiraLinha = true;
+    for await (const linha of linhasDe(nome, organizacaoId)) {
+      // A tabela só aparece se tiver linha; a vírgula e a chave abrem na primeira.
+      if (primeiraLinha) {
+        await escrever(`${primeiraTabela ? '' : ','}${JSON.stringify(nome)}:[`);
+        primeiraTabela = false;
+      }
+      await escrever(`${primeiraLinha ? '' : ','}${JSON.stringify(regras.semSegredos(linha, omitidas))}`);
+      primeiraLinha = false;
     }
-    if (linhas.length) tabelas[nome] = linhas.map((l) => regras.semSegredos(l, omitidas));
+    if (!primeiraLinha) await escrever(']');
   }
-
-  return {
-    gerado_em: new Date().toISOString(),
-    organizacao: org,
-    equipe: membros,
-    tabelas,
-    avisos: [
-      'Os arquivos do cofre (certidões, anexos, propostas em PDF) não vão neste JSON: baixe-os pelo painel ou peça ao suporte.',
-      'Credenciais (senhas, tokens de API, segredos de webhook) nunca saem na exportação.',
-      ...(omitidas.size ? [`Colunas omitidas por parecerem credenciais: ${[...omitidas].sort().join(', ')}.`] : []),
-      ...(truncadas.length ? [`Tabelas cortadas em ${regras.LINHAS_POR_TABELA} linhas: ${truncadas.join(', ')}.`] : []),
-    ],
-  };
+  const avisos = [
+    'Os arquivos do cofre (certidões, anexos, propostas em PDF) não vão neste JSON: baixe-os pelo painel ou peça ao suporte.',
+    'Credenciais (senhas, tokens de API, segredos de webhook) nunca saem na exportação.',
+    ...(omitidas.size ? [`Colunas omitidas por parecerem credenciais: ${[...omitidas].sort().join(', ')}.`] : []),
+  ];
+  await escrever(`},"avisos":${JSON.stringify(avisos)}}`);
 }
 
 async function situacaoDaExclusao(organizacaoId) {
@@ -212,5 +225,5 @@ async function excluirVencidas({ agora = new Date() } = {}) {
 }
 
 module.exports = {
-  exportar, situacaoDaExclusao, temCobrancaRecorrente, agendar, cancelar, excluir, excluirVencidas,
+  exportarEmFluxo, situacaoDaExclusao, temCobrancaRecorrente, agendar, cancelar, excluir, excluirVencidas,
 };

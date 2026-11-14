@@ -19,6 +19,7 @@ const NOMES_LIMITE = {
   perfis_empresa: 'perfis de empresa',
   ia_resumos_mes: 'leituras de edital por IA neste mês',
   ia_perguntas_mes: 'perguntas ao edital neste mês',
+  ia_juridico_mes: 'perguntas ao consultor jurídico neste mês',
   exportacoes_mes: 'exportações neste mês',
   cofre_gb: 'GB no cofre de documentos',
   monitoramentos: 'licitações acompanhadas',
@@ -48,7 +49,7 @@ const NOMES_RECURSO = {
 };
 
 // Limites mensais vêm de `uso_mensal`; os outros são estoque, contados na hora.
-const MENSAIS = ['ia_resumos_mes', 'ia_perguntas_mes', 'exportacoes_mes', 'api_chamadas_mes'];
+const MENSAIS = ['ia_resumos_mes', 'ia_perguntas_mes', 'ia_juridico_mes', 'exportacoes_mes', 'api_chamadas_mes'];
 
 // ------------------------------------------------------------------- puro
 

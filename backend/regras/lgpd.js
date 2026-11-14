@@ -21,8 +21,25 @@ const COLUNA_SECRETA = /(senha|segredo|secret|token_hash|^token$|api_?key|p256dh
 // de auditoria entra, porque é dado sobre as pessoas da equipe.
 const TABELAS_FORA_DA_EXPORTACAO = new Set(['tokens_api', 'notificacoes_push']);
 
-// Teto de linhas por tabela na exportação (a resposta é montada em memória).
-const LINHAS_POR_TABELA = 50000;
+// Toda tabela com `organizacao_id` tem de estar classificada: ou sai na exportação (esta lista) ou
+// fica de fora por ser só credencial (`TABELAS_FORA_DA_EXPORTACAO`). A exportação descobre as
+// tabelas no schema, então uma tabela nova entraria sozinha — o teste de CI
+// (testes/lgpd-classificacao.test.js) lê as migrações e falha quando surge tabela que ninguém
+// classificou, para alguém olhar se há coluna secreta (`COLUNA_SECRETA` omite por nome) ou dado
+// que não deveria sair. `lgpd_exclusoes` (comprovante) tem `organizacao_id` mas não é dado da
+// organização e é tratada à parte.
+const TABELAS_EXPORTADAS = new Set([
+  'alertas', 'anotacoes', 'assinatura_eventos', 'assinaturas', 'auditoria', 'boletim_itens',
+  'boletins', 'chat_mensagens', 'contratos', 'convites', 'documento_kits', 'empresa_documentos',
+  'empresa_perfis', 'ia_perguntas', 'juridico_conversas', 'juridico_mensagens', 'licitacao_anexos',
+  'links_publicos', 'modelos_declaracao', 'monitoramentos', 'notificacoes_config',
+  'notificacoes_destinos', 'nps_respostas', 'org_andamentos', 'org_configuracoes',
+  'org_exigencias', 'org_licitacoes', 'org_oportunidades', 'org_portais', 'org_tarefas',
+  'organizacao_membros', 'pacotes', 'palavras_chave', 'palavras_excluidas', 'palavras_sugeridas',
+  'perfis_busca', 'propostas', 'questionamentos', 'regras_pontuacao', 'resumo_consideracoes',
+  'servico_pedidos', 'solicitacoes', 'termos_aceites', 'uso_mensal', 'webhooks',
+]);
+const TABELA_DO_COMPROVANTE = 'lgpd_exclusoes';
 
 /** O dono digitou o nome da organização igual (sem ligar para caixa, acento e espaços)? */
 function confirmacaoConfere(nomeOrganizacao, digitado) {
@@ -83,6 +100,6 @@ function arquivoDaOrganizacao(relativo, organizacaoId) {
 const vencida = (agendadaEm, agora = new Date()) => Boolean(agendadaEm) && new Date(agendadaEm).getTime() <= new Date(agora).getTime();
 
 module.exports = {
-  DIAS_DE_CARENCIA, TABELAS_FORA_DA_EXPORTACAO, LINHAS_POR_TABELA,
+  DIAS_DE_CARENCIA, TABELAS_EXPORTADAS, TABELAS_FORA_DA_EXPORTACAO, TABELA_DO_COMPROVANTE,
   confirmacaoConfere, dataDaExclusao, podePedirExclusao, semSegredos, arquivoDaOrganizacao, vencida,
 };

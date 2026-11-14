@@ -4,15 +4,17 @@
 // tem um comportamento no código atrás), mas NÃO foi revisado por advogado — o
 // revisor ainda não foi definido (mesma pendência da Seção 16). A API devolve
 // `revisado_por_advogado: false` e a tela mostra a faixa de aviso enquanto for
-// assim. Quem revisar muda o texto, sobe `VERSAO_TERMOS` e passa a flag para
-// `true`: todo usuário volta a ser perguntado, porque o aceite é por versão.
+// assim. Quem revisar muda o texto, sobe `VERSAO_TERMOS` e preenche no ambiente o advogado e
+// `LEGAL_REVISADO=true` (regras/revisao.js): todo usuário volta a ser perguntado, porque o
+// aceite é por versão.
 //
 // Dado que falta é lacuna visível (`____________`): razão social, CNPJ e e-mail
 // de contato da operadora vêm do ambiente (`OPERADORA_*`), e sem eles o texto
 // mostra o traço — nunca um valor inventado.
 
+const { revisao } = require('../../regras/revisao');
+
 const VERSAO_TERMOS = '2026-11-14';
-const REVISADO_POR_ADVOGADO = false;
 const LACUNA = '____________';
 
 /** Identificação da operadora, lida do ambiente a cada chamada (o teste troca o env). */
@@ -167,7 +169,7 @@ function documentos(env = process.env) {
   const o = operadora(env);
   return {
     versao: VERSAO_TERMOS,
-    revisado_por_advogado: REVISADO_POR_ADVOGADO,
+    ...revisao(env, 'LEGAL'),
     operadora: o,
     termos: termos(o),
     privacidade: privacidade(o),
@@ -175,4 +177,4 @@ function documentos(env = process.env) {
   };
 }
 
-module.exports = { VERSAO_TERMOS, REVISADO_POR_ADVOGADO, LACUNA, operadora, documentos };
+module.exports = { VERSAO_TERMOS, LACUNA, operadora, documentos };

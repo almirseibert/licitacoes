@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock, Newspaper, LayoutDashboard, ListTodo, ScrollText, BookMarked, BellRing, PieChart, Plug, Trophy, Rocket, LifeBuoy, Activity, ShieldCheck, History, MessagesSquare, Handshake } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock, Newspaper, LayoutDashboard, ListTodo, ScrollText, BookMarked, BellRing, PieChart, Plug, Trophy, Rocket, LifeBuoy, Activity, ShieldCheck, History, MessagesSquare, Handshake, Scale } from 'lucide-react';
 import { api, obterToken, obterUsuario, obterOrganizacao, guardarSessao, encerrarSessao } from './servicos/api';
 import Login from './paginas/Login';
 import Convite from './paginas/Convite';
@@ -38,6 +38,7 @@ import Auditoria from './paginas/Auditoria';
 import Legal from './paginas/Legal';
 import Servicos from './paginas/Servicos';
 import Parceiros from './paginas/Parceiros';
+import Juridico from './paginas/Juridico';
 import AceiteTermos from './componentes/AceiteTermos';
 import PesquisaNps from './componentes/PesquisaNps';
 import Alertas from './componentes/Alertas';
@@ -68,6 +69,8 @@ const TELAS = [
   { chave: 'diagnostico', rotulo: 'Diagnóstico', icone: Stethoscope, recurso: 'relatorios' },
   { chave: 'desempenho', rotulo: 'Meu desempenho', icone: Trophy, recurso: 'relatorios' },
   { chave: 'relatorio', rotulo: 'Relatório mensal', icone: BarChart3, recurso: 'relatorios' },
+  // Seção 16: consultor jurídico (chat sobre a Lei 14.133) e biblioteca Jurídico Fácil.
+  { chave: 'juridico', rotulo: 'Jurídico', icone: Scale, recurso: 'consultor_juridico' },
   { chave: 'cofre', rotulo: 'Documentos', icone: FolderLock },
   // Seção 18: seguro garantia, assessoria cadastral e demais serviços por parceria.
   { chave: 'servicos', rotulo: 'Serviços', icone: Handshake },
@@ -91,9 +94,6 @@ const TELAS = [
 
 // Seção 12: as três telas do mercado são o mesmo componente, por tipo de lista.
 const TELAS_MERCADO = { mercado_contratos: 'contratos', mercado_atas: 'atas', acompanhamentos: 'acompanhamentos' };
-
-// Quem configura a organização (a permissão em si é conferida pelo backend).
-const PAPEIS_ADMIN = ['dono', 'admin'];
 
 // Situações em que vale um aviso fixo no topo (Seção 3).
 const AVISAR = ['teste_vencido', 'vencida', 'suspensa'];
@@ -158,19 +158,21 @@ export default function App() {
     api.assinatura().then(setPlano).catch(() => {});
     api
       .onboarding()
-      .then((e) => {
-        setOnb(e);
-        // Organização nova: o painel abre no assistente (só para quem pode configurá-la).
-        if (!e.concluido && PAPEIS_ADMIN.includes(e.papel)) setTela((t) => (['dashboard', 'radar'].includes(t) ? 'primeiros_passos' : t));
-      })
+      .then(setOnb)
       .catch(() => {});
   }, [usuario]);
 
-  // Plano sem gestão (ou bloqueado) não abre no Dashboard, que daria erro.
+  // Tela inicial: UMA decisão, tomada quando o plano e o assistente já chegaram (antes eram dois
+  // efeitos que se atropelavam). Organização nova abre no assistente — só para quem pode
+  // configurá-la (`pode_administrar` vem do backend); plano sem gestão não abre no Dashboard,
+  // que daria erro. Depois de decidida, não mexe mais: quem navegou fica onde está.
+  const inicialDecidida = useRef(false);
   useEffect(() => {
-    if (plano && tela === 'dashboard' && !temRecurso('gestao')) setTela('radar');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plano]);
+    if (inicialDecidida.current || !plano || !onb) return;
+    inicialDecidida.current = true;
+    if (!onb.concluido && onb.pode_administrar) setTela((t) => (['dashboard', 'radar'].includes(t) ? 'primeiros_passos' : t));
+    else if (!plano.isenta && plano.plano && !plano.plano.recursos.includes('gestao')) setTela((t) => (t === 'dashboard' ? 'radar' : t));
+  }, [plano, onb]);
 
   const temRecurso = (recurso) =>
     !recurso || !plano || plano.isenta || (plano.plano && plano.plano.recursos.includes(recurso));
@@ -234,7 +236,7 @@ export default function App() {
         </div>
 
         <div className="flex-1 py-2">
-          {TELAS.filter((t) => (!t.soSuperadmin || (plano && plano.superadmin)) && (!t.soAdmin || (plano && PAPEIS_ADMIN.includes(plano.papel)))).map(({ chave, rotulo, icone: Icone, recurso }) => (
+          {TELAS.filter((t) => (!t.soSuperadmin || (plano && plano.superadmin)) && (!t.soAdmin || (plano && plano.pode_administrar))).map(({ chave, rotulo, icone: Icone, recurso }) => (
             <button
               key={chave}
               onClick={() => irPara(chave)}
@@ -319,6 +321,7 @@ export default function App() {
         )}
         {tela === 'desempenho' && <Desempenho aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />}
         {tela === 'relatorio' && <Relatorio />}
+        {tela === 'juridico' && <Juridico aoIr={irPara} />}
         {tela === 'equipe' && <Equipe />}
         {tela === 'integracoes' && <Integracoes />}
         {tela === 'configuracoes' && <Configuracoes />}

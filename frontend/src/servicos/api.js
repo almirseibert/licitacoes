@@ -609,6 +609,19 @@ export const api = {
   salvarPerguntaEdital: (id, pid, salva) =>
     requisitar(`/licitacoes/${id}/perguntas/${pid}`, { method: 'PATCH', body: JSON.stringify({ salva }) }),
 
+  // Consultor jurídico e Jurídico Fácil (Seção 16 do plano SaaS)
+  juridicoSobre: () => requisitar('/juridico/sobre'),
+  juridicoBiblioteca: (q = '', tema = '') =>
+    requisitar(`/juridico/biblioteca?q=${encodeURIComponent(q)}&tema=${encodeURIComponent(tema)}`),
+  juridicoGuia: (id) => requisitar(`/juridico/biblioteca/${encodeURIComponent(id)}`),
+  juridicoConversas: () => requisitar('/juridico/conversas'),
+  juridicoNovaConversa: () => requisitar('/juridico/conversas', { method: 'POST', body: '{}' }),
+  juridicoConversa: (id) => requisitar(`/juridico/conversas/${id}`),
+  juridicoApagarConversa: (id) => requisitar(`/juridico/conversas/${id}`, { method: 'DELETE' }),
+  juridicoPerguntar: (id, pergunta) =>
+    requisitar(`/juridico/conversas/${id}/mensagens`, { method: 'POST', body: JSON.stringify({ pergunta }) }),
+  juridicoMensagem: (id, mid) => requisitar(`/juridico/conversas/${id}/mensagens/${mid}`),
+
   gastoIa: (dias = 30) => requisitar(`/ia?dias=${dias}`),
 
   palavrasSugeridas: () => requisitar('/ia/palavras-sugeridas'),

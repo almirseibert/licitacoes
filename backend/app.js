@@ -93,6 +93,9 @@ app.use('/api/acompanhamentos', ...modulo('acompanhamentos'), require('./rotas/m
 // Seção 6: monitor de chat do pregão (vagas pelo limite `monitores_chat` do plano).
 app.use('/api/chat', ...modulo('acompanhamentos'), require('./rotas/chat'));
 
+// Seção 16: consultor jurídico (chat sobre a Lei 14.133) e a biblioteca Jurídico Fácil.
+app.use('/api/juridico', ...modulo('consultor_juridico'), require('./rotas/juridico'));
+
 // Seção 14: tokens e webhooks (tela de Integrações, com o login do painel) e a
 // API pública por token. `/api/v1` não passa por `autenticar`: o token é dela.
 app.use('/api/integracoes', ...modulo('api'), require('./rotas/integracoes'));

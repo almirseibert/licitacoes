@@ -185,6 +185,7 @@ module.exports = {
   MAX_TRECHOS,
   paginasDoArquivo,
   blocosDaPagina,
+  termosDe,
   indexarBlocos,
   pontuarBlocos,
   buscarTrechos,

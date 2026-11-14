@@ -202,6 +202,10 @@ async function marcarSalva(organizacaoId, licitacaoId, id, salva) {
 
 module.exports = {
   MAX_PENDENTES,
+  ESPERA_MAXIMA_S,
+  FALHAS,
+  FALHA_PADRAO,
+  INTERROMPIDA,
   lerPedido,
   pendentes,
   criar,

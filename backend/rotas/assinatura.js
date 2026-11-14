@@ -24,6 +24,8 @@ rotas.get('/', async (req, res) => {
       planos: dados.planos,
       nomes_recurso: limites.NOMES_RECURSO,
       papel: req.papel,
+      // Quem configura a organização: o front não decide por lista de papéis.
+      pode_administrar: NIVEL_PAPEL[req.papel] >= NIVEL_PAPEL.admin,
       // O menu do superadmin aparece pelo que o backend diz, nunca por e-mail no front.
       superadmin: ehOperadora(req.organizacaoId) && NIVEL_PAPEL[req.papel] >= NIVEL_PAPEL.admin,
     });

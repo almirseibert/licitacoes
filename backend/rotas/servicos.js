@@ -7,6 +7,7 @@ const { exigirPapel } = require('../middlewares/autenticar');
 const { responderErro } = require('../middlewares/responder-erro');
 const email = require('../servicos/email');
 const regras = require('../regras/servicos');
+const { revisao } = require('../regras/revisao');
 const { CATALOGO } = require('../regras/exigencias');
 const escopo = require('../servicos/escopo');
 const exigenciasOrg = require('../servicos/exigencias');
@@ -113,6 +114,7 @@ rotas.get('/previa', exigirPapel('admin'), async (req, res) => {
       linhas: regras.linhasDosDados(r.dados),
       termo: regras.TERMO_VINCULO,
       termo_versao: regras.VERSAO_TERMO_PARCEIRO,
+      termo_revisado_por_advogado: revisao(process.env, 'PARCEIROS').revisado_por_advogado,
     });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível montar a prévia do pedido.', erro);

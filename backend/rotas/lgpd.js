@@ -38,15 +38,24 @@ rotas.get('/', async (req, res) => {
   }
 });
 
-// GET /api/lgpd/exportar — baixa um JSON com tudo que a organização cadastrou.
+// GET /api/lgpd/exportar — baixa um JSON com tudo que a organização cadastrou, escrito aos poucos
+// (a memória não cresce com o tamanho da organização).
 rotas.get('/exportar', exigirPapel('admin'), async (req, res) => {
   try {
-    const dados = await servico.exportar(req.organizacaoId);
+    res.setHeader('Content-Disposition', `attachment; filename="meus-dados-${diaNoFuso()}.json"`);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    // `write` devolve false com a fila cheia: espera o `drain` para não acumular no processo.
+    const escrever = (texto) => (res.write(texto) ? undefined : new Promise((ok) => res.once('drain', ok)));
+    await servico.exportarEmFluxo(req.organizacaoId, escrever);
+    res.end();
     await auditoria.registrarDaRequisicao(req, 'exportou_dados', 'lgpd', null, null);
-    const dia = diaNoFuso();
-    res.setHeader('Content-Disposition', `attachment; filename="meus-dados-${dia}.json"`);
-    res.json(dados);
   } catch (erro) {
+    // Já começou a escrever: o cabeçalho de status foi, e o JSON fica incompleto de propósito
+    // (inválido), em vez de parecer uma cópia completa.
+    if (res.headersSent) {
+      console.error('Exportação LGPD interrompida:', erro.message);
+      return res.destroy(erro);
+    }
     responderErro(res, 500, 'Não foi possível montar a cópia dos dados.', erro);
   }
 });

@@ -29,6 +29,20 @@ const REGRAS = [
 
   ['PATCH', `^/licitacoes/${ID}$`, 'alterou_licitacao', 'licitacao', ['etapa', 'favorito', 'descartada']],
 
+  // Seção 17b: palavras-chave, ajustes e pesos (mudam o que o Radar e o boletim mostram) e proposta.
+  ['POST', '^/palavras$', 'criou_palavra_chave', 'palavra', []],
+  ['PATCH', `^/palavras/${ID}$`, 'alterou_palavra_chave', 'palavra', ['ativa', 'ativo']],
+  ['DELETE', `^/palavras/${ID}$`, 'removeu_palavra_chave', 'palavra', []],
+  ['POST', '^/palavras/excluidas$', 'criou_palavra_excluida', 'palavra', []],
+  ['DELETE', `^/palavras/excluidas/${ID}$`, 'removeu_palavra_excluida', 'palavra', []],
+  ['PATCH', '^/configuracoes/ajustes$', 'alterou_ajustes', 'configuracao', []],
+  ['PATCH', '^/configuracoes/pesos$', 'alterou_pesos', 'configuracao', []],
+  ['POST', '^/configuracoes/pesos/[A-Za-z0-9_]+/restaurar$', 'restaurou_peso', 'configuracao', []],
+  ['POST', '^/configuracoes/repontuar$', 'repontuou', 'configuracao', []],
+  ['POST', `^/licitacoes/${ID}/propostas$`, 'criou_proposta', 'proposta', []],
+  ['POST', `^/licitacoes/${ID}/propostas/\\d+/saida$`, 'gerou_proposta', 'proposta', ['formato']],
+  ['DELETE', `^/licitacoes/${ID}/propostas/\\d+$`, 'removeu_proposta', 'proposta', []],
+
   ['POST', '^/servicos/pedidos$', 'pediu_servico', 'servico', ['servico']],
   ['POST', `^/servicos/pedidos/${ID}/cancelar$`, 'cancelou_pedido_servico', 'servico', []],
 
@@ -141,6 +155,18 @@ const ROTULOS = {
   cancelou_exclusao: 'Cancelou o pedido de exclusão dos dados',
   exportou_dados: 'Exportou os dados da organização',
   abriu_solicitacao: 'Abriu uma solicitação ao suporte',
+  criou_palavra_chave: 'Criou uma palavra-chave',
+  alterou_palavra_chave: 'Alterou uma palavra-chave',
+  removeu_palavra_chave: 'Removeu uma palavra-chave',
+  criou_palavra_excluida: 'Criou uma palavra de exclusão',
+  removeu_palavra_excluida: 'Removeu uma palavra de exclusão',
+  alterou_ajustes: 'Alterou os ajustes da pontuação',
+  alterou_pesos: 'Alterou os pesos da pontuação',
+  restaurou_peso: 'Restaurou um peso da pontuação',
+  repontuou: 'Repontuou as licitações',
+  criou_proposta: 'Criou uma proposta',
+  gerou_proposta: 'Gerou o arquivo de uma proposta',
+  removeu_proposta: 'Removeu uma proposta',
 };
 
 const rotulo = (acao) => ROTULOS[acao] || acao;

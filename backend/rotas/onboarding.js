@@ -2,7 +2,7 @@
 // Montada só com `comToken`: o leitor também aceita os termos e responde ao NPS.
 // As escritas do assistente exigem papel de admin e assinatura em dia.
 const express = require('express');
-const { exigirPapel } = require('../middlewares/autenticar');
+const { exigirPapel, NIVEL_PAPEL } = require('../middlewares/autenticar');
 const { responderErro } = require('../middlewares/responder-erro');
 const { assinaturaValida } = require('../servicos/limites');
 const servico = require('../servicos/onboarding');
@@ -16,7 +16,7 @@ rotas.get('/', async (req, res) => {
   try {
     const estado = await servico.estado({ organizacaoId: req.organizacaoId, usuarioId: req.usuario.id });
     if (!estado) return res.status(404).json({ erro: 'Organização não encontrada.' });
-    res.json({ ...estado, papel: req.papel, ufs: regras.UFS });
+    res.json({ ...estado, papel: req.papel, pode_administrar: NIVEL_PAPEL[req.papel] >= NIVEL_PAPEL.admin, ufs: regras.UFS });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível carregar o assistente.', erro);
   }
