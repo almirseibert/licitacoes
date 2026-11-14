@@ -157,10 +157,11 @@ rodada sem mudança = 1 ida e 0 alertas; portal fora do ar = 1 tentativa, as dua
 resultado lido uma vez e A → Ganhamos, B → Perdemos, cada uma com o próprio alerta. Migração 037 conferida
 com dados antigos: 3 confirmações copiadas para a organização 1, relidas só as de edital baixado, coluna
 apagada, `recorrencias.grupo` NULL. Lint limpo, **260/260** testes (3 novos em `testes/exigencias-org.test.js`).
-`code-review`: 10 achados, 4 corrigidos; `simplify`: hashes e erros em um UPDATE por licitação, colunas mortas apagadas, `adiar` no serviço do monitor;
-( (erro de organização irmã no "checar agora", `'{}'`/`'[]'` no catálogo,
+`code-review`: 10 achados, 4 corrigidos (erro de organização irmã no "checar agora", `'{}'`/`'[]'` no catálogo,
 junção direta na ficha, listas de `IN` desnecessárias); deixados: baseline sem hash (já era assim por
 organização), alerta de estratégica condicionado a `pode_escrever` (pedido pelo plano; confirmar).
+`simplify`: hashes em um UPDATE por licitação, colunas de grupo apagadas (038), `adiar` no serviço do monitor;
+deixados: `limites.podeUsar` único para as quatro cópias da conferência de plano (mexe fora do diff).
 **Não verificado:** coleta pelo PNCP de ponta a ponta; MySQL 8; custo em catálogo grande.
 
 **Aceite da Seção 1a (medido):** duas organizações criadas por `/api/auth/cadastro`; a
