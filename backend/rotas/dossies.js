@@ -135,6 +135,12 @@ rotas.get('/concorrentes/:cnpj', async (req, res) => {
         WHERE l.etapa IN ('Ganhamos','Perdemos')`,
       [cnpj, cnpj]
     );
+    // Seção 13: desclassificação só existe na lista de propostas do portal
+    // (origem diferente de 'pncp'). Sem ela, a tela diz "não disponível", não 0.
+    const [[lista]] = await pool.query(
+      "SELECT EXISTS (SELECT 1 FROM propostas_concorrentes WHERE cnpj = ? AND origem <> 'pncp') AS tem",
+      [cnpj]
+    );
     c.encontros = Number(encontro.encontros || 0);
     c.encontros_perdidos = Number(encontro.perdidos || 0);
 
@@ -147,6 +153,7 @@ rotas.get('/concorrentes/:cnpj', async (req, res) => {
         sancoes: lerJson(c.sancoes, []),
       },
       licitacoes,
+      lista_propostas: Boolean(Number(lista.tem)),
       // Sem isto a tela não tem como dizer "nenhuma sanção" com honestidade.
       sancoes_disponivel: sancoes.disponivel(),
     });

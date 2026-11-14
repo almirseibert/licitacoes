@@ -7,6 +7,7 @@ const express = require('express');
 const pool = require('../config/db');
 const { responderErro } = require('../middlewares/responder-erro');
 const regras = require('../regras/mercado');
+const analise = require('../servicos/analise-mercado');
 
 const POR_PAGINA_MAX = 100;
 
@@ -179,6 +180,60 @@ mercado.get('/resumo', async (_req, res) => {
     res.json({ ...dados, coletas });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível carregar o resumo do mercado.', erro);
+  }
+});
+
+// ------------------------------------------- Seção 13: análise e concorrentes
+// O catálogo é público; segmento, filtro salvo e "próprio CNPJ" são da
+// organização que pergunta (servicos/analise-mercado.js filtra por ela).
+
+mercado.get('/analise/opcoes', async (req, res) => {
+  try {
+    res.json(await analise.opcoes(req.organizacaoId));
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível carregar os segmentos.', erro);
+  }
+});
+
+// GET /api/mercado/analise — compras por mês, região, modalidade, órgão, fornecedor e produto.
+mercado.get('/analise', async (req, res) => {
+  try {
+    res.json(await analise.analisar(req.organizacaoId, req.query));
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível montar a análise de mercado.', erro);
+  }
+});
+
+// GET /api/mercado/analise/pdf?mes=AAAA-MM&segmento=... — o relatório mensal por segmento.
+mercado.get('/analise/pdf', async (req, res) => {
+  try {
+    const { buffer, analise: r } = await analise.relatorioEmPdf(req.organizacaoId, req.query);
+    const nome = `relatorio-mercado-${(r.segmento.nome || 'mercado').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w-]+/g, '-').toLowerCase()}-${r.periodo.de.slice(0, 7)}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${nome}"`);
+    res.send(buffer);
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível gerar o relatório em PDF.', erro);
+  }
+});
+
+// GET /api/mercado/recorrentes — quem mais assina contrato nos meus segmentos.
+mercado.get('/recorrentes', async (req, res) => {
+  try {
+    res.json(await analise.recorrentes(req.organizacaoId, req.query));
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível listar os concorrentes recorrentes.', erro);
+  }
+});
+
+// GET /api/mercado/fornecedores/:cnpj — perfil por CNPJ no mercado.
+mercado.get('/fornecedores/:cnpj', async (req, res) => {
+  try {
+    const perfil = await analise.perfilNoMercado(req.params.cnpj);
+    if (!perfil) return res.status(400).json({ erro: 'Informe um CNPJ com 14 dígitos.' });
+    res.json(perfil);
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível abrir o perfil do fornecedor.', erro);
   }
 });
 

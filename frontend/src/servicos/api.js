@@ -592,6 +592,17 @@ export const api = {
   listarMercado: (tipo, parametros = {}) =>
     requisitar(`${tipo === 'acompanhamentos' ? '/acompanhamentos' : `/mercado/${tipo}`}?${new URLSearchParams(parametros)}`),
   resumoMercado: () => requisitar('/mercado/resumo'),
+  // Seção 13: análise de mercado, concorrentes recorrentes, perfil por CNPJ e perdas.
+  opcoesAnalise: () => requisitar('/mercado/analise/opcoes'),
+  analiseMercado: (parametros = {}) => requisitar(`/mercado/analise?${new URLSearchParams(parametros)}`),
+  relatorioMercadoPdf: (parametros = {}) =>
+    salvarComo(
+      `/mercado/analise/pdf?${new URLSearchParams(parametros)}`,
+      `relatorio-mercado-${parametros.mes || new Date().toISOString().slice(0, 7)}.pdf`
+    ),
+  recorrentes: (parametros = {}) => requisitar(`/mercado/recorrentes?${new URLSearchParams(parametros)}`),
+  perfilFornecedor: (cnpj) => requisitar(`/mercado/fornecedores/${String(cnpj).replace(/\D/g, '')}`),
+  historicoPerdas: (meses = 12) => requisitar(`/diagnostico/perdas?meses=${meses}`),
   tiposAcompanhamento: () => requisitar('/acompanhamentos/tipos'),
 
   // ------------- contratos e marcos (seção 28)

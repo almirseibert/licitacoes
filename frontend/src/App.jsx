@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock, Newspaper, LayoutDashboard, ListTodo, ScrollText, BookMarked, BellRing } from 'lucide-react';
+import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock, Newspaper, LayoutDashboard, ListTodo, ScrollText, BookMarked, BellRing, PieChart } from 'lucide-react';
 import { api, obterToken, obterUsuario, obterOrganizacao, guardarSessao, encerrarSessao } from './servicos/api';
 import Login from './paginas/Login';
 import Convite from './paginas/Convite';
@@ -21,6 +21,7 @@ import Calendario from './paginas/Calendario';
 import Orgaos from './paginas/Orgaos';
 import Contratos from './paginas/Contratos';
 import Mercado from './paginas/Mercado';
+import AnaliseMercado from './paginas/AnaliseMercado';
 import Relatorio from './paginas/Relatorio';
 import Assinatura from './paginas/Assinatura';
 import Organizacoes from './paginas/Organizacoes';
@@ -46,6 +47,8 @@ const TELAS = [
   { chave: 'mercado_contratos', rotulo: 'Contratos do mercado', icone: ScrollText, recurso: 'mercado' },
   { chave: 'mercado_atas', rotulo: 'Atas', icone: BookMarked, recurso: 'mercado' },
   { chave: 'acompanhamentos', rotulo: 'Acompanhamentos', icone: BellRing, recurso: 'acompanhamentos' },
+  // Seção 13: análise por segmento, concorrentes recorrentes e motivos de perda.
+  { chave: 'analise_mercado', rotulo: 'Análise de mercado', icone: PieChart, recurso: 'mercado' },
   { chave: 'orgaos', rotulo: 'Órgãos', icone: Landmark, recurso: 'concorrentes' },
   { chave: 'diagnostico', rotulo: 'Diagnóstico', icone: Stethoscope, recurso: 'relatorios' },
   { chave: 'relatorio', rotulo: 'Relatório mensal', icone: BarChart3, recurso: 'relatorios' },
@@ -258,8 +261,11 @@ export default function App() {
             aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }}
           />
         )}
+        {tela === 'analise_mercado' && (
+          <AnaliseMercado aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />
+        )}
         {tela === 'orgaos' && (
-          <Orgaos aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />
+          <Orgaos comMercado={temRecurso('mercado')} aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />
         )}
         {tela === 'diagnostico' && (
           <Diagnostico aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />

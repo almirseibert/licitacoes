@@ -5,6 +5,7 @@ const servico = require('../servicos/diagnostico');
 const descarte = require('../regras/descarte');
 const exigencias = require('../regras/exigencias');
 const descartarVencidas = require('../jobs/descartar-vencidas');
+const analise = require('../servicos/analise-mercado');
 
 const rotas = express.Router();
 
@@ -26,6 +27,16 @@ rotas.get('/', async (req, res) => {
   } catch (erro) {
     console.error('Erro no diagnóstico de descarte:', erro.message);
     responderErro(res, 500, 'Não foi possível montar o diagnóstico.', erro);
+  }
+});
+
+// GET /api/diagnostico/perdas — meu histórico: motivos de perda e recomendação (Seção 13).
+rotas.get('/perdas', async (req, res) => {
+  const meses = [3, 6, 12, 24].includes(Number(req.query.meses)) ? Number(req.query.meses) : 12;
+  try {
+    res.json(await analise.historicoDePerdas(req.organizacaoId, { meses }));
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível montar o histórico de perdas.', erro);
   }
 });
 
