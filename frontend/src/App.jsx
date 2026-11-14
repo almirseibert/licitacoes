@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock, Newspaper, LayoutDashboard, ListTodo, ScrollText, BookMarked, BellRing, PieChart, Plug } from 'lucide-react';
+import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock, Newspaper, LayoutDashboard, ListTodo, ScrollText, BookMarked, BellRing, PieChart, Plug, Trophy } from 'lucide-react';
 import { api, obterToken, obterUsuario, obterOrganizacao, guardarSessao, encerrarSessao } from './servicos/api';
 import Login from './paginas/Login';
 import Convite from './paginas/Convite';
@@ -24,6 +24,7 @@ import Contratos from './paginas/Contratos';
 import Mercado from './paginas/Mercado';
 import AnaliseMercado from './paginas/AnaliseMercado';
 import Relatorio from './paginas/Relatorio';
+import Desempenho from './paginas/Desempenho';
 import Assinatura from './paginas/Assinatura';
 import Organizacoes from './paginas/Organizacoes';
 import Dashboard from './paginas/Dashboard';
@@ -52,6 +53,7 @@ const TELAS = [
   { chave: 'analise_mercado', rotulo: 'Análise de mercado', icone: PieChart, recurso: 'mercado' },
   { chave: 'orgaos', rotulo: 'Órgãos', icone: Landmark, recurso: 'concorrentes' },
   { chave: 'diagnostico', rotulo: 'Diagnóstico', icone: Stethoscope, recurso: 'relatorios' },
+  { chave: 'desempenho', rotulo: 'Meu desempenho', icone: Trophy, recurso: 'relatorios' },
   { chave: 'relatorio', rotulo: 'Relatório mensal', icone: BarChart3, recurso: 'relatorios' },
   { chave: 'cofre', rotulo: 'Documentos', icone: FolderLock },
   { chave: 'modelos', rotulo: 'Declarações', icone: FileSignature },
@@ -273,6 +275,7 @@ export default function App() {
         {tela === 'diagnostico' && (
           <Diagnostico aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />
         )}
+        {tela === 'desempenho' && <Desempenho aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />}
         {tela === 'relatorio' && <Relatorio />}
         {tela === 'equipe' && <Equipe />}
         {tela === 'integracoes' && <Integracoes />}

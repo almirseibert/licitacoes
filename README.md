@@ -367,6 +367,16 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
   `backend/servicos/api.js`, `webhook.js`; regras puras em `regras/api.js`; job `jobs/webhooks.js`
   (`npm run webhooks`, no worker de hora em hora). Variáveis: `CONFIAR_PROXY`, `WEBHOOK_PERMITIR_LOCAL`.
   Documentação: [docs/API.md](docs/API.md). **Aceite medido**: ver o plano (Seção 14).
+
+- **Seção 15 — Meu desempenho, entregue em 14/11/2026.** Migração `032_desempenho.sql` (índice de
+  `historico_precos` por `chave_externa`). Tela **Meu desempenho** (plano com `relatorios`), por período
+  (todo, 1/3/6 meses, 1 ano, definido) e com impressão: participações, ganhas/perdidas, taxa de
+  vitória, valor ganho, ticket médio, desconto médio, itens vencidos, órgãos, portais, motivos de
+  perda, **margem por licitação** (preço do contrato/resultado/proposta × custo da proposta ou
+  custo estimado, e na referência de preço), contratos das ganhas e o meu desconto contra o do
+  mercado (`historico_precos`). Sem custo, a margem é lacuna. `GET /api/desempenho`. Contas puras em
+  `backend/regras/desempenho.js` (`testes/desempenho.test.js`), consultas em
+  `backend/servicos/desempenho.js`. **Aceite medido**: ver o plano (Seção 15).
 - `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
   ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
 
@@ -1299,6 +1309,7 @@ GET    /api/mercado/analise/opcoes             segmentos (grupos de palavra-chav
 GET    /api/mercado/recorrentes                ?segmento=|filtro=&dias=30|90|180|365&minimo=
 GET    /api/mercado/fornecedores/:cnpj         perfil por CNPJ no mercado (PNCP)
 GET    /api/diagnostico/perdas                 ?meses=3|6|12|24 — motivos de perda e recomendação
+GET    /api/desempenho                         ?janela=todo|1m|3m|6m|1a|definido&de=&ate= — Meu desempenho (seção 15)
 GET    /api/acompanhamentos                    publicações posteriores ao edital (filtros; ?favoritas=1)
 GET    /api/contratos                          lista, faturado em 12m e faixa
 GET    /api/gestao/tarefas                     ?visao=atrasadas|hoje|futuras|concluidas&por=mim&licitacao_id=

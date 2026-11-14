@@ -65,6 +65,8 @@ app.use('/api/precos-referencia', ...modulo('historico'), require('./rotas/preco
 app.use('/api/concorrentes', ...modulo('concorrentes'), require('./rotas/concorrentes'));
 app.use('/api/dossies', ...modulo('concorrentes'), require('./rotas/dossies'));
 app.use('/api/diagnostico', ...modulo('relatorios'), require('./rotas/diagnostico'));
+// Seção 15: "Meu desempenho" — o mesmo recurso do relatório mensal e do diagnóstico.
+app.use('/api/desempenho', ...modulo('relatorios'), require('./rotas/desempenho'));
 app.use('/api/oportunidades', ...modulo('estrategicas'), require('./rotas/oportunidades'));
 app.use('/api/ia', ...modulo('ia'), require('./rotas/ia'));
 app.use('/api/boletins', ...modulo('boletim'), require('./rotas/boletins').rotas);

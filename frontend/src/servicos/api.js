@@ -618,6 +618,8 @@ export const api = {
     ),
   recorrentes: (parametros = {}) => requisitar(`/mercado/recorrentes?${new URLSearchParams(parametros)}`),
   perfilFornecedor: (cnpj) => requisitar(`/mercado/fornecedores/${String(cnpj).replace(/\D/g, '')}`),
+  // Seção 15: "Meu desempenho" por período.
+  desempenho: (parametros = {}) => requisitar(`/desempenho?${new URLSearchParams(parametros)}`),
   historicoPerdas: (meses = 12) => requisitar(`/diagnostico/perdas?meses=${meses}`),
   tiposAcompanhamento: () => requisitar('/acompanhamentos/tipos'),
 

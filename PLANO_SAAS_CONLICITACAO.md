@@ -28,7 +28,7 @@ cofre de senha de portal e a assinatura digital (ver a tabela de divergências n
 |---|---|---|---|
 | **A — Fundação SaaS** | 0 ✅, 1 (1a ✅, 1b ✅, 1c), 2 ✅, 3 ✅ | Conta própria, equipe, dados isolados, tema claro/escuro, plano e cobrança | Dá para cobrar e isolar clientes |
 | **B — Paridade de captação** | 4 ✅, 7 ✅, 8 ✅, 9 ✅, 10 ✅ | Boletim diário, banco de licitações completo, gestão com tarefas, avisos por tipo, documentos | Substitui o uso diário do ConLicitação na captação |
-| **C — IA e inteligência** | 5 ✅, 11 (11b), 12 ✅ (12b), 13 ✅ (13b), 14, 15, 17 | Pergunte ao Edital, resumo com checklist, acompanhamentos, contratos e atas, concorrentes e mercado, API, onboarding | **Versão 1 vendável** — fim da Fase C |
+| **C — IA e inteligência** | 5 ✅, 11 (11b), 12 ✅ (12b), 13 ✅ (13b), 14 ✅ (14b), 15 ✅ (15b), 17 | Pergunte ao Edital, resumo com checklist, acompanhamentos, contratos e atas, concorrentes e mercado, API, onboarding | **Versão 1 vendável** — fim da Fase C |
 | **D — Estratégia e automação** | 6, 16 | Monitor de chat, alerta de deserta por segmento, consultor jurídico | Planos mais caros |
 | **E — Ecossistema** | 18 | Seguro garantia, assessoria cadastral, cursos por parceria | Receita complementar |
 
@@ -832,14 +832,61 @@ revisão de segurança foi à mão (SSRF, hash, HMAC, isolamento). A skill `simp
 
 ---
 
-## Seção 15 — Painel de mercado do cliente: histórico e relatórios (Fase C)
+## Seção 15 — Painel de mercado do cliente: histórico e relatórios (Fase C) — ✅ feito em 14/11/2026
 Reunir o que o cliente consulta toda semana numa só tela "Meu desempenho": participações, itens
 vencidos, ticket médio, órgãos, portais, motivos de perda, margem por licitação (Preço de
 referência + contrato). A margem é **diferencial** — a referência não calcula.
-- [ ] Tela única com os blocos acima, por período (todo, 1/3/6 meses, 1 ano, definido) e impressão.
+- [x] Tela única com os blocos acima, por período (todo, 1/3/6 meses, 1 ano, definido) e impressão
+      (`window.print()`; a barra de controles some no `@media print`). `GET /api/desempenho`
+      (recurso `relatorios`, o mesmo do relatório mensal e do diagnóstico), `Desempenho.jsx`,
+      contas puras em `regras/desempenho.js`, consultas em `servicos/desempenho.js`.
+- [x] Definições (a ressalva da tela repete): participação = Proposta enviada, Em disputa, Ganhamos ou
+      Perdemos, datada por `COALESCE(proposta_em, etapa_em, fim_propostas)` (a do relatório mensal);
+      taxa de vitória só sobre o que já teve resultado; ticket médio só entre as ganhas com valor;
+      desconto médio só onde há estimado e valor **meu** (o `valor_final` da perdida é o do vencedor e
+      não conta); margem = (preço − custo) ÷ preço, preço da ganha = contrato › resultado › proposta,
+      custo = total da proposta final/enviada (rascunho não conta) › custo estimado; sem custo é lacuna.
+- [x] Migração `032_desempenho.sql`: índice `historico_precos(chave_externa, sem_homologacao)` (o
+      `uq_historico` tem `adaptador` à frente e a busca por chave varria a tabela).
 
 **Aceite:** os números batem com `contratos`, `propostas` e `historico_precos` da organização,
 conferidos por consulta direta.
+
+**Aceite medido (14/11/2026, API real, MariaDB 10.11, banco com a migração 032, duas organizações):**
+13 licitações **sintéticas** inseridas por SQL (o PNCP não responde neste ambiente), 11 participações
+da org A em 6 meses. Para 6 meses, 1 ano, todo o histórico e 1 mês, sete números da API
+(participações, ganhas, perdidas, valor ganho, valor dos contratos, itens vencidos, licitações com
+histórico de preços) contra **SQL escrito à parte**: 28 de 28 iguais (6m: 11/5/4/R$ 385.000/R$ 229.000/3/2;
+todo: 12/6/4/R$ 394.000; 1m: 3/1/0/R$ 80.000). Margem das ganhas: R$ 344.000 de preço, R$ 302.000
+de custo, R$ 42.000 de lucro, 4 licitações — igual à consulta direta (a proposta em rascunho ficou de
+fora, a final entrou). Contra o relatório mensal (12 meses): disputei 11, ganhei 5, perdi 4, valor
+R$ 385.000 — iguais. Preço de referência (linha de estudo inserida só para o teste): Teclados
+R$ 70.000 estimado × (1 − 0,20) = R$ 56.000, margem 10,71% — confere. Isolamento: a org B, com
+decisões próprias sobre a mesma licitação, vê 2 participações e R$ 0 de contratos (nada da A); sem token
+401; janela/data inválida ou `1' OR 1=1` cai no padrão sem erro. Tela com Playwright em 1366 px e
+390 px: sem rolagem lateral, 0 erro no console; impressão esconde menu e botões. Lint limpo, 183/183
+testes (14 novos em `testes/desempenho.test.js`).
+
+`code-review` (6 achados): corrigidos o desconto da perdida que usava o preço do vencedor, o resultado
+da janela anterior que ficava na tela em "Definir período", as buscas de referência em série e o preço
+da margem × valor ganho (documentado na ressalva e mostrado na tela por linha). Ficaram para a 15b o
+fuso de `fim_propostas` e o órgão sem CNPJ. `simplify` (4 revisores): `perdas` e campos sem uso saíram
+da resposta, arredondamento passou a `regras/proposta.arredondar`, `percentual` foi para `formato.js`,
+CNPJ da empresa e consulta principal em paralelo.
+
+**Não verificado:** catálogo e histórico de preços **sintéticos** (não há PNCP aqui), MySQL 8 (o teste é
+MariaDB) e organização com milhares de participações (a consulta traz as linhas ao Node e agrega lá).
+
+**Seção 15b — pendente:**
+- [ ] A definição de "participação" (etapas, data, taxa, valor ganho) está copiada entre `relatorioMensal`
+      (`servicos/exportar.js`) e `regras/desempenho.js`; extrair uma fonte única e fazer o relatório mensal
+      agrupar por mês as mesmas linhas (hoje diferem nas bordas e no desconto da perdida sem proposta).
+- [ ] `fim_propostas` não tem fuso (o PNCP publica horário de Brasília e a coleta grava como veio): a janela
+      em UTC pode errar a borda de uma participação sem `proposta_em`/`etapa_em`.
+- [ ] Órgão com e sem CNPJ vira dois grupos; "todo" como `de` nulo; cache de referência duplicado com
+      `diagnostico.js` (`montarDescontador`); `Numero` e `pct` ainda duplicados em outras telas.
+- [ ] Agregar no SQL (`GROUP BY`) se uma organização passar de alguns milhares de participações.
+- [ ] Margem por licitação com o custo vindo de várias propostas e aditivos de contrato.
 
 ---
 

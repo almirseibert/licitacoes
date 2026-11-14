@@ -10,15 +10,16 @@ import { moeda } from '../servicos/formato';
  *
  * linhas: [{ chave?, rotulo, quantidade, valor }]
  * medida: 'valor' | 'quantidade' — o comprimento da barra.
+ * rotuloQuantidade / rotuloValor: o que as duas medidas são (contratos e valor, ou participações e valor ganho).
  */
-export default function Barras({ titulo, linhas, medida = 'valor', vazio = 'Nada no período.', aoClicar, nota }) {
+export default function Barras({ titulo, linhas, medida = 'valor', vazio = 'Nada no período.', aoClicar, nota, rotuloQuantidade = 'Contratos', rotuloValor = 'Valor' }) {
   const [tabela, setTabela] = useState(false);
   const [foco, setFoco] = useState(null);
   const id = `barras-${titulo.replace(/\W+/g, '-').toLowerCase()}`;
   const maximo = Math.max(1, ...linhas.map((l) => Number(l[medida]) || 0));
   const chaveDe = (l) => l.chave || l.rotulo;
   const principal = (l) => (medida === 'valor' ? moeda(l.valor) : String(l.quantidade));
-  const dica = (l) => `${l.rotulo} · ${l.quantidade} contrato(s) · ${moeda(l.valor)}`;
+  const dica = (l) => `${l.rotulo} · ${l.quantidade} ${rotuloQuantidade.toLowerCase()} · ${moeda(l.valor)}`;
 
   return (
     <section aria-labelledby={id} className="border border-borda rounded p-3 min-w-0">
@@ -43,8 +44,8 @@ export default function Barras({ titulo, linhas, medida = 'valor', vazio = 'Nada
           <thead>
             <tr className="text-texto-suave text-left">
               <th className="py-1 font-normal">{titulo}</th>
-              <th className="py-1 font-normal text-right">Contratos</th>
-              <th className="py-1 font-normal text-right">Valor</th>
+              <th className="py-1 font-normal text-right">{rotuloQuantidade}</th>
+              <th className="py-1 font-normal text-right">{rotuloValor}</th>
             </tr>
           </thead>
           <tbody>

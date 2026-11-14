@@ -78,3 +78,9 @@ export function ondeCitacao(c) {
   if (!c) return '';
   return `${c.arquivo || 'arquivo'} · ${c.pagina ? `página ${c.pagina}` : 'página não identificada'}`;
 }
+
+/** 0,1234 → "12,3%"; sem valor, a lacuna (nunca "0%"). */
+export function percentual(valor, casas = 1) {
+  if (valor === null || valor === undefined || valor === '') return LACUNA;
+  return `${(Number(valor) * 100).toLocaleString('pt-BR', { maximumFractionDigits: casas })}%`;
+}
