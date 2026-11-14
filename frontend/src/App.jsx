@@ -74,6 +74,12 @@ function voltarParaRaiz() {
 export default function App() {
   const [usuario, setUsuario] = useState(() => (obterToken() ? obterUsuario() : null));
   const [tela, setTela] = useState('dashboard');
+  // Parâmetro da tela de destino (ex.: a aba do cofre), para o link do dashboard.
+  const [parametros, setParametros] = useState({});
+  const irPara = (destino, params = {}) => {
+    setParametros(params);
+    setTela(destino);
+  };
   // O sino e o funil abrem a gaveta de uma licitação pelo Radar.
   const [licitacaoAberta, setLicitacaoAberta] = useState(null);
   const [link, setLink] = useState(linkDeEmail);
@@ -174,7 +180,7 @@ export default function App() {
           {TELAS.filter((t) => !t.soSuperadmin || (plano && plano.superadmin)).map(({ chave, rotulo, icone: Icone, recurso }) => (
             <button
               key={chave}
-              onClick={() => setTela(chave)}
+              onClick={() => irPara(chave)}
               aria-label={rotulo}
               title={rotulo}
               className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
@@ -218,13 +224,13 @@ export default function App() {
           </p>
         )}
         <div className="flex-1 min-h-0">
-        {tela === 'dashboard' && <Dashboard aoIr={setTela} />}
+        {tela === 'dashboard' && <Dashboard aoIr={irPara} />}
         {tela === 'tarefas' && <Tarefas aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />}
         {tela === 'radar' && <Radar abrir={licitacaoAberta} aoAbrir={setLicitacaoAberta} />}
         {tela === 'fontes' && <Fontes />}
         {tela === 'palavras' && <Palavras />}
         {tela === 'boletins' && <Boletins />}
-        {tela === 'cofre' && <Cofre />}
+        {tela === 'cofre' && <Cofre key={parametros.aba || 'documentos'} abaInicial={parametros.aba} />}
         {tela === 'modelos' && <Modelos />}
         {tela === 'funil' && <Funil aoAbrir={setLicitacaoAberta} />}
         {tela === 'precos' && <Precos />}

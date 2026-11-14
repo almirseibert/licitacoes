@@ -66,6 +66,11 @@ function dataValida(texto) {
  * Dia "AAAA-MM-DD" de um valor: DATE chega do banco como texto (é dia de
  * calendário, sem fuso); DATETIME chega como instante e vira o dia de Brasília.
  */
+/** Dias inteiros entre dois dias 'AAAA-MM-DD' (até − de). */
+function diasEntre(deTexto, ateTexto) {
+  return Math.round((Date.parse(`${ateTexto}T00:00:00Z`) - Date.parse(`${deTexto}T00:00:00Z`)) / 86400000);
+}
+
 function dia(valor) {
   if (!valor) return null;
   if (valor instanceof Date) return diaNoFuso(valor);
@@ -160,6 +165,7 @@ module.exports = {
   TIPOS_ANDAMENTO,
   dataValida,
   dia,
+  diasEntre,
   visaoDaTarefa,
   lerTarefa,
   lerAndamento,

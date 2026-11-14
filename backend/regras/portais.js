@@ -2,30 +2,21 @@
 //
 // No lugar do cofre de senha que o projeto não faz (CLAUDE.md): nome, endereço,
 // tipo, vencimento do cadastro e observação. A tabela não tem coluna de login
-// nem de senha, e esta validação não aceita campo com esse nome — quem tentar
-// mandar recebe 400 em vez de ver o valor sumir calado.
-const { diasEntre } = require('./documentos');
+// nem de senha, e esta validação só aceita os campos dela — quem mandar senha
+// (ou qualquer outro) recebe 400 em vez de ver o valor sumir calado.
+const { dia, dataValida, diasEntre } = require('./gestao');
 const { AVISOS_DIAS } = require('./validades');
 
 const TIPOS = ['compras', 'cadastro', 'certidao', 'outro'];
 const AVISO_DIAS = 30;
-const CAMPOS_PROIBIDOS = /senha|pass|login|usuario|user|token|certificado/i;
-
-function soDia(valor) {
-  if (valor === null || valor === undefined || valor === '') return null;
-  const texto = String(valor).slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(texto)) return undefined;
-  const d = new Date(`${texto}T00:00:00Z`);
-  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === texto ? texto : undefined;
-}
+const CAMPOS = ['nome', 'url', 'tipo', 'login_vence_em', 'observacao'];
 
 /**
  * Valida o corpo de criar/alterar. `parcial` = PATCH (só o que veio).
  * @returns {{campos?:object, erro?:string}}
  */
 function validar(corpo = {}, { parcial = false } = {}) {
-  const proibido = Object.keys(corpo).find((k) => k !== 'login_vence_em' && CAMPOS_PROIBIDOS.test(k));
-  if (proibido) return { erro: 'A agenda de portais não guarda login nem senha. Guarde-os no seu gerenciador de senhas.' };
+  if (Object.keys(corpo).some((k) => !CAMPOS.includes(k))) return { erro: 'A agenda de portais não guarda login nem senha. Guarde-os no seu gerenciador de senhas.' };
 
   const campos = {};
   if (!parcial || 'nome' in corpo) {
@@ -45,8 +36,8 @@ function validar(corpo = {}, { parcial = false } = {}) {
     campos.tipo = tipo;
   }
   if (!parcial || 'login_vence_em' in corpo) {
-    const d = soDia(corpo.login_vence_em);
-    if (d === undefined) return { erro: 'Data de vencimento inválida.' };
+    const d = dia(corpo.login_vence_em);
+    if (d && !dataValida(d)) return { erro: 'Data de vencimento inválida.' };
     campos.login_vence_em = d;
   }
   if (!parcial || 'observacao' in corpo) {
@@ -75,4 +66,4 @@ function marco(dias) {
   return cruzados.length ? String(Math.min(...cruzados)) : null;
 }
 
-module.exports = { TIPOS, AVISO_DIAS, validar, situacao, marco, soDia };
+module.exports = { TIPOS, AVISO_DIAS, validar, situacao, marco };

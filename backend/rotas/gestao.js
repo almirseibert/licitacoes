@@ -22,7 +22,7 @@ const escopo = require('../servicos/escopo');
 const gestao = require('../regras/gestao');
 const alertas = require('../servicos/alertas');
 const { LISTAS, sqlPorMim } = require('../regras/filtros-radar');
-const { REVISAO_DIAS, SQL_BASE_REVISAO } = require('../regras/documentos');
+const { REVISAO_DIAS } = require('../regras/documentos');
 const { AVISO_DIAS: PORTAL_AVISO_DIAS } = require('../regras/portais');
 
 const rotas = express.Router();
@@ -384,7 +384,7 @@ rotas.get('/dashboard', async (req, res) => {
       pool.query(
         `SELECT SUM(valido_ate < ?) AS vencidos,
                 SUM(valido_ate BETWEEN ? AND DATE_ADD(?, INTERVAL 30 DAY)) AS vencendo,
-                SUM(valido_ate IS NULL AND ${SQL_BASE_REVISAO()} <= DATE_SUB(?, INTERVAL ? DAY)) AS revisar
+                SUM(valido_ate IS NULL AND revisado_em <= DATE_SUB(?, INTERVAL ? DAY)) AS revisar
            FROM empresa_documentos WHERE organizacao_id = ? AND ativo = 1`,
         [hoje, hoje, hoje, hoje, REVISAO_DIAS, org]
       ),

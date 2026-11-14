@@ -14,9 +14,9 @@ import Portais from './Portais';
  * Seção 10: grupos e situação (com filtro), revisão de 90 dias do documento sem
  * validade, lote para baixar ou mandar por e-mail, e a agenda de portais.
  */
-export default function Cofre() {
-  // O aviso de portal no dashboard chega com #portais e abre direto a agenda.
-  const [aba, setAba] = useState(() => (window.location.hash === '#portais' ? 'portais' : 'documentos'));
+export default function Cofre({ abaInicial = 'documentos' }) {
+  // O aviso de portal no dashboard abre direto a agenda (aoIr('cofre', { aba: 'portais' })).
+  const [aba, setAba] = useState(abaInicial);
   return (
     <div className="h-full overflow-auto">
       <div className="px-4 pt-3 flex gap-1 border-b border-borda" role="tablist">
@@ -67,7 +67,7 @@ function Documentos() {
 
   const carregar = () =>
     api
-      .cofre({ historico: historico ? '1' : '', grupo, situacao })
+      .cofre({ historico: historico ? '1' : '' })
       .then((r) => {
         setDados(r);
         setErro(null);
@@ -79,7 +79,11 @@ function Documentos() {
     setMarcados(new Set());
     carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historico, grupo, situacao]);
+  }, [historico]);
+
+  // Grupo e situação filtram aqui: cada linha já vem com os dois, sem nova ida ao servidor.
+  // Trocar o filtro limpa a marcação: o lote nunca leva o que saiu da tela.
+  useEffect(() => setMarcados(new Set()), [grupo, situacao]);
 
   useEffect(() => () => vendo && URL.revokeObjectURL(vendo.url), [vendo]);
 
@@ -136,10 +140,10 @@ function Documentos() {
       return novo;
     });
 
-  const baixarLote = async () => {
+  const emLote = (acao) => async () => {
     setOcupado(true);
     try {
-      await api.baixarLote([...marcados]);
+      await acao();
       setErro(null);
     } catch (e) {
       setErro(e.message);
@@ -148,20 +152,14 @@ function Documentos() {
     }
   };
 
-  const enviarLote = async () => {
-    setOcupado(true);
-    try {
-      const r = await api.enviarLote({ ids: [...marcados], para: envio.para, mensagem: envio.mensagem });
-      setAviso(r.mensagem);
-      setErro(null);
-      setEnvio(null);
-      setMarcados(new Set());
-    } catch (e) {
-      setErro(e.message);
-    } finally {
-      setOcupado(false);
-    }
-  };
+  const baixarLote = emLote(() => api.baixarLote([...marcados]));
+
+  const enviarLote = emLote(async () => {
+    const r = await api.enviarLote({ ids: [...marcados], para: envio.para, mensagem: envio.mensagem });
+    setAviso(r.mensagem);
+    setEnvio(null);
+    setMarcados(new Set());
+  });
 
   if (erro && !dados) return <p className="m-4 text-sm text-erro">{erro}</p>;
   if (!dados) return <Loader2 size={16} className="animate-spin text-texto-suave m-4" />;
@@ -173,7 +171,8 @@ function Documentos() {
     if (caiu) setArquivo(caiu);
   };
 
-  const comArquivo = dados.dados.filter((d) => d.tem_arquivo);
+  const linhas = dados.dados.filter((d) => (!grupo || d.grupo === grupo) && (!situacao || d.situacao === situacao));
+  const comArquivo = linhas.filter((d) => d.tem_arquivo);
   const todosMarcados = comArquivo.length > 0 && comArquivo.every((d) => marcados.has(d.id));
   const r = dados.resumo;
 
@@ -182,9 +181,9 @@ function Documentos() {
       <div className="px-4 py-3 border-b border-borda flex flex-wrap items-center gap-x-4 gap-y-2">
         <h1 className="font-titulo text-xl">Documentos da empresa</h1>
         <p className="text-xs text-texto-suave">
-          {dados.resumo.total} no cofre
-          {dados.resumo.vencendo > 0 && <span className="text-atencao"> · {dados.resumo.vencendo} vencendo</span>}
-          {dados.resumo.vencidos > 0 && <span className="text-erro"> · {dados.resumo.vencidos} vencidos</span>}
+          {r.total} no cofre
+          {r.vencendo > 0 && <span className="text-atencao"> · {r.vencendo} vencendo</span>}
+          {r.vencidos > 0 && <span className="text-erro"> · {r.vencidos} vencidos</span>}
           {r.revisar > 0 && <span className="text-atencao"> · {r.revisar} para revisar</span>}
         </p>
         <button className="botao ml-auto flex items-center gap-1" onClick={() => setHistorico(!historico)}>
@@ -332,7 +331,7 @@ function Documentos() {
           </tr>
         </thead>
         <tbody>
-          {dados.dados.map((d) => (
+          {linhas.map((d) => (
             <tr key={d.id} className={d.ativo ? '' : 'opacity-50'}>
               <td>
                 <input
@@ -443,13 +442,11 @@ function Documentos() {
         </tbody>
       </table>
 
-      {!dados.dados.length && r.total > 0 && (
-        <p className="m-4 text-sm text-texto-suave">Nenhum documento neste filtro.</p>
-      )}
-      {!dados.dados.length && !r.total && (
+      {!linhas.length && (
         <p className="m-4 text-sm text-texto-suave">
-          O cofre está vazio. Comece pelo contrato social e pelas certidões — são eles que entram em
-          praticamente todo envio.
+          {r.total
+            ? 'Nenhum documento neste filtro.'
+            : 'O cofre está vazio. Comece pelo contrato social e pelas certidões — são eles que entram em praticamente todo envio.'}
         </p>
       )}
 

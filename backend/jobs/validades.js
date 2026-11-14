@@ -11,8 +11,10 @@ const documentos = require('../regras/documentos');
 const portais = require('../regras/portais');
 const { diaNoFuso } = require('../regras/gestao');
 
+const rotuloDe = (documento) => `${documento.titulo}${documento.perfil_nome ? ` (${documento.perfil_nome})` : ''}`;
+
 function mensagemDe(documento, dias) {
-  const quem = `${documento.titulo}${documento.perfil_nome ? ` (${documento.perfil_nome})` : ''}`;
+  const quem = rotuloDe(documento);
   if (dias < 0) return `${quem} está vencida há ${Math.abs(dias)} dias.`;
   if (dias === 0) return `${quem} vence hoje.`;
   return `${quem} vence em ${dias} dias.${documento.renovavel_em ? ` Renove em: ${documento.renovavel_em}` : ''}`;
@@ -55,8 +57,7 @@ async function verificarValidades() {
   }
 
   const hoje = diaNoFuso(agora);
-  resumo.revisao = await avisarRevisoes(hoje);
-  resumo.portais = await avisarPortais(hoje);
+  [resumo.revisao, resumo.portais] = await Promise.all([avisarRevisoes(hoje), avisarPortais(hoje)]);
   return resumo;
 }
 
@@ -66,7 +67,7 @@ async function avisarRevisoes(hoje) {
     `SELECT d.id, d.organizacao_id, d.titulo, d.revisado_em, d.criado_em, d.valido_ate, p.nome AS perfil_nome
        FROM empresa_documentos d JOIN empresa_perfis p ON p.id = d.perfil_id
       WHERE d.ativo = 1 AND d.valido_ate IS NULL
-        AND ${documentos.SQL_BASE_REVISAO('d')} <= DATE_SUB(?, INTERVAL ? DAY)`,
+        AND d.revisado_em <= DATE_SUB(?, INTERVAL ? DAY)`,
     [hoje, documentos.REVISAO_DIAS]
   );
   let criados = 0;
@@ -80,7 +81,7 @@ async function avisarRevisoes(hoje) {
       nivel: 'atencao',
       documentoId: d.id,
       chave: `revisao:${d.id}:${r.base}`,
-      mensagem: `${d.titulo}${d.perfil_nome ? ` (${d.perfil_nome})` : ''} não tem validade formal e foi conferido há ${r.dias_desde} dias. Confira se continua atual.`,
+      mensagem: `${rotuloDe(d)} não tem validade formal e foi conferido há ${r.dias_desde} dias. Confira se continua atual.`,
     }));
   }
   return { avaliados: linhas.length, alertas: criados };

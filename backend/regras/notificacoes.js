@@ -230,4 +230,5 @@ module.exports = {
   lerDestinos,
   planejarEnvios,
   textoDeModelo,
+  EMAIL,
 };

@@ -49,8 +49,8 @@ test('"emitir" só vira link para https; instrução em texto fica texto', () =>
   assert.equal(d.linkDeEmissao('http://inseguro.gov.br'), null);
 });
 
-test('agenda de portais recusa campo de login ou senha, e valida o resto', () => {
-  for (const campo of ['senha', 'login', 'usuario', 'password', 'token']) {
+test('agenda de portais recusa campo de login ou senha (e qualquer outro fora da lista), e valida o resto', () => {
+  for (const campo of ['senha', 'login', 'usuario', 'password', 'token', 'qualquer']) {
     assert.match(p.validar({ nome: 'X', [campo]: 'segredo' }).erro, /não guarda login nem senha/);
   }
   assert.equal(p.validar({ nome: 'X', login_vence_em: '2027-01-01' }).campos.login_vence_em, '2027-01-01');

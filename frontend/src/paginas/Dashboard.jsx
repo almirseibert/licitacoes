@@ -51,10 +51,7 @@ export default function Dashboard({ aoIr }) {
       <div className="p-4 space-y-6 max-w-6xl">
         {c.portais_vencendo + c.portais_vencidos > 0 && (
           <button
-            onClick={() => {
-              window.location.hash = 'portais';
-              aoIr('cofre');
-            }}
+            onClick={() => aoIr('cofre', { aba: 'portais' })}
             className={`w-full text-left text-xs px-3 py-2 rounded border ${
               c.portais_vencidos ? 'border-erro/40 text-erro bg-erro/5' : 'border-atencao/40 text-atencao bg-atencao/5'
             }`}

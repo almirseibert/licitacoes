@@ -44,8 +44,18 @@ export default function Portais() {
       setNovo(VAZIO);
     });
 
+  // Edição na própria linha: grava ao sair do campo, só se mudou.
+  const salvarSe = (p, campo) => (e) =>
+    e.target.value !== (p[campo] || '') && executar(() => api.salvarPortal(p.id, { [campo]: e.target.value }));
+
   if (erro && !dados) return <p className="m-4 text-sm text-erro">{erro}</p>;
   if (!dados) return <Loader2 size={16} className="animate-spin text-texto-suave m-4" />;
+
+  const opcoesTipo = dados.tipos.map((t) => (
+    <option key={t} value={t}>
+      {TIPOS[t] || t}
+    </option>
+  ));
 
   return (
     <div>
@@ -74,11 +84,7 @@ export default function Portais() {
           onChange={(e) => setNovo({ ...novo, url: e.target.value })}
         />
         <select className="campo-caixa" value={novo.tipo} onChange={(e) => setNovo({ ...novo, tipo: e.target.value })}>
-          {dados.tipos.map((t) => (
-            <option key={t} value={t}>
-              {TIPOS[t] || t}
-            </option>
-          ))}
+          {opcoesTipo}
         </select>
         <input
           className="campo-caixa"
@@ -121,19 +127,14 @@ export default function Portais() {
                     className="campo text-xs"
                     defaultValue={p.nome}
                     aria-label="nome"
-                    onBlur={(e) =>
-                      e.target.value !== p.nome && executar(() => api.salvarPortal(p.id, { nome: e.target.value }))
-                    }
+                    onBlur={salvarSe(p, 'nome')}
                   />
                   <input
                     className="campo text-[11px] text-texto-suave"
                     defaultValue={p.observacao || ''}
                     placeholder="observação"
                     aria-label="observação"
-                    onBlur={(e) =>
-                      e.target.value !== (p.observacao || '') &&
-                      executar(() => api.salvarPortal(p.id, { observacao: e.target.value }))
-                    }
+                    onBlur={salvarSe(p, 'observacao')}
                   />
                 </td>
                 <td>
@@ -142,11 +143,7 @@ export default function Portais() {
                     value={p.tipo}
                     onChange={(e) => executar(() => api.salvarPortal(p.id, { tipo: e.target.value }))}
                   >
-                    {dados.tipos.map((t) => (
-                      <option key={t} value={t}>
-                        {TIPOS[t] || t}
-                      </option>
-                    ))}
+                    {opcoesTipo}
                   </select>
                 </td>
                 <td>
@@ -154,10 +151,7 @@ export default function Portais() {
                     className="campo text-xs font-mono"
                     type="date"
                     defaultValue={p.login_vence_em || ''}
-                    onBlur={(e) =>
-                      e.target.value !== (p.login_vence_em || '') &&
-                      executar(() => api.salvarPortal(p.id, { login_vence_em: e.target.value }))
-                    }
+                    onBlur={salvarSe(p, 'login_vence_em')}
                   />
                 </td>
                 <td className={`text-xs ${COR[p.situacao.cor]}`}>{p.situacao.texto}</td>

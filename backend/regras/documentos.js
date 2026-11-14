@@ -6,7 +6,7 @@
 // sem validade formal que passou da revisão) e pendente (vencido ou sem arquivo).
 const { CATALOGO } = require('./exigencias');
 const { semaforo } = require('./validades');
-const { dia } = require('./gestao');
+const { dia, diasEntre } = require('./gestao');
 
 const GRUPOS = [
   { chave: 'juridica', rotulo: 'Habilitação jurídica' },
@@ -32,11 +32,6 @@ const REVISAO_DIAS = 90;
 
 const grupoDoCodigo = (codigo) => GRUPO_POR_CODIGO[codigo] || 'outros';
 
-/** Dias inteiros entre dois dias 'AAAA-MM-DD' (b − a). */
-function diasEntre(a, b) {
-  return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000);
-}
-
 /**
  * Revisão do documento sem validade formal. Base: a última conferência
  * (`revisado_em`) ou, sem ela, o dia em que entrou no cofre.
@@ -50,24 +45,20 @@ function revisao(documento, hoje) {
   return { base, dias_desde: desde, devida: desde >= REVISAO_DIAS, faltam: Math.max(0, REVISAO_DIAS - desde) };
 }
 
-/** Situação para o filtro da tela. `agora` vai ao semáforo; `hoje` (Brasília) à revisão. */
-function situacao(documento, agora, hoje) {
-  if (!documento.arquivo_path) return { situacao: 'pendente', motivo: 'sem arquivo' };
-  const luz = semaforo(documento.valido_ate, agora);
-  if (luz.cor === 'vermelho') return { situacao: 'pendente', motivo: luz.texto };
-  if (luz.cor === 'amarelo') return { situacao: 'vencendo', motivo: luz.texto };
-  const r = revisao(documento, hoje);
-  if (r && r.devida) return { situacao: 'vencendo', motivo: `revisar: conferido há ${r.dias_desde} dias` };
-  return { situacao: 'disponivel', motivo: luz.texto };
-}
-
 /**
- * A mesma base da revisão em SQL, no dia de Brasília: `criado_em` é UTC, e o
- * documento subido às 22 h não pode ganhar um dia a mais no dashboard e no job
- * do que na tela. Brasília é -03:00 o ano inteiro desde 2019.
+ * Situação para o filtro da tela, com o semáforo e a revisão que a decidiram
+ * (a rota espalha tudo na linha). `agora` vai ao semáforo; `hoje` (Brasília) à revisão.
  */
-const SQL_BASE_REVISAO = (a = '') =>
-  `COALESCE(${a ? `${a}.` : ''}revisado_em, DATE(CONVERT_TZ(${a ? `${a}.` : ''}criado_em, '+00:00', '-03:00')))`;
+function situacao(documento, agora, hoje) {
+  const luz = semaforo(documento.valido_ate, agora);
+  const r = revisao(documento, hoje);
+  const com = (sit, motivo) => ({ situacao: sit, motivo, semaforo: luz, revisao: r });
+  if (!documento.arquivo_path) return com('pendente', 'sem arquivo');
+  if (luz.cor === 'vermelho') return com('pendente', luz.texto);
+  if (luz.cor === 'amarelo') return com('vencendo', luz.texto);
+  if (r && r.devida) return com('vencendo', `revisar: conferido há ${r.dias_desde} dias`);
+  return com('disponivel', luz.texto);
+}
 
 /** Só link http(s) vira botão "emitir"; "site da Sefaz do seu estado" fica como texto. */
 const linkDeEmissao = (texto) => (/^https:\/\/[^\s]+$/i.test(String(texto || '').trim()) ? String(texto).trim() : null);
@@ -76,10 +67,8 @@ module.exports = {
   GRUPOS,
   SITUACOES,
   REVISAO_DIAS,
-  SQL_BASE_REVISAO,
   grupoDoCodigo,
   revisao,
   situacao,
   linkDeEmissao,
-  diasEntre,
 };

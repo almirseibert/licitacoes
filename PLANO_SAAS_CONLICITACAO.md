@@ -521,7 +521,18 @@ enviado pela tela, ZIP baixado, portal adicionado. `code-review` (10 achados, 9 
 ZIP por GET para o leitor, marcação limpa ao filtrar, teto de 15 MB pelo base64, limite por
 hora, contagem de portal igual à agenda, revisão no dia de Brasília também no SQL,
 `alertas.criar` no lugar de INSERT IGNORE, aviso do dashboard abre a agenda, vencido antigo fora
-da consulta; o botão passou a "Vencendo/revisar").
+da consulta; o botão passou a "Vencendo/revisar"). `simplify` (4 revisores, 27 achados): aplicados —
+`revisado_em` sempre preenchido (entrada = 1ª conferência; migração `026_revisao_modelos.sql`
+preenche as antigas no dia de Brasília), sem conversão de fuso nas consultas; índice único real
+dos modelos (`escopo_org` gerada, NULL → 0); agenda de portais por lista de campos aceitos (não
+por nome proibido); `diasEntre` único em `regras/gestao.js` (sai de `limites.js`), `dataValida`
+e `EMAIL` reaproveitados; situação devolve semáforo e revisão de uma vez; resumo numa passada;
+`stat` assíncrono em paralelo no lote; filtro de grupo/situação na tela, sem nova ida ao
+servidor; mapa do limite por hora se esvazia; job com as duas fases em paralelo; aba do cofre
+por parâmetro de navegação (`aoIr(tela, params)`), não por `#hash`. Medido de novo: **41/41**,
+112/112, migração em banco zerado, tela sem erro e o aviso do dashboard abre a agenda. Ficaram:
+insert em lote no job (cada aviso passa por `alertas.criar`, que é o caminho único), limite de
+e-mail no banco (10b) e `semaforo`/`situacao` do portal num helper só (textos diferentes).
 
 **Seção 10b — pendente:**
 - [ ] Limite de envios por hora guardado no banco (hoje em memória do processo: reinício zera e

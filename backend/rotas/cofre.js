@@ -11,11 +11,12 @@ const pool = require('../config/db');
 const arquivos = require('../servicos/arquivos');
 const upload = require('../servicos/upload');
 const limites = require('../servicos/limites');
-const { PADROES, sugerirValidade, semaforo, tituloPadrao } = require('../regras/validades');
+const { PADROES, sugerirValidade, tituloPadrao } = require('../regras/validades');
 const { CATALOGO } = require('../regras/exigencias');
 const regras = require('../regras/documentos');
 const { diaNoFuso } = require('../regras/gestao');
 const email = require('../servicos/email');
+const { EMAIL } = require('../regras/notificacoes');
 
 const rotas = express.Router();
 
@@ -51,10 +52,8 @@ rotas.get('/', async (req, res) => {
     const hoje = diaNoFuso(agora);
     const todos = linhas.map((d) => ({
       ...d,
-      semaforo: semaforo(d.valido_ate, agora),
       grupo: regras.grupoDoCodigo(d.codigo),
       ...regras.situacao(d, agora, hoje),
-      revisao: regras.revisao(d, hoje),
       emitir_em: regras.linkDeEmissao(d.renovavel_em),
       tem_arquivo: Boolean(d.arquivo_path),
     }));
@@ -63,19 +62,25 @@ rotas.get('/', async (req, res) => {
     // os números do topo não mudarem a cada clique.
     const { grupo, situacao } = req.query;
     const dados = todos.filter((d) => (!grupo || d.grupo === grupo) && (!situacao || d.situacao === situacao));
-    const ativos = todos.filter((d) => d.ativo);
-    const contar = (campo, valor) => ativos.filter((d) => d[campo] === valor).length;
+    // Uma passada só pelo cofre atual para todos os números do topo.
+    const resumo = {
+      total: 0, vencidos: 0, vencendo: 0, revisar: 0,
+      por_situacao: Object.fromEntries(regras.SITUACOES.map((s) => [s, 0])),
+      por_grupo: Object.fromEntries(regras.GRUPOS.map((g) => [g.chave, 0])),
+    };
+    for (const d of todos) {
+      if (!d.ativo) continue;
+      resumo.total += 1;
+      if (d.semaforo.cor === 'vermelho') resumo.vencidos += 1;
+      if (d.semaforo.cor === 'amarelo') resumo.vencendo += 1;
+      if (d.revisao && d.revisao.devida) resumo.revisar += 1;
+      resumo.por_situacao[d.situacao] += 1;
+      resumo.por_grupo[d.grupo] += 1;
+    }
     res.json({
       perfil_id: perfilId,
       dados,
-      resumo: {
-        total: ativos.length,
-        vencidos: ativos.filter((d) => d.semaforo.cor === 'vermelho').length,
-        vencendo: ativos.filter((d) => d.semaforo.cor === 'amarelo').length,
-        revisar: ativos.filter((d) => d.revisao && d.revisao.devida).length,
-        por_situacao: Object.fromEntries(regras.SITUACOES.map((s) => [s, contar('situacao', s)])),
-        por_grupo: Object.fromEntries(regras.GRUPOS.map((g) => [g.chave, contar('grupo', g.chave)])),
-      },
+      resumo,
       grupos: regras.GRUPOS,
       // Para o seletor de "novo documento": catálogo de exigências + validade sugerida.
       codigos: CATALOGO.map((c) => ({
@@ -126,12 +131,13 @@ rotas.post('/', (req, res) => {
       const [r] = await pool.query(
         `INSERT INTO empresa_documentos
            (organizacao_id, perfil_id, codigo, titulo, arquivo_path, nome_arquivo, tamanho_bytes,
-            emitido_em, valido_ate, renovavel_em, observacao, versao, ativo)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+            emitido_em, valido_ate, revisado_em, renovavel_em, observacao, versao, ativo)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
         [
           req.organizacaoId,
           perfilId, codigo, titulo, gravado.caminho, gravado.nome, gravado.tamanho,
-          emitidoEm, validoAte,
+          // Entrar no cofre conta como a primeira conferência (revisão de 90 dias).
+          emitidoEm, validoAte, diaNoFuso(),
           corpo.renovavel_em ? String(corpo.renovavel_em).slice(0, 255) : (PADROES[codigo] && PADROES[codigo].renovar) || null,
           corpo.observacao || null,
           Number(anterior.versao || 0) + 1,
@@ -164,10 +170,14 @@ const enviosRecentes = new Map(); // organizacao_id → instantes dos envios da 
 
 function dentroDoTeto(organizacaoId, agora = Date.now()) {
   const ultimos = (enviosRecentes.get(organizacaoId) || []).filter((t) => agora - t < 3600000);
-  enviosRecentes.set(organizacaoId, ultimos);
+  if (ultimos.length) enviosRecentes.set(organizacaoId, ultimos);
+  else enviosRecentes.delete(organizacaoId); // quem parou de mandar não fica no mapa
   return ultimos.length < LOTE_EMAIL_POR_HORA;
 }
-const EMAIL = /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/;
+
+function registrarEnvio(organizacaoId) {
+  enviosRecentes.set(organizacaoId, [...(enviosRecentes.get(organizacaoId) || []), Date.now()]);
+}
 
 /** Os documentos pedidos, só da organização, com arquivo no volume. */
 async function documentosDoLote(organizacaoId, ids) {
@@ -175,14 +185,21 @@ async function documentosDoLote(organizacaoId, ids) {
   if (!lista.length) return { erro: 'Escolha ao menos um documento.' };
   if (lista.length > LOTE_MAX) return { erro: `No máximo ${LOTE_MAX} documentos por vez.` };
   const [linhas] = await pool.query(
-    `SELECT id, codigo, titulo, arquivo_path, nome_arquivo, tamanho_bytes FROM empresa_documentos
+    `SELECT id, codigo, titulo, arquivo_path, nome_arquivo FROM empresa_documentos
       WHERE organizacao_id = ? AND id IN (?) AND arquivo_path IS NOT NULL ORDER BY codigo, versao DESC`,
     [organizacaoId, lista]
   );
-  const pecas = linhas
-    .filter((d) => arquivos.dentroDoVolume(d.arquivo_path) && fs.existsSync(arquivos.caminhoAbsoluto(d.arquivo_path)))
-    .map((d, i) => ({
+  // Um stat assíncrono por arquivo, todos juntos: diz se existe e o tamanho.
+  const noVolume = linhas.filter((d) => arquivos.dentroDoVolume(d.arquivo_path));
+  const stats = await Promise.all(
+    noVolume.map((d) => fs.promises.stat(arquivos.caminhoAbsoluto(d.arquivo_path)).catch(() => null))
+  );
+  const pecas = noVolume
+    .map((d, i) => ({ d, stat: stats[i] }))
+    .filter(({ stat }) => stat && stat.isFile())
+    .map(({ d, stat }, i) => ({
       ...d,
+      bytes: stat.size,
       absoluto: arquivos.caminhoAbsoluto(d.arquivo_path),
       nome: arquivos.nomeDoArquivo(i + 1, d.titulo, path.extname(d.nome_arquivo || d.arquivo_path).toLowerCase()),
     }));
@@ -230,7 +247,7 @@ rotas.post('/lote/email', async (req, res) => {
 
     const lote = await documentosDoLote(req.organizacaoId, corpo.ids);
     if (lote.erro) return res.status(lote.status || 400).json({ erro: lote.erro });
-    const bytes = lote.pecas.reduce((s, p) => s + Number(p.tamanho_bytes || fs.statSync(p.absoluto).size), 0);
+    const bytes = lote.pecas.reduce((s, p) => s + p.bytes, 0);
     if (bytes > LOTE_EMAIL_BYTES) {
       return res.status(413).json({ erro: 'Os anexos passam de 15 MB. Mande em duas partes ou baixe o ZIP.' });
     }
@@ -250,7 +267,7 @@ rotas.post('/lote/email', async (req, res) => {
       ].join('\n'),
       anexos: lote.pecas.map((p) => ({ filename: p.nome, path: p.absoluto })),
     });
-    enviosRecentes.get(req.organizacaoId).push(Date.now());
+    registrarEnvio(req.organizacaoId);
     if (!r.enviado) return responderErro(res, 502, 'O servidor de e-mail não aceitou o envio. Tente de novo.', new Error(r.motivo));
     res.json({
       ok: true,

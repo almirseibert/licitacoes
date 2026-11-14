@@ -4,6 +4,7 @@
 // migração 020) — aqui só se lê e se compara. A metade de cima deste arquivo é
 // pura (testada sem banco em testes/limites.test.js); a de baixo lê o banco.
 const { ehOperadora } = require('./escopo');
+const { diasEntre } = require('../regras/gestao');
 
 // Dias depois do `pago_ate` em que o painel ainda funciona inteiro — boleto
 // compensa em até 3 dias úteis, e cortar o cliente por isso é injusto.
@@ -60,10 +61,6 @@ function somarDias(diaTexto, dias) {
   const d = new Date(`${diaTexto}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + dias);
   return d.toISOString().slice(0, 10);
-}
-
-function diasEntre(deTexto, ateTexto) {
-  return Math.round((Date.parse(`${ateTexto}T00:00:00Z`) - Date.parse(`${deTexto}T00:00:00Z`)) / 86400000);
 }
 
 function mesDe(agora = new Date()) {
