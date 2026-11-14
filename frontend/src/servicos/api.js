@@ -588,10 +588,10 @@ export const api = {
   apagarFeriado: (id) => requisitar(`/feriados/${id}`, { method: 'DELETE' }),
 
   // ------------- mercado: contratos, atas e acompanhamentos (Seção 12)
-  contratosMercado: (parametros = {}) => requisitar(`/mercado/contratos?${new URLSearchParams(parametros)}`),
-  atasMercado: (parametros = {}) => requisitar(`/mercado/atas?${new URLSearchParams(parametros)}`),
+  // tipo: 'contratos' | 'atas' | 'acompanhamentos'
+  listarMercado: (tipo, parametros = {}) =>
+    requisitar(`${tipo === 'acompanhamentos' ? '/acompanhamentos' : `/mercado/${tipo}`}?${new URLSearchParams(parametros)}`),
   resumoMercado: () => requisitar('/mercado/resumo'),
-  acompanhamentos: (parametros = {}) => requisitar(`/acompanhamentos?${new URLSearchParams(parametros)}`),
   tiposAcompanhamento: () => requisitar('/acompanhamentos/tipos'),
 
   // ------------- contratos e marcos (seção 28)

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Loader2, ExternalLink, Star, Search, AlertTriangle } from 'lucide-react';
 import { api } from '../servicos/api';
-import { moedaExata, data as comoData, dataHora, resumir } from '../servicos/formato';
+import { moedaExata, data as comoData, dataHora, resumir, LACUNA } from '../servicos/formato';
 
 /**
  * Contratos do mercado, Atas e Acompanhamentos (Seção 12 do PLANO_SAAS_CONLICITACAO.md).
@@ -19,7 +19,8 @@ const TITULOS = {
   },
   atas: {
     titulo: 'Atas de registro de preços',
-    subtitulo: 'Atas publicadas no PNCP. As que vencem em até 60 dias aparecem marcadas: é quando o órgão costuma abrir a próxima.',
+    subtitulo: (dias) =>
+      `Atas publicadas no PNCP. As que vencem em até ${dias} dias aparecem marcadas: é quando o órgão costuma abrir a próxima.`,
   },
   acompanhamentos: {
     titulo: 'Acompanhamentos',
@@ -27,23 +28,23 @@ const TITULOS = {
   },
 };
 
+// "vence_em:N" vira o parâmetro vence_em=N; o resto vai como vigencia=<chave>.
 const VIGENCIAS = [
-  { chave: '', rotulo: 'Qualquer vigência' },
   { chave: 'vigente', rotulo: 'Vigentes hoje' },
-  { chave: 'vence60', rotulo: 'Vencem em 60 dias' },
-  { chave: 'vence90', rotulo: 'Vencem em 90 dias' },
+  { chave: 'vence_em:60', rotulo: 'Vencem em 60 dias' },
+  { chave: 'vence_em:90', rotulo: 'Vencem em 90 dias' },
   { chave: 'encerrada', rotulo: 'Encerradas' },
 ];
 
 const ESTADO_COLETA = { ok: 'em dia', parcial: 'parcial', erro: 'falhou na última rodada' };
-const ESFERAS = ['Federal', 'Estadual', 'Municipal', 'Distrital'];
-const LACUNA = '____________';
+// Mesmo vocabulário do Radar (backend/regras/filtros-radar.js).
+const ESFERAS = ['Federal', 'Estadual', 'Municipal', 'Outra'];
 
-function paraParametros(tipo, f) {
-  const p = { ...f };
-  if (tipo !== 'acompanhamentos') {
-    if (f.vigencia === 'vence60') Object.assign(p, { vigencia: '', vence_em: '60' });
-    if (f.vigencia === 'vence90') Object.assign(p, { vigencia: '', vence_em: '90' });
+function paraParametros(f) {
+  const { vigencia, ...p } = f;
+  if (vigencia) {
+    const [campo, valor] = vigencia.startsWith('vence_em:') ? vigencia.split(':') : ['vigencia', vigencia];
+    p[campo] = valor;
   }
   return Object.fromEntries(Object.entries(p).filter(([, v]) => v !== '' && v !== null && v !== undefined));
 }
@@ -73,8 +74,8 @@ export default function Mercado({ tipo, aoAbrir }) {
   useEffect(() => {
     let vivo = true;
     setCarregando(true);
-    const chamar = { contratos: api.contratosMercado, atas: api.atasMercado, acompanhamentos: api.acompanhamentos }[tipo];
-    chamar({ ...paraParametros(tipo, aplicados), pagina })
+    api
+      .listarMercado(tipo, { ...paraParametros(aplicados), pagina })
       .then((r) => {
         if (!vivo) return;
         setDados(r);
@@ -101,7 +102,11 @@ export default function Mercado({ tipo, aoAbrir }) {
   };
 
   const opcoes = (resumo && resumo.opcoes) || {};
-  const { titulo, subtitulo } = TITULOS[tipo];
+  const { titulo } = TITULOS[tipo];
+  const subtitulo =
+    typeof TITULOS[tipo].subtitulo === 'function'
+      ? TITULOS[tipo].subtitulo((resumo && resumo.dias_aviso_fim) || 60)
+      : TITULOS[tipo].subtitulo;
   const totalPaginas = dados ? Math.max(1, Math.ceil(dados.total / dados.por_pagina)) : 1;
   const coletas = resumo ? resumo.coletas.filter((c) => c.tipo === (tipo === 'contratos' ? 'contrato' : 'ata')) : [];
 
@@ -155,7 +160,7 @@ export default function Mercado({ tipo, aoAbrir }) {
         {escolha('Modalidade', 'modalidade', opcoes.modalidade || [])}
         {tipo !== 'acompanhamentos' && (
           <>
-            {escolha('Vigência', 'vigencia', VIGENCIAS.slice(1), VIGENCIAS[0].rotulo)}
+            {escolha('Vigência', 'vigencia', VIGENCIAS, 'Qualquer vigência')}
             {escolha('Poder', 'poder', opcoes.poder || [])}
             {tipo === 'contratos' && escolha('Tipo', 'tipo', opcoes.tipo || [])}
             {tipo === 'contratos' && campo('Empresa', 'empresa')}
@@ -199,7 +204,8 @@ export default function Mercado({ tipo, aoAbrir }) {
           </button>
           {dados && (
             <span className="text-xs text-texto-suave ml-auto">
-              {dados.total.toLocaleString('pt-BR')} resultado(s)
+              {dados.total.toLocaleString('pt-BR')}
+              {dados.total_limitado ? '+' : ''} resultado(s)
               {carregando && <Loader2 size={12} className="inline animate-spin ml-1" />}
             </span>
           )}
@@ -252,6 +258,23 @@ function linkPncp(numeroControle, tipo) {
   if (tipo === 'atas' && seqAta) return `https://pncp.gov.br/app/atas/${cnpj}/${ano}/${Number(seq)}/${Number(seqAta)}`;
   if (tipo === 'contratos') return `https://pncp.gov.br/app/contratos/${cnpj}/${ano}/${Number(seq)}`;
   return `https://pncp.gov.br/app/editais/${cnpj}/${ano}/${Number(seq)}`;
+}
+
+function Rodape({ link, licitacaoId, aoAbrir }) {
+  return (
+    <div className="flex gap-3 mt-2 text-xs">
+      {link && (
+        <a href={link} target="_blank" rel="noreferrer" className="text-voltagem flex items-center gap-1">
+          ver no PNCP <ExternalLink size={11} />
+        </a>
+      )}
+      {licitacaoId && (
+        <button className="text-voltagem" onClick={() => aoAbrir(licitacaoId)}>
+          abrir o edital no Radar
+        </button>
+      )}
+    </div>
+  );
 }
 
 function Rotulo({ children }) {
@@ -310,18 +333,7 @@ function Registro({ r, tipo, aoAbrir }) {
           <p className="text-texto-suave">assinado em {comoData(r.data_assinatura) || LACUNA}</p>
         </div>
       </div>
-      <div className="flex gap-3 mt-2 text-xs">
-        {link && (
-          <a href={link} target="_blank" rel="noreferrer" className="text-voltagem flex items-center gap-1">
-            ver no PNCP <ExternalLink size={11} />
-          </a>
-        )}
-        {r.licitacao_id && (
-          <button className="text-voltagem" onClick={() => aoAbrir(r.licitacao_id)}>
-            abrir o edital no Radar
-          </button>
-        )}
-      </div>
+      <Rodape link={link} licitacaoId={r.licitacao_id} aoAbrir={aoAbrir} />
     </li>
   );
 }
@@ -342,18 +354,7 @@ function Publicacao({ p, aoAbrir }) {
         {p.modalidade ? ` · ${p.modalidade}` : ''}
         {p.numero_compra ? ` · edital ${p.numero_compra}` : ''}
       </p>
-      <div className="flex gap-3 mt-2 text-xs">
-        {link && (
-          <a href={link} target="_blank" rel="noreferrer" className="text-voltagem flex items-center gap-1">
-            ver no PNCP <ExternalLink size={11} />
-          </a>
-        )}
-        {p.licitacao_id && (
-          <button className="text-voltagem" onClick={() => aoAbrir(p.licitacao_id)}>
-            abrir no Radar
-          </button>
-        )}
-      </div>
+      <Rodape link={link} licitacaoId={p.licitacao_id} aoAbrir={aoAbrir} />
     </li>
   );
 }

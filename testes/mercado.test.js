@@ -16,6 +16,7 @@ const CONTRATO = {
   tipo_contrato_nome: 'Empenho',
   orgao_cnpj: '92402510000103',
   orgao_nome: 'MUNICIPIO DE RELVADO',
+  esfera_id: 'M',
   esfera_nome: 'Municipal',
   poder_nome: 'Não se aplica',
   uf: 'RS',
@@ -38,6 +39,7 @@ const ATA = {
   numero_sequencial_compra_ata: '972',
   ano: '2025',
   orgao_cnpj: '87958658000199',
+  esfera_id: 'E',
   esfera_nome: 'Estadual',
   uf: 'RS',
   data_fim_vigencia: '2026-11-13',
@@ -168,6 +170,7 @@ test('acompanhamento: tipo fora da lista é ignorado; filtro de data usa a publi
   assert.deepEqual(b.valores, ['homologacao']);
 });
 
-test('alerta de publicação em favorita cai no tipo "resultado" (dá para desligar)', () => {
-  assert.equal(notificacoes.tipoDoAlerta('acompanhamento'), 'resultado');
+test('alerta de contrato/ata em favorita cai no tipo "resultado" (dá para desligar)', () => {
+  assert.equal(notificacoes.tipoDoAlerta('mercado_contrato'), 'resultado');
+  assert.equal(notificacoes.tipoDoAlerta('mercado_ata'), 'resultado');
 });

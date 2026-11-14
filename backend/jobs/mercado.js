@@ -18,13 +18,14 @@
 const pool = require('../config/db');
 const fila = require('../servicos/fila');
 const { buscarJson } = require('../servicos/http');
-const alertas = require('../servicos/alertas');
 const regras = require('../regras/mercado');
 
 const BUSCA = 'https://pncp.gov.br/api/search/';
 const CONSULTA = 'https://pncp.gov.br/api/consulta/v1';
-// 500 por página falhou 3 de 3 vezes em contratos (resposta vazia a ~1,8 MB); 200 passa.
-const TAM_PAGINA = 200;
+// 500 por página falhou 3 de 3 vezes em contratos (resposta vazia a ~1,8 MB); a
+// busca derrubou ~60% das chamadas em 14/11/2026 em qualquer tamanho. Página de
+// 100 com as 3 tentativas da seção 5.4, e a metade (50) só se a página falhar.
+const TAM_PAGINA = 100;
 const JANELA_BUSCA = 10000; // teto de resultados da busca do PNCP
 // Modalidades da Lei 14.133 no PNCP (manual da API de consulta, tabela 5.2).
 const MODALIDADES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
@@ -32,23 +33,11 @@ const MODALIDADES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
 // não novidade.
 const DIAS_ALERTA = 30;
 
+// Colunas = as chaves que os normalizadores produzem: coluna nova entra num lugar só.
 const COLUNAS = {
-  contrato: [
-    'numero_controle', 'numero_controle_compra', 'numero_contrato', 'tipo', 'orgao_cnpj', 'orgao_nome',
-    'unidade', 'esfera', 'poder', 'uf', 'municipio', 'modalidade', 'objeto', 'valor_global',
-    'fornecedor_ni', 'fornecedor_nome', 'data_assinatura', 'vigencia_inicio', 'vigencia_fim',
-    'cancelado', 'publicado_em', 'atualizado_pncp_em',
-  ],
-  ata: [
-    'numero_controle', 'numero_controle_compra', 'numero_ata', 'orgao_cnpj', 'orgao_nome', 'unidade',
-    'esfera', 'poder', 'uf', 'municipio', 'modalidade', 'objeto', 'valor_global', 'fornecedor_ni',
-    'fornecedor_nome', 'permite_adesao', 'data_assinatura', 'vigencia_inicio', 'vigencia_fim',
-    'cancelado', 'publicado_em', 'atualizado_pncp_em',
-  ],
-  publicacao: [
-    'chave', 'numero_controle_compra', 'tipo', 'descricao', 'ocorrido_em', 'orgao_cnpj', 'orgao_nome',
-    'esfera', 'uf', 'municipio', 'modalidade', 'numero_compra', 'objeto', 'valor',
-  ],
+  contrato: Object.keys(regras.normalizarContrato({})),
+  ata: Object.keys(regras.normalizarAta({})),
+  publicacao: regras.COLUNAS_PUBLICACAO,
 };
 const TABELA = { contrato: 'mercado_contratos', ata: 'mercado_atas' };
 
@@ -94,8 +83,8 @@ const TAM_MINIMO = 50;
 /**
  * Uma faixa da busca (`inicio` múltiplo de `tamanho`). A busca do PNCP às vezes
  * fecha a conexão sem resposta numa página e responde a mesma faixa em pedaços
- * menores (medido em 14/11/2026: 3 de 5 páginas falharam e as metades passaram).
- * Se a página inteira falha depois das 3 tentativas, pede as duas metades.
+ * menores. Se a página falha depois das 3 tentativas da seção 5.4, pede as duas
+ * metades (no máximo 1 + 2 páginas = 9 chamadas por faixa).
  */
 async function paginaDaBusca({ tipo, uf, inicio, tamanho }) {
   const parametros = new URLSearchParams({
@@ -108,7 +97,7 @@ async function paginaDaBusca({ tipo, uf, inicio, tamanho }) {
     status: 'todos',
   });
   try {
-    const dados = await buscarJson(`${BUSCA}?${parametros}`, { tentativas: 6 });
+    const dados = await buscarJson(`${BUSCA}?${parametros}`);
     return Array.isArray(dados && dados.items) ? dados.items : [];
   } catch (erro) {
     if (tamanho / 2 < TAM_MINIMO || (erro.status && erro.status < 500)) throw erro;
@@ -134,18 +123,13 @@ async function coletarIndice({ tipo, uf, desdeDias = 7, paginasMax = JANELA_BUSC
   let alcancou = false;
   let erro = null;
 
-  let paginas = 0;
-  for (let pagina = 1; pagina <= paginasMax && pagina * TAM_PAGINA <= JANELA_BUSCA; pagina += 1) {
-    paginas = pagina;
+  let pagina = 1;
+  for (; pagina <= paginasMax && pagina * TAM_PAGINA <= JANELA_BUSCA; pagina += 1) {
     let itens;
     try {
       itens = await paginaDaBusca({ tipo, uf, inicio: (pagina - 1) * TAM_PAGINA, tamanho: TAM_PAGINA });
     } catch (e) {
       erro = e.message;
-      break;
-    }
-    if (!itens.length) {
-      alcancou = true; // acabou o índice antes do cursor
       break;
     }
     const novos = [];
@@ -168,16 +152,15 @@ async function coletarIndice({ tipo, uf, desdeDias = 7, paginasMax = JANELA_BUSC
       COLUNAS.publicacao,
       unicos.map((l) => regras.publicacaoDe(tipo, l)).filter(Boolean)
     );
-    if (alcancou || itens.length < TAM_PAGINA) {
-      alcancou = true;
-      break;
-    }
+    // Página curta = acabou o índice antes do cursor.
+    if (itens.length < TAM_PAGINA) alcancou = true;
+    if (alcancou) break;
   }
 
   // Bateu no teto da busca (10.000) sem alcançar o cursor: o que ficou entre os
   // dois não tem como ser lido pela busca. O cursor avança mesmo assim (senão
   // nunca mais sai do lugar) e o buraco fica registrado para quem olhar a coleta.
-  const tetoDaBusca = !alcancou && !erro && paginas * TAM_PAGINA >= JANELA_BUSCA;
+  const tetoDaBusca = !alcancou && !erro && (pagina - 1) * TAM_PAGINA >= JANELA_BUSCA;
   const status = erro ? 'erro' : alcancou ? 'ok' : 'parcial';
   await salvarCursor(tipo, uf, {
     ate: alcancou || tetoDaBusca ? maisNovo : null,
@@ -188,7 +171,7 @@ async function coletarIndice({ tipo, uf, desdeDias = 7, paginasMax = JANELA_BUSC
   return { tipo, uf, lidos, gravados, status, erro };
 }
 
-const paraConsulta = (dataSql) => dataSql.slice(0, 10).replace(/-/g, '');
+const paraConsulta = (dia) => dia.replace(/-/g, '');
 
 /**
  * Homologação e situação (revogada/anulada/suspensa) das contratações da UF
@@ -196,10 +179,11 @@ const paraConsulta = (dataSql) => dataSql.slice(0, 10).replace(/-/g, '');
  * modalidade; 13 modalidades × dias × páginas de 50.
  */
 async function coletarAcompanhamentos({ uf, desdeDias = 2, paginasMax = 40 }) {
+  // Como nos outros tipos, o cursor é um instante UTC; a consulta é por dia de Brasília.
   const cursor = (await lerCursor('acompanhamento', uf)) || diasAtras(desdeDias);
-  const inicio = paraConsulta(cursor);
-  // O dia da consulta é o de Brasília; o cursor guarda esse dia (00:00), não um instante.
-  const fim = paraConsulta(regras.hojeEmBrasilia());
+  const hoje = regras.hojeEmBrasilia();
+  const inicio = paraConsulta(regras.hojeEmBrasilia(new Date(`${cursor.replace(' ', 'T')}Z`)));
+  const fim = paraConsulta(hoje);
   let gravados = 0;
   let lidos = 0;
   const erros = [];
@@ -230,18 +214,17 @@ async function coletarAcompanhamentos({ uf, desdeDias = 2, paginasMax = 40 }) {
   // Dia a dia: a próxima rodada recomeça no dia de hoje (atualizações do resto
   // do dia), nunca pula para amanhã.
   const status = erros.length ? (erros.length === MODALIDADES.length ? 'erro' : 'parcial') : 'ok';
+  const resultado = { tipo: 'acompanhamento', uf, lidos, gravados, status, erro: erros[0] || null };
   await salvarCursor('acompanhamento', uf, {
-    ate: status === 'ok' ? `${fim.slice(0, 4)}-${fim.slice(4, 6)}-${fim.slice(6)} 00:00:00` : null,
-    status,
-    gravados,
-    erro: erros[0] || null,
+    ...resultado,
+    ate: status === 'ok' ? regras.periodoEmUtc(hoje, hoje).inicio : null,
   });
-  return { tipo: 'acompanhamento', uf, lidos, gravados, status, erro: erros[0] || null };
+  return resultado;
 }
 
 /**
- * Alerta às organizações que favoritaram a licitação quando ela recebe uma
- * publicação nova. Cada publicação é olhada uma vez (`avisado_em`).
+ * Alerta às organizações que favoritaram a licitação quando ela recebe contrato
+ * ou ata nova. Cada publicação é olhada uma vez (`avisado_em`).
  */
 async function avisarFavoritas() {
   // O teto fixa o lote: o que chegar enquanto isto roda fica para a próxima.
@@ -252,19 +235,31 @@ async function avisarFavoritas() {
        JOIN licitacoes l ON l.numero_controle = p.numero_controle_compra
        JOIN org_licitacoes ol ON ol.licitacao_id = l.id AND ol.favorito = 1
       WHERE p.avisado_em IS NULL AND p.id <= ?
+        -- Homologação, revogação e suspensão de favorita o monitor já avisa
+        -- (jobs/monitorar.js, linha do tempo): aqui só o que ele não vê.
+        AND p.tipo IN ('contrato', 'ata')
         AND (p.ocorrido_em IS NULL OR p.ocorrido_em >= DATE_SUB(NOW(), INTERVAL ? DAY))`,
     [teto, DIAS_ALERTA]
   );
+  // Um INSERT só por lote, não um por (publicação × organização).
   let criados = 0;
-  for (const p of pendentes) {
-    const criou = await alertas.criar({
-      organizacaoId: p.organizacao_id,
-      tipo: 'acompanhamento',
-      chave: `acompanhamento:${p.id}`,
-      licitacaoId: p.licitacao_id,
-      mensagem: `${regras.ROTULOS_PUBLICACAO[p.tipo]} em favorita: ${p.descricao || ''} — ${String(p.objeto || '').slice(0, 160)}`,
-    });
-    if (criou) criados += 1;
+  for (let i = 0; i < pendentes.length; i += 500) {
+    const lote = pendentes.slice(i, i + 500);
+    const [r] = await pool.query(
+      `INSERT INTO alertas (organizacao_id, tipo, chave, mensagem, licitacao_id) VALUES ?
+       ON DUPLICATE KEY UPDATE id = id`,
+      [
+        lote.map((p) => [
+          p.organizacao_id,
+          `mercado_${p.tipo}`,
+          `mercado:${p.id}`,
+          `${regras.ROTULOS_PUBLICACAO[p.tipo]} em favorita: ${p.descricao || ''} — ${String(p.objeto || '')}`.slice(0, 500),
+          p.licitacao_id,
+        ]),
+      ]
+    );
+    // affectedRows: 1 por linha nova, 0 por chave repetida (UPDATE id = id não muda nada).
+    criados += r.affectedRows;
   }
   await pool.query('UPDATE mercado_publicacoes SET avisado_em = NOW() WHERE avisado_em IS NULL AND id <= ?', [teto]);
   return { criados };

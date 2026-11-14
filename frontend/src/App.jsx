@@ -59,6 +59,9 @@ const TELAS = [
   { chave: 'organizacoes', rotulo: 'Organizações', icone: Building2, soSuperadmin: true },
 ];
 
+// Seção 12: as três telas do mercado são o mesmo componente, por tipo de lista.
+const TELAS_MERCADO = { mercado_contratos: 'contratos', mercado_atas: 'atas', acompanhamentos: 'acompanhamentos' };
+
 // Situações em que vale um aviso fixo no topo (Seção 3).
 const AVISAR = ['teste_vencido', 'vencida', 'suspensa'];
 
@@ -248,10 +251,10 @@ export default function App() {
         {tela === 'contratos' && (
           <Contratos aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />
         )}
-        {['mercado_contratos', 'mercado_atas', 'acompanhamentos'].includes(tela) && (
+        {TELAS_MERCADO[tela] && (
           <Mercado
             key={tela}
-            tipo={{ mercado_contratos: 'contratos', mercado_atas: 'atas', acompanhamentos: 'acompanhamentos' }[tela]}
+            tipo={TELAS_MERCADO[tela]}
             aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }}
           />
         )}

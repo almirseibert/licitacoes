@@ -1,3 +1,6 @@
+// Dado que falta aparece como lacuna visível, nunca como valor inventado (CLAUDE.md).
+export const LACUNA = '____________';
+
 // Formatação em português do Brasil. Valores e prazos sempre em mono (seção 15).
 export function moeda(valor) {
   if (valor === null || valor === undefined || valor === '') return '—';

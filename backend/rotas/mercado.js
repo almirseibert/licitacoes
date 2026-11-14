@@ -27,9 +27,11 @@ const TABELAS = { contratos: 'mercado_contratos', atas: 'mercado_atas', acompanh
 // A licitação do catálogo de onde a publicação saiu, para o "abrir no Radar".
 const LICITACAO =
   '(SELECT MIN(lc.id) FROM licitacoes lc WHERE lc.numero_controle = a.numero_controle_compra) AS licitacao_id';
-const favoritaDa = (alias) =>
-  `EXISTS (SELECT 1 FROM licitacoes lf JOIN org_licitacoes of_ ON of_.licitacao_id = lf.id
-            WHERE lf.numero_controle = ${alias}.numero_controle_compra AND of_.organizacao_id = ? AND of_.favorito = 1)`;
+const FAVORITA = `EXISTS (SELECT 1 FROM licitacoes lf JOIN org_licitacoes of_ ON of_.licitacao_id = lf.id
+  WHERE lf.numero_controle = a.numero_controle_compra AND of_.organizacao_id = ? AND of_.favorito = 1)`;
+// Contar além disto custa uma varredura inteira (LIKE em TEXT) a cada clique;
+// a tela mostra "10.000+".
+const TETO_CONTAGEM = 10000;
 
 async function listar(tipo, req) {
   const q = req.query;
@@ -42,12 +44,16 @@ async function listar(tipo, req) {
       'SELECT termo FROM palavras_chave WHERE id = ? AND organizacao_id = ?',
       [atividade, req.organizacaoId]
     );
-    // Palavra de outra organização (ou apagada) não vira "sem filtro": vira lista vazia.
-    condicoes.push(palavra ? 'a.objeto LIKE ?' : '1 = 0');
-    if (palavra) valores.push(regras.like(palavra.termo));
+    if (palavra) {
+      condicoes.push('a.objeto LIKE ?');
+      valores.push(regras.like(palavra.termo));
+    } else {
+      // Palavra de outra organização (ou apagada) não vira "sem filtro": vira lista vazia.
+      condicoes.push('1 = 0');
+    }
   }
   if (q.favoritas === '1') {
-    condicoes.push(favoritaDa('a'));
+    condicoes.push(FAVORITA);
     valores.push(req.organizacaoId);
   }
 
@@ -60,14 +66,17 @@ async function listar(tipo, req) {
   const extras = [LICITACAO];
   const valoresExtras = [];
   if (tipo === 'acompanhamentos') {
-    extras.push(`${favoritaDa('a')} AS favorita`);
+    extras.push(`${FAVORITA} AS favorita`);
     valoresExtras.push(req.organizacaoId);
   } else {
     extras.push(`${regras.ESTIMADO} AS valor_estimado`);
   }
 
   const [[[{ total }]], [linhas]] = await Promise.all([
-    pool.query(`SELECT COUNT(*) AS total FROM ${tabela} a ${onde}`, valores),
+    pool.query(`SELECT COUNT(*) AS total FROM (SELECT 1 FROM ${tabela} a ${onde} LIMIT ?) t`, [
+      ...valores,
+      TETO_CONTAGEM + 1,
+    ]),
     pool.query(
       `SELECT a.*, ${extras.join(', ')} FROM ${tabela} a ${onde} ORDER BY ${ordem} LIMIT ? OFFSET ?`,
       [...valoresExtras, ...valores, porPagina, (pagina - 1) * porPagina]
@@ -76,12 +85,12 @@ async function listar(tipo, req) {
 
   const hoje = regras.hojeEmBrasilia();
   return {
-    total,
+    total: Math.min(total, TETO_CONTAGEM),
+    total_limitado: total > TETO_CONTAGEM,
     pagina,
     por_pagina: porPagina,
     dados: linhas.map((l) => {
-      const { avisado_em: _a, coletado_em: _c, atualizado_em: _u, ...resto } = l;
-      const item = { ...resto };
+      const { avisado_em: _a, coletado_em: _c, atualizado_em: _u, ...item } = l;
       if (tipo === 'acompanhamentos') {
         item.favorita = Boolean(l.favorita);
         item.rotulo = regras.ROTULOS_PUBLICACAO[l.tipo];
@@ -111,39 +120,63 @@ const mercado = express.Router();
 mercado.get('/contratos', rotaDeLista('contratos', 'Não foi possível carregar os contratos do mercado.'));
 mercado.get('/atas', rotaDeLista('atas', 'Não foi possível carregar as atas.'));
 
-// GET /api/mercado/resumo — contagem por mês e UF, e o estado de cada coleta.
+// O resumo só muda quando a coleta roda (uma vez por dia): 10 min em memória
+// poupam ~6 varreduras de tabela a cada tela aberta.
+const CACHE_RESUMO_MS = 10 * 60 * 1000;
+let cacheResumo = null;
+
+// Guarda a promessa, não o resultado: dois pedidos juntos fazem uma consulta só.
+function resumoEmCache() {
+  if (!cacheResumo || Date.now() - cacheResumo.em > CACHE_RESUMO_MS) {
+    const promessa = calcularResumo().catch((erro) => {
+      cacheResumo = null;
+      throw erro;
+    });
+    cacheResumo = { em: Date.now(), promessa };
+  }
+  return cacheResumo.promessa;
+}
+
+async function calcularResumo() {
+  // Mês de Brasília (o banco está em UTC).
+  const porMes = (tabela) =>
+    pool.query(
+      `SELECT uf, DATE_FORMAT(DATE_SUB(publicado_em, INTERVAL 3 HOUR), '%Y-%m') AS mes, COUNT(*) AS total
+         FROM ${tabela} GROUP BY uf, mes ORDER BY mes DESC, uf LIMIT 120`
+    );
+  // As listas dos filtros numa varredura por tabela, separadas em JS.
+  const combinacoes = (tabela, tipo) =>
+    pool.query(`SELECT ${tipo ? 'tipo' : 'NULL AS tipo'}, modalidade, poder, uf FROM ${tabela} GROUP BY 1, 2, 3, 4`);
+  const [[contratos], [atas], [combC], [combA]] = await Promise.all([
+    porMes('mercado_contratos'),
+    porMes('mercado_atas'),
+    combinacoes('mercado_contratos', true),
+    combinacoes('mercado_atas', false),
+  ]);
+  const opcoes = {};
+  for (const linha of [...combC, ...combA]) {
+    for (const campo of ['tipo', 'modalidade', 'poder', 'uf']) {
+      if (linha[campo]) (opcoes[campo] ||= new Set()).add(linha[campo]);
+    }
+  }
+  return {
+    contratos_por_mes: contratos,
+    atas_por_mes: atas,
+    opcoes: Object.fromEntries(Object.entries(opcoes).map(([k, v]) => [k, [...v].sort()])),
+    dias_aviso_fim: regras.DIAS_AVISO_FIM,
+  };
+}
+
+// GET /api/mercado/resumo — contagem por mês e UF, estado de cada coleta, listas dos filtros.
 mercado.get('/resumo', async (_req, res) => {
   try {
-    const porMes = (tabela) =>
-      pool.query(
-        // Mês de Brasília (o banco está em UTC).
-        `SELECT uf, DATE_FORMAT(DATE_SUB(publicado_em, INTERVAL 3 HOUR), '%Y-%m') AS mes, COUNT(*) AS total
-           FROM ${tabela} GROUP BY uf, mes ORDER BY mes DESC, uf LIMIT 120`
-      );
-    const [[contratos], [atas], [coletas], [opcoes]] = await Promise.all([
-      porMes('mercado_contratos'),
-      porMes('mercado_atas'),
-      pool.query(
-        // `ate` sai como instante (UTC com Z), para o navegador mostrar no fuso de quem olha.
-        'SELECT tipo, uf, ate, ultima_execucao, ultimo_status, gravados, ultimo_erro FROM mercado_coletas ORDER BY uf, tipo'
-      ),
-      pool.query(
-        `SELECT 'tipo' AS campo, tipo AS valor FROM mercado_contratos WHERE tipo IS NOT NULL GROUP BY tipo
-         UNION ALL SELECT 'modalidade', modalidade FROM mercado_contratos WHERE modalidade IS NOT NULL GROUP BY modalidade
-         UNION ALL SELECT 'modalidade', modalidade FROM mercado_atas WHERE modalidade IS NOT NULL GROUP BY modalidade
-         UNION ALL SELECT 'poder', poder FROM mercado_contratos WHERE poder IS NOT NULL GROUP BY poder
-         UNION ALL SELECT 'uf', uf FROM mercado_contratos WHERE uf IS NOT NULL GROUP BY uf`
-      ),
-    ]);
-    const listas = {};
-    for (const o of opcoes) (listas[o.campo] ||= new Set()).add(o.valor);
-    res.json({
-      contratos_por_mes: contratos,
-      atas_por_mes: atas,
-      coletas,
-      opcoes: Object.fromEntries(Object.entries(listas).map(([k, v]) => [k, [...v].sort()])),
-      dias_aviso_fim: regras.DIAS_AVISO_FIM,
-    });
+    const dados = await resumoEmCache();
+    // O estado da coleta é uma tabela de poucas linhas: sempre fresco.
+    // `ate` sai como instante (UTC com Z), para o navegador mostrar no fuso de quem olha.
+    const [coletas] = await pool.query(
+      'SELECT tipo, uf, ate, ultima_execucao, ultimo_status, gravados, ultimo_erro FROM mercado_coletas ORDER BY uf, tipo'
+    );
+    res.json({ ...dados, coletas });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível carregar o resumo do mercado.', erro);
   }

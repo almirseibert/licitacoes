@@ -706,6 +706,23 @@ testes `testes/mercado.test.js` 9/9. **Divergências anotadas:** a contagem **po
 republicado nesse intervalo (fica na 12b); a busca do PNCP derrubou ~60% das chamadas durante o
 teste (resposta vazia), contornado com 6 tentativas e página repartida em metades.
 
+`code-review` (10 achados, todos corrigidos: cursor que travava no teto da busca, página 40 dos
+acompanhamentos contada como completa, filtro de data em UTC, data do cursor sem fuso na tela,
+modalidade vazia nos acompanhamentos, homologação antiga voltando ao topo, requisição dupla ao trocar
+de tela, `gravados` inflado, helpers repetidos, ramo morto). `simplify` (4 revisores): normalizadores
+com campos comuns e colunas derivadas deles; esfera no vocabulário do Radar (Distrito Federal =
+Municipal); Brasília→UTC num helper só (`gestao.brasiliaParaUtc`); cursor dos acompanhamentos também
+em instante UTC; página de 100 com as 3 tentativas da seção 5.4 (era 6) e metade só na falha; alertas
+num INSERT por lote e só para contrato/ata — homologação, revogação e suspensão de favorita o monitor
+já avisa, sem aviso em dobro (tipos `mercado_contrato`/`mercado_ata` → "Resultado"); contagem com teto
+de 10.000 ("10.000+"); resumo numa varredura por tabela e 10 min em memória; índices da ordem padrão
+(`030_mercado_indices.sql`); `LACUNA`, rodapé, chamada de API e mapa das telas num lugar só no front;
+órgão também busca a unidade, como no Radar. Pulados: cliente de busca compartilhado com
+`adaptadores/pncp.js` e `gravar` genérico para os outros jobs (fora do diff), busca por frases do
+Radar no "Objeto" (muda comportamento), valor estimado copiado na gravação (a subconsulta indexada só
+roda na página), regravação do dia corrente nos acompanhamentos. Medido de novo: isolamento (1 × 0
+favorita, 0 com palavra alheia, alerta só para quem favoritou), telas sem erro em 1366 e 390, 146/146.
+
 **Seção 12b — pendente:**
 - [ ] Carga histórica além da janela de 10.000 da busca (mês inteiro por UF): fatiar a busca por
       modalidade/esfera ou usar a consulta por órgão, e aí refazer a contagem mensal completa.

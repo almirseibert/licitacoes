@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bookmark, Copy, FileText, Link2, Loader2, Mic, MicOff, Printer, Trash2, X } from 'lucide-react';
 import { api } from '../servicos/api';
-import { dataHora, moeda } from '../servicos/formato';
+import { dataHora, moeda, LACUNA } from '../servicos/formato';
 
 const botao = 'p-1.5 rounded border border-borda text-texto-suave hover:text-texto disabled:opacity-60';
-const LACUNA = '____________';
 
 // Campos da tela que não são filtro: não vão para a pesquisa salva nem para o link.
 const SO_DA_TELA = ['pagina', 'por_pagina', 'versao'];

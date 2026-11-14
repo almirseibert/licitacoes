@@ -8,9 +8,11 @@
 
 const { comoLike } = require('./filtros-radar');
 // "Hoje" do painel é o de Brasília (UTC às 21h já é amanhã); dias inteiros entre datas.
-const { diaNoFuso: hojeEmBrasilia, dataValida, periodoEmUtc, diasEntre } = require('./gestao');
+const { diaNoFuso: hojeEmBrasilia, dataValida, periodoEmUtc, diasEntre, brasiliaParaUtc } = require('./gestao');
 
-const ESFERAS = { F: 'Federal', E: 'Estadual', M: 'Municipal', D: 'Distrital' };
+// Mesmo vocabulário do catálogo (adaptadores/pncp.js, filtros-radar.js): o
+// Distrito Federal cai em "Municipal", como no Radar.
+const ESFERAS = { F: 'Federal', E: 'Estadual', M: 'Municipal', D: 'Municipal' };
 const PODERES = { E: 'Executivo', L: 'Legislativo', J: 'Judiciário', N: 'Não se aplica' };
 
 // Situações da contratação no PNCP (consulta/v1, situacaoCompraId) que são
@@ -51,18 +53,17 @@ function dataHora(v) {
 const soData = (v) => (dataHora(v) || '').slice(0, 10) || null;
 
 // O banco guarda DATETIME em UTC (config/db.js, `timezone: 'Z'`) e o front mostra
-// no fuso de quem olha. Brasília não tem horário de verão desde 2019: UTC−3 fixo.
+// no fuso de quem olha; a conversão de Brasília mora em regras/gestao.js.
 const sqlUtc = (data) => data.toISOString().slice(0, 19).replace('T', ' ');
 function instante(v) {
   const local = dataHora(v);
-  if (!local) return null;
-  const ms = Date.parse(`${local.replace(' ', 'T')}-03:00`);
-  return Number.isFinite(ms) ? sqlUtc(new Date(ms)) : null;
+  return local ? brasiliaParaUtc(local) : null;
 }
 
 function esfera(registro) {
-  if (registro.esfera_nome) return texto(registro.esfera_nome, 20);
-  return ESFERAS[registro.esfera_id || registro.esferaId] || null;
+  const id = registro.esfera_id || registro.esferaId;
+  if (ESFERAS[id]) return ESFERAS[id];
+  return registro.esfera_nome ? 'Outra' : null;
 }
 function poder(registro) {
   if (registro.poder_nome) return texto(registro.poder_nome, 40);
@@ -79,13 +80,9 @@ function compraDaAta(numeroControleAta, registro = {}) {
   return null;
 }
 
-/** Item da busca do PNCP (tipos_documento=contrato) → linha de `mercado_contratos`. */
-function normalizarContrato(r) {
+// O que contrato e ata trazem igual na busca do PNCP.
+function camposComuns(r) {
   return {
-    numero_controle: texto(r.numero_controle_pncp, 60),
-    numero_controle_compra: texto(r.numero_contratacao, 60),
-    numero_contrato: texto(r.numero_contrato_empenho, 80) || texto(String(r.title || '').replace(/^\S+\s+nº\s*/i, ''), 80),
-    tipo: texto(r.tipo_contrato_nome, 60),
     orgao_cnpj: digitos(r.orgao_cnpj).slice(0, 14) || null,
     orgao_nome: texto(r.orgao_nome),
     unidade: texto(r.unidade_nome),
@@ -95,6 +92,8 @@ function normalizarContrato(r) {
     municipio: texto(r.municipio_nome, 120),
     modalidade: texto(r.modalidade_licitacao_nome, 80),
     objeto: texto(r.description, 65000),
+    // Na ata a busca devolve `valor_global: null` e nenhum fornecedor
+    // (conferido em 14/11/2026): fica NULL, nunca zero.
     valor_global: numero(r.valor_global),
     fornecedor_ni: texto(r.fornecedor_ni, 20),
     fornecedor_nome: texto(r.fornecedor_nome),
@@ -107,6 +106,17 @@ function normalizarContrato(r) {
   };
 }
 
+/** Item da busca do PNCP (tipos_documento=contrato) → linha de `mercado_contratos`. */
+function normalizarContrato(r) {
+  return {
+    numero_controle: texto(r.numero_controle_pncp, 60),
+    numero_controle_compra: texto(r.numero_contratacao, 60),
+    numero_contrato: texto(r.numero_contrato_empenho, 80) || texto(String(r.title || '').replace(/^\S+\s+nº\s*/i, ''), 80),
+    tipo: texto(r.tipo_contrato_nome, 60),
+    ...camposComuns(r),
+  };
+}
+
 /** Item da busca do PNCP (tipos_documento=ata) → linha de `mercado_atas`. */
 function normalizarAta(r) {
   const numeroControle = texto(r.numero_controle_pncp, 70);
@@ -114,29 +124,16 @@ function normalizarAta(r) {
     numero_controle: numeroControle,
     numero_controle_compra: compraDaAta(numeroControle, r),
     numero_ata: texto(String(r.title || '').replace(/^Ata\s+nº\s*/i, ''), 80),
-    orgao_cnpj: digitos(r.orgao_cnpj).slice(0, 14) || null,
-    orgao_nome: texto(r.orgao_nome),
-    unidade: texto(r.unidade_nome),
-    esfera: esfera(r),
-    poder: poder(r),
-    uf: texto(r.uf, 2),
-    municipio: texto(r.municipio_nome, 120),
-    modalidade: texto(r.modalidade_licitacao_nome, 80),
-    objeto: texto(r.description, 65000),
-    // A busca devolve `valor_global: null` e nenhum fornecedor em toda ata
-    // (conferido em 14/11/2026): fica NULL, nunca zero.
-    valor_global: numero(r.valor_global),
-    fornecedor_ni: texto(r.fornecedor_ni, 20),
-    fornecedor_nome: texto(r.fornecedor_nome),
     permite_adesao: r.permite_adesao === null || r.permite_adesao === undefined ? null : r.permite_adesao ? 1 : 0,
-    data_assinatura: soData(r.data_assinatura),
-    vigencia_inicio: soData(r.data_inicio_vigencia),
-    vigencia_fim: soData(r.data_fim_vigencia),
-    cancelado: r.cancelado ? 1 : 0,
-    publicado_em: instante(r.data_publicacao_pncp),
-    atualizado_pncp_em: instante(r.data_atualizacao_pncp),
+    ...camposComuns(r),
   };
 }
+
+// Colunas de `mercado_publicacoes` que a coleta grava (a chave única primeiro).
+const COLUNAS_PUBLICACAO = [
+  'chave', 'numero_controle_compra', 'tipo', 'descricao', 'ocorrido_em', 'orgao_cnpj', 'orgao_nome',
+  'esfera', 'uf', 'municipio', 'modalidade', 'numero_compra', 'objeto', 'valor',
+];
 
 const moeda = (v) =>
   v === null || v === undefined ? null : Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -256,7 +253,8 @@ function montarFiltros(tipo, q = {}, { hoje = null } = {}) {
   if (s('orgao')) {
     const d = digitos(s('orgao'));
     if (d.length === 14) add('a.orgao_cnpj = ?', d);
-    else add('a.orgao_nome LIKE ?', like(s('orgao')));
+    else if (tipo === 'acompanhamentos') add('a.orgao_nome LIKE ?', like(s('orgao')));
+    else add('(a.orgao_nome LIKE ? OR a.unidade LIKE ?)', like(s('orgao')), like(s('orgao')));
   }
   if (s('esfera')) add('a.esfera = ?', s('esfera'));
   if (s('modalidade')) add('a.modalidade = ?', s('modalidade'));
@@ -316,6 +314,7 @@ function diasParaFim(vigenciaFim, hoje = hojeEmBrasilia()) {
 const DIAS_AVISO_FIM = 60;
 
 module.exports = {
+  COLUNAS_PUBLICACAO,
   ESTIMADO,
   ROTULOS_PUBLICACAO,
   DIAS_AVISO_FIM,

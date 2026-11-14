@@ -20,9 +20,14 @@ function diaNoFuso(instante = new Date()) {
  * "AAAA-MM-DD HH:MM:SS" para comparar com DATETIME (o banco guarda em UTC).
  * Brasília não tem horário de verão desde 2019: -03:00 o ano inteiro.
  */
+const emUtc = (texto) => new Date(texto).toISOString().slice(0, 19).replace('T', ' ');
 function periodoEmUtc(de, ate) {
-  const emUtc = (texto) => new Date(texto).toISOString().slice(0, 19).replace('T', ' ');
   return { inicio: emUtc(`${de}T00:00:00-03:00`), fim: emUtc(`${ate}T23:59:59-03:00`) };
+}
+
+/** "AAAA-MM-DD HH:MM:SS" de Brasília (sem fuso, como o PNCP publica) → mesmo formato em UTC. */
+function brasiliaParaUtc(local) {
+  return emUtc(`${local.replace(' ', 'T')}-03:00`);
 }
 
 /**
@@ -161,6 +166,7 @@ module.exports = {
   FUSO,
   diaNoFuso,
   periodoEmUtc,
+  brasiliaParaUtc,
   sqlVisao,
   TIPOS_ANDAMENTO,
   dataValida,

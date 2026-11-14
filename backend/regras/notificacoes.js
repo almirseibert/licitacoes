@@ -46,8 +46,9 @@ const MAPA = {
   reaberta: 'status',
   reativada: 'status',
   resultado: 'resultado',
-  // Seção 12: publicação nova (contrato, ata, homologação...) numa favorita.
-  acompanhamento: 'resultado',
+  // Seção 12: contrato ou ata publicados numa favorita (jobs/mercado.js).
+  mercado_contrato: 'resultado',
+  mercado_ata: 'resultado',
   tarefa_atrasada: 'tarefa_atrasada',
   nova_licitacao_alta: 'nova_oportunidade',
   reabertura: 'nova_oportunidade',
