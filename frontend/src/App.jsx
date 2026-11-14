@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock, Newspaper, LayoutDashboard, ListTodo } from 'lucide-react';
+import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock, Newspaper, LayoutDashboard, ListTodo, ScrollText, BookMarked, BellRing } from 'lucide-react';
 import { api, obterToken, obterUsuario, obterOrganizacao, guardarSessao, encerrarSessao } from './servicos/api';
 import Login from './paginas/Login';
 import Convite from './paginas/Convite';
@@ -20,6 +20,7 @@ import Oportunidades from './paginas/Oportunidades';
 import Calendario from './paginas/Calendario';
 import Orgaos from './paginas/Orgaos';
 import Contratos from './paginas/Contratos';
+import Mercado from './paginas/Mercado';
 import Relatorio from './paginas/Relatorio';
 import Assinatura from './paginas/Assinatura';
 import Organizacoes from './paginas/Organizacoes';
@@ -40,7 +41,11 @@ const TELAS = [
   { chave: 'precos', rotulo: 'Preço de referência', icone: TrendingDown, recurso: 'historico' },
   { chave: 'oportunidades', rotulo: 'Oportunidades', icone: Sparkles, recurso: 'estrategicas' },
   { chave: 'calendario', rotulo: 'Calendário', icone: CalendarRange },
-  { chave: 'contratos', rotulo: 'Contratos', icone: FileCheck2, recurso: 'contratos' },
+  // Seção 12: "Meus contratos" (os que a organização ganhou) × "Contratos do mercado" (PNCP).
+  { chave: 'contratos', rotulo: 'Meus contratos', icone: FileCheck2, recurso: 'contratos' },
+  { chave: 'mercado_contratos', rotulo: 'Contratos do mercado', icone: ScrollText, recurso: 'mercado' },
+  { chave: 'mercado_atas', rotulo: 'Atas', icone: BookMarked, recurso: 'mercado' },
+  { chave: 'acompanhamentos', rotulo: 'Acompanhamentos', icone: BellRing, recurso: 'acompanhamentos' },
   { chave: 'orgaos', rotulo: 'Órgãos', icone: Landmark, recurso: 'concorrentes' },
   { chave: 'diagnostico', rotulo: 'Diagnóstico', icone: Stethoscope, recurso: 'relatorios' },
   { chave: 'relatorio', rotulo: 'Relatório mensal', icone: BarChart3, recurso: 'relatorios' },
@@ -242,6 +247,13 @@ export default function App() {
         )}
         {tela === 'contratos' && (
           <Contratos aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />
+        )}
+        {['mercado_contratos', 'mercado_atas', 'acompanhamentos'].includes(tela) && (
+          <Mercado
+            key={tela}
+            tipo={{ mercado_contratos: 'contratos', mercado_atas: 'atas', acompanhamentos: 'acompanhamentos' }[tela]}
+            aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }}
+          />
         )}
         {tela === 'orgaos' && (
           <Orgaos aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />

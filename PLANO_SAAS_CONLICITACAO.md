@@ -28,7 +28,7 @@ cofre de senha de portal e a assinatura digital (ver a tabela de divergências n
 |---|---|---|---|
 | **A — Fundação SaaS** | 0 ✅, 1 (1a ✅, 1b ✅, 1c), 2 ✅, 3 ✅ | Conta própria, equipe, dados isolados, tema claro/escuro, plano e cobrança | Dá para cobrar e isolar clientes |
 | **B — Paridade de captação** | 4 ✅, 7 ✅, 8 ✅, 9 ✅, 10 ✅ | Boletim diário, banco de licitações completo, gestão com tarefas, avisos por tipo, documentos | Substitui o uso diário do ConLicitação na captação |
-| **C — IA e inteligência** | 5 ✅, 11 (11b), 12, 13, 14, 15, 17 | Pergunte ao Edital, resumo com checklist, acompanhamentos, contratos e atas, concorrentes e mercado, API, onboarding | **Versão 1 vendável** — fim da Fase C |
+| **C — IA e inteligência** | 5 ✅, 11 (11b), 12 ✅ (12b), 13, 14, 15, 17 | Pergunte ao Edital, resumo com checklist, acompanhamentos, contratos e atas, concorrentes e mercado, API, onboarding | **Versão 1 vendável** — fim da Fase C |
 | **D — Estratégia e automação** | 6, 16 | Monitor de chat, alerta de deserta por segmento, consultor jurídico | Planos mais caros |
 | **E — Ecossistema** | 18 | Seguro garantia, assessoria cadastral, cursos por parceria | Receita complementar |
 
@@ -671,22 +671,47 @@ uso 10→10→11, 404/400/409/422, injeção barrada, tela e impressão sem erro
 
 ---
 
-## Seção 12 — Acompanhamentos, contratos e atas do mercado (Fase C)
+## Seção 12 — Acompanhamentos, contratos e atas do mercado (Fase C) — ✅ feito em 14/11/2026
 O painel conhece os eventos das licitações que monitora e os contratos que a organização ganhou.
 Falta o banco **de mercado**.
-- [ ] Adaptador PNCP para **contratos** e **atas de registro de preços** (ID da ata, ID da
-      contratação, vigência, valor, empresa, CNPJ, data de assinatura) em tabelas de catálogo
-      compartilhado — `mercado_contratos`, `mercado_atas` (sem `organizacao_id`, é dado público).
-      Mesma conduta da seção 5.4; confirmar no PNCP o formato e os limites antes de codar.
-- [ ] **Acompanhamentos**: publicações posteriores ao edital (adjudicação, homologação, resultado)
-      de **qualquer** licitação do catálogo, com filtros por objeto, UF, cidade, órgão, esfera,
-      edital, modalidade, data e atividade; alerta quando uma **favorita** recebe publicação nova.
-- [ ] Telas "Contratos do mercado" e "Atas" com filtros de vigência, valor estimado e contratado,
-      empresa, CNPJ do fornecedor, tipo e poder; aviso de **ata perto do fim da vigência**.
-- [ ] Nome claro nas telas: "Meus contratos" (os da organização, seção 28) × "Contratos do mercado".
+- [x] Adaptador PNCP para **contratos** e **atas de registro de preços** em catálogo compartilhado
+      (`029_mercado.sql`: `mercado_contratos`, `mercado_atas`, sem `organizacao_id`). Conferido no
+      PNCP antes de codar: a consulta `/v1/contratos` ignora `uf` (9.581 contratos do Brasil num só
+      dia), então contratos e atas vêm da busca (`/api/search`, `ufs=RS`), que só alcança 10.000
+      resultados (~16 dias de contratos de RS); a ata **não publica fornecedor nem valor** (fica NULL
+      e a tela mostra a lacuna). Conduta 5.4 pelo `servicos/http.js`.
+- [x] **Acompanhamentos** (`mercado_publicacoes`): contrato, ata, homologação, revogação, anulação e
+      suspensão de qualquer contratação (`/v1/contratacoes/atualizacao` por UF e modalidade), com
+      filtros de objeto, UF, cidade, órgão, esfera, edital, modalidade, data e atividade
+      (palavra-chave da organização); alerta `acompanhamento` quando uma **favorita** recebe
+      publicação nova, só para quem favoritou.
+- [x] Telas "Contratos do mercado" e "Atas" (`Mercado.jsx`) com vigência, valor contratado e
+      estimado, empresa, CNPJ do fornecedor, tipo, poder; ata que vence em até 60 dias marcada.
+- [x] "Meus contratos" (seção 28) × "Contratos do mercado" no menu.
 
 **Aceite:** contagem de contratos e atas de RS por mês conferida contra o próprio portal do PNCP em
 uma amostra de 30 registros, com divergências anotadas.
+
+**Aceite medido (14/11/2026, PNCP real, RS):** coleta de 3 dias trouxe **2.249 contratos**, **565
+atas** e **~3.000 publicações** (2.938 homologações, 16 revogadas, 12 anuladas, 32 suspensas).
+**30/30 registros** (15 contratos + 15 atas, sorteados) conferidos contra o detalhe oficial
+(`pncp-api/v1/orgaos/...`): fornecedor, valor, assinatura, fim da vigência, UF, contratação de
+origem e cancelamento — **0 divergência**. Contagem por órgão no dia 12/11 contra
+`/api/consulta/v1/contratos?cnpjOrgao=`: **10/10 órgãos, 37 = 37 contratos, nenhum faltando**.
+Rodada incremental: 1 página por tipo até o cursor (50 s). Isolamento com duas organizações:
+favorita de A não aparece para B (1 × 0), palavra-chave de B usada por A devolve 0, alerta só para
+A; sem token 401. Telas em 1366 e 390: sem rolagem lateral, 0 erro no console. Lint limpo,
+testes `testes/mercado.test.js` 9/9. **Divergências anotadas:** a contagem **por mês inteiro** não
+é possível hoje — a busca só alcança ~16 dias, então meses anteriores no banco têm só o que foi
+republicado nesse intervalo (fica na 12b); a busca do PNCP derrubou ~60% das chamadas durante o
+teste (resposta vazia), contornado com 6 tentativas e página repartida em metades.
+
+**Seção 12b — pendente:**
+- [ ] Carga histórica além da janela de 10.000 da busca (mês inteiro por UF): fatiar a busca por
+      modalidade/esfera ou usar a consulta por órgão, e aí refazer a contagem mensal completa.
+- [ ] Fornecedor e valor da ata (itens/resultados da contratação no `pncp-api`).
+- [ ] Contagem de atas por órgão contra a consulta `/v1/atas` (filtra por vigência, não por
+      publicação — precisa de outra comparação).
 
 ---
 

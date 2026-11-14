@@ -69,7 +69,7 @@ export default function Contratos({ aoAbrir }) {
   return (
     <div className="h-full flex flex-col">
       <div className="px-4 py-3 border-b border-borda flex items-center gap-4 shrink-0 flex-wrap">
-        <h1 className="font-titulo text-xl">Contratos</h1>
+        <h1 className="font-titulo text-xl">Meus contratos</h1>
         <div className="flex items-center gap-1">
           {SITUACOES.map((s) => (
             <button

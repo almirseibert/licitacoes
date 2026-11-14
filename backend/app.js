@@ -67,6 +67,9 @@ app.use('/api/ia', ...modulo('ia'), require('./rotas/ia'));
 app.use('/api/boletins', ...modulo('boletim'), require('./rotas/boletins').rotas);
 app.use('/api/contratos', ...modulo('contratos'), require('./rotas/contratos'));
 app.use('/api/gestao', ...modulo('gestao'), require('./rotas/gestao'));
+// Seção 12: catálogo público do mercado (contratos e atas) e acompanhamentos.
+app.use('/api/mercado', ...modulo('mercado'), require('./rotas/mercado').mercado);
+app.use('/api/acompanhamentos', ...modulo('acompanhamentos'), require('./rotas/mercado').acompanhamentos);
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ erro: 'Rota não encontrada.' });

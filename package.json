@@ -33,7 +33,8 @@
     "sancoes": "node backend/jobs/executar-sancoes.js",
     "boletim": "node backend/jobs/executar-boletim.js",
     "notificar": "node backend/jobs/executar-notificar.js",
-    "validades": "node backend/jobs/executar-validades.js"
+    "validades": "node backend/jobs/executar-validades.js",
+    "mercado": "node backend/jobs/executar-mercado.js"
   },
   "engines": {
     "node": ">=20"

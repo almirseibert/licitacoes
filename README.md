@@ -320,6 +320,29 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
     (`openai` = endpoint compatível do Gemini com `Authorization: Bearer`, o que um cofre de
     credenciais que só injeta Bearer consegue entregar). **Aceite medido**: ver o plano
     (Seção 11). Testes em `testes/resumo-edital.test.js`.
+- **Seção 12 — Contratos, atas e acompanhamentos do mercado, entregue em 14/11/2026.** Migração
+  `029_mercado.sql` (catálogo público, sem `organizacao_id`: `mercado_contratos`, `mercado_atas`,
+  `mercado_publicacoes`, `mercado_coletas`); job `backend/jobs/mercado.js` (`npm run mercado`,
+  worker às 02h pela fila, UFs em `MERCADO_UFS`, padrão RS); regras puras em
+  `backend/regras/mercado.js`; rotas `/api/mercado/{contratos,atas,resumo}` (recurso `mercado`) e
+  `/api/acompanhamentos` (recurso `acompanhamentos`); tela única `frontend/src/paginas/Mercado.jsx`
+  em três menus — **Contratos do mercado**, **Atas**, **Acompanhamentos** — e "Contratos" virou
+  **Meus contratos**.
+  - Contratos e atas vêm da busca do PNCP (`tipos_documento=contrato|ata`, filtro `ufs`), do mais
+    novo para trás até o cursor da rodada anterior. A consulta `/v1/contratos` ignora `uf` (devolve
+    o Brasil inteiro, 9.581 num dia) e por isso não serve; a busca só alcança 10.000 resultados
+    (~16 dias de contratos de RS) — passou disso, o cursor avança e o buraco fica anotado.
+  - A **ata do PNCP não publica fornecedor nem valor** (nem na busca, nem no detalhe): as colunas
+    ficam NULL e a tela mostra a lacuna, nunca R$ 0. Ata que vence em até 60 dias aparece marcada.
+  - **Acompanhamentos**: contrato e ata publicados + homologação, revogação, anulação e suspensão
+    (`/v1/contratacoes/atualizacao` por UF e modalidade), de qualquer contratação, com filtros de
+    objeto, UF, cidade, órgão, esfera, edital, modalidade, data e atividade (palavra-chave da
+    organização). Favorita com publicação nova vira alerta `acompanhamento` (tipo "Resultado" nos
+    avisos), só para a organização que favoritou.
+  - Filtros de contrato/ata: vigência (vigentes, vencem em 60/90 dias, encerradas), valor
+    contratado e estimado (do edital, quando está no catálogo), empresa, CNPJ do fornecedor, tipo,
+    poder, esfera, modalidade, data de assinatura. **Aceite medido**: ver o plano (Seção 12).
+    Testes em `testes/mercado.test.js`.
 - `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
   ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
 
@@ -1081,6 +1104,8 @@ linha de comando serve para rodar um agora e ver o número:
 | `npm run sancoes` | CEIS/CNEP do próprio CNPJ e dos concorrentes recorrentes |
 | `npm run boletim` | boletim diário; `-- --org=<id> --simular` mostra sem gravar, sem `--simular` envia já |
 
+O `npm run mercado` aceita `-- --uf=RS,SC --tipo=contrato,ata,acompanhamento --dias=7 --paginas=20`.
+
 O `npm run limpar` aceita `-- --dias=365` e `-- --horas=48`; o `npm run sancoes` aceita
 `-- --quantos=25`. A limpeza apaga os **arquivos** da licitação descartada, não a ficha:
 o motivo do descarte é o que alimenta a tela de diagnóstico, e uma base que se apaga a
@@ -1241,6 +1266,10 @@ POST   /api/dossies/agregar                    recalcula as fichas
 GET    /api/feriados?ano=2026                  POST /api/feriados  (estadual/municipal)
 POST   /api/feriados/importar                  baixa os nacionais da BrasilAPI
 DELETE /api/feriados/:id                       so os cadastrados a mao
+GET    /api/mercado/contratos                  contratos do mercado (PNCP), com filtros e paginação
+GET    /api/mercado/atas                       atas de registro de preços, com filtros
+GET    /api/mercado/resumo                     contagem por mês/UF, estado da coleta, listas dos filtros
+GET    /api/acompanhamentos                    publicações posteriores ao edital (filtros; ?favoritas=1)
 GET    /api/contratos                          lista, faturado em 12m e faixa
 GET    /api/gestao/tarefas                     ?visao=atrasadas|hoje|futuras|concluidas&por=mim&licitacao_id=
 POST   /api/gestao/tarefas                     cria (responsavel_id da equipe; padrao: quem cria)

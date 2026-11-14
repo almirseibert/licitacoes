@@ -32,6 +32,7 @@ const contratos = require('../backend/jobs/contratos');
 const limpar = require('../backend/jobs/limpar');
 const sancoesMensais = require('../backend/jobs/sancoes-mensais');
 const boletim = require('../backend/jobs/boletim');
+const mercado = require('../backend/jobs/mercado');
 const notificar = require('../backend/servicos/notificar');
 
 const sinal = { parar: false };
@@ -40,6 +41,7 @@ const MEIA_HORA = 30 * 60 * 1000;
 const UMA_HORA = 60 * 60 * 1000;
 
 // Horários da seção 14.
+const HORA_DO_MERCADO = 2; // contratos, atas e acompanhamentos (Seção 12)
 const HORA_DAS_ENCERRADAS = 3; // varredura larga, de madrugada (seção 5.4)
 const HORA_DA_LIMPEZA = 4; // depois das encerradas, antes das estratégicas
 const HORA_DAS_ESTRATEGICAS = 5; // lê o que a coleta das 03h trouxe
@@ -49,6 +51,7 @@ const HORA_DOS_AVISOS = 8; // recorrência e prazo de questionamento
 
 const ultimaVez = {
   coleta: 0, // carimbo de tempo: a coleta é de hora em hora, sem horário fixo
+  mercado: null,
   encerradas: null,
   limpeza: null,
   estrategicas: null,
@@ -115,6 +118,7 @@ function registrarTodos() {
   contratos.registrarNaFila();
   limpar.registrarNaFila();
   sancoesMensais.registrarNaFila();
+  mercado.registrarNaFila();
 }
 
 // ---------------------------------------------------------------------------
@@ -203,6 +207,12 @@ async function rodarDeHoraEmHora() {
     const lidas = await iaResumos.enfileirarResumos({ limite: 10 });
     if (lidas.enfileiradas) {
       console.log(`Leitura assistida enfileirada para ${lidas.enfileiradas} licitações.`);
+    }
+
+    // Contratos, atas e acompanhamentos do PNCP (Seção 12), uma vez por dia.
+    if (naHoraDiaria('mercado', HORA_DO_MERCADO)) {
+      await fila.enfileirar('coletar_mercado', {}, { prioridade: 20, chaveUnica: `mercado:${hojeLocal()}` });
+      console.log('Coleta do mercado enfileirada para hoje.');
     }
 
     // Amostra de preço: contratações encerradas, uma vez por dia (seção 12).
