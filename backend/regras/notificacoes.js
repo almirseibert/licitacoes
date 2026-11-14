@@ -16,6 +16,7 @@ const TIPOS = [
   { chave: 'recurso', rotulo: 'Recurso' },
   { chave: 'status', rotulo: 'Mudança de status' },
   { chave: 'resultado', rotulo: 'Resultado' },
+  { chave: 'chat', rotulo: 'Chat do pregão' },
   { chave: 'documento_vencendo', rotulo: 'Documento vencendo' },
   { chave: 'tarefa_atrasada', rotulo: 'Tarefa atrasada' },
   { chave: 'nova_oportunidade', rotulo: 'Nova oportunidade' },
@@ -46,6 +47,10 @@ const MAPA = {
   reaberta: 'status',
   reativada: 'status',
   resultado: 'resultado',
+  // Seção 6: mensagem nova do pregoeiro (jobs/chat.js).
+  chat_pregao: 'chat',
+  // Seção 6: desertas e iminências no segmento da organização (jobs/estrategicas.js).
+  estrategica_segmento: 'nova_oportunidade',
   // Seção 12: contrato ou ata publicados numa favorita (jobs/mercado.js).
   mercado_contrato: 'resultado',
   mercado_ata: 'resultado',

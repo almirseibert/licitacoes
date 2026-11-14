@@ -16,6 +16,8 @@ const fila = require('../servicos/fila');
 const alertas = require('../servicos/alertas');
 const servicoMonitor = require('../servicos/monitor');
 const similaridade = require('../regras/similaridade');
+const regrasMercado = require('../regras/analise-mercado');
+const limites = require('../servicos/limites');
 
 // A janela da seção 22.3: contratações encerradas nos últimos 180 dias.
 const DIAS = 180;
@@ -340,12 +342,107 @@ async function iminencia({ organizacaoId, horas = HORAS_IMINENCIA } = {}) {
   return linhas;
 }
 
+/**
+ * Alerta de estratégica por segmento da organização (Seção 6 do plano SaaS).
+ *
+ * Segmento = um grupo das palavras-chave da organização (o mesmo da Análise de
+ * mercado). A varredura acima é do catálogo inteiro; aqui cada organização só é
+ * avisada do que casa com os termos dos SEUS segmentos — e só se o plano dela
+ * tem o recurso "estratégicas".
+ *
+ * Dois avisos, os dois sem inventar o que o painel não sabe (ver as divergências
+ * de `baixaConcorrencia` e `iminencia`):
+ *   · deserta/fracassada nova no segmento — dedupe pela maior oportunidade já
+ *     avisada, então só volta a avisar quando chega uma nova;
+ *   · prazo acabando em menos de 24 h numa licitação do segmento — "está
+ *     acabando", não "ninguém propôs ainda".
+ */
+async function alertarPorSegmento({ dias = 3, horas = HORAS_IMINENCIA } = {}) {
+  const [grupos] = await pool.query(
+    `SELECT organizacao_id, grupo, JSON_ARRAYAGG(termo) AS termos
+       FROM palavras_chave WHERE ativa = 1 AND organizacao_id IS NOT NULL
+      GROUP BY organizacao_id, grupo`
+  );
+
+  const resumo = { organizacoes: 0, segmentos: 0, desertas: 0, iminentes: 0, sem_recurso: 0 };
+  const vistas = new Set();
+
+  for (const g of grupos) {
+    const organizacaoId = g.organizacao_id;
+    const dados = await limites.daOrganizacao(organizacaoId);
+    if (!dados) continue;
+    if (!dados.isenta && !limites.temRecurso(dados.plano, 'estrategicas')) {
+      if (!vistas.has(`sem:${organizacaoId}`)) resumo.sem_recurso += 1;
+      vistas.add(`sem:${organizacaoId}`);
+      continue;
+    }
+    if (!vistas.has(organizacaoId)) resumo.organizacoes += 1;
+    vistas.add(organizacaoId);
+    resumo.segmentos += 1;
+
+    const termos = regrasMercado.condicaoDeTermos(regrasMercado.listaJson(g.termos), 'objeto');
+    if (!termos.valores.length) continue;
+    const rotulo = String(g.grupo).slice(0, 60);
+
+    // --- deserta/fracassada nova no segmento
+    const [novas] = await pool.query(
+      `SELECT id, tipo, orgao_nome, uf, objeto FROM oportunidades_retomada
+        WHERE situacao = 'aguardando' AND criado_em >= DATE_SUB(NOW(), INTERVAL ? DAY) AND ${termos.sql}
+        ORDER BY id`,
+      [dias, ...termos.valores]
+    );
+    if (novas.length) {
+      const ultima = novas[novas.length - 1];
+      const criou = await alertas.criar({
+        organizacaoId,
+        tipo: 'estrategica_segmento',
+        nivel: 'atencao',
+        // A maior oportunidade avisada identifica o lote: o mesmo lote não repete, um novo avisa.
+        chave: `estrategica_segmento:deserta:${rotulo}:${ultima.id}`,
+        mensagem:
+          `${novas.length} ${novas.length === 1 ? 'oportunidade sem vencedor' : 'oportunidades sem vencedor'} ` +
+          `no segmento “${rotulo}” (deserta ou fracassada). Mais recente: ` +
+          `${recortar(ultima.objeto, 110)} — ${ultima.orgao_nome || 'órgão não informado'}${ultima.uf ? `/${ultima.uf}` : ''}.`,
+      });
+      if (criou) resumo.desertas += 1;
+    }
+
+    // --- prazo acabando no segmento (da organização, sem o descartado)
+    const termosL = regrasMercado.condicaoDeTermos(regrasMercado.listaJson(g.termos), 'l.objeto');
+    const [iminentes] = await pool.query(
+      `SELECT l.id, l.objeto, l.orgao_nome, l.fim_propostas
+         FROM ${escopo.daOrganizacao(organizacaoId)} l
+        WHERE l.descartada = 0 AND l.fim_propostas BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL ? HOUR)
+          AND ${termosL.sql}
+        ORDER BY l.fim_propostas ASC LIMIT 20`,
+      [horas, ...termosL.valores]
+    );
+    for (const l of iminentes) {
+      const criou = await alertas.criar({
+        organizacaoId,
+        tipo: 'estrategica_segmento',
+        nivel: 'atencao',
+        chave: `estrategica_segmento:iminencia:${l.id}`,
+        licitacaoId: l.id,
+        quando: l.fim_propostas,
+        mensagem:
+          `O prazo acaba em menos de ${horas} h numa licitação do segmento “${rotulo}”: ` +
+          `${recortar(l.objeto, 110)} — ${l.orgao_nome || 'órgão não informado'}.`,
+      });
+      if (criou) resumo.iminentes += 1;
+    }
+  }
+  return resumo;
+}
+
 /** A varredura inteira. Diária, 05h (seção 14). */
 async function varrerEstrategicas({ dias = DIAS } = {}) {
   const assinaturas = await calcularAssinaturas({});
   const radar = await doRadar({ dias });
   const amostra = await daAmostra({ dias });
   const reaberturas = await ligarReaberturas();
+  // Falha no aviso por segmento não pode derrubar a varredura já gravada.
+  const segmentos = await alertarPorSegmento({}).catch((erro) => ({ erro: erro.message }));
 
   const [[contagem]] = await pool.query(
     `SELECT COUNT(*) AS total,
@@ -360,6 +457,7 @@ async function varrerEstrategicas({ dias = DIAS } = {}) {
     radar,
     amostra,
     reaberturas,
+    segmentos,
     total: Number(contagem.total || 0),
     aguardando: Number(contagem.aguardando || 0),
     reabertas: Number(contagem.reabertas || 0),
@@ -379,6 +477,7 @@ module.exports = {
   ligarReaberturas,
   baixaConcorrencia,
   iminencia,
+  alertarPorSegmento,
   registrarNaFila,
   DIAS,
 };

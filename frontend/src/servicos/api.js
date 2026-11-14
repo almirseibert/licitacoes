@@ -370,6 +370,19 @@ export const api = {
   enviarLote: (corpo) =>
     requisitar('/empresa/documentos/lote/email', { method: 'POST', body: JSON.stringify(corpo) }),
 
+  // ------------------------------------- monitor de chat do pregão (Seção 6)
+  chatMonitores: (aba = 'todos') => requisitar(`/chat/monitores?aba=${encodeURIComponent(aba)}`),
+  chatPortais: () => requisitar('/chat/portais'),
+  chatLicitacao: (id) => requisitar(`/chat/licitacoes/${id}`),
+  chatLigar: (id) => requisitar(`/chat/licitacoes/${id}/ligar`, { method: 'POST' }),
+  chatDesativar: (id) => requisitar(`/chat/licitacoes/${id}/desativar`, { method: 'POST' }),
+  chatArquivar: (id, arquivado = true) =>
+    requisitar(`/chat/licitacoes/${id}/arquivar`, { method: 'POST', body: JSON.stringify({ arquivado }) }),
+  chatLerTodas: (id) => requisitar(`/chat/licitacoes/${id}/ler`, { method: 'POST' }),
+  chatChecar: (id) => requisitar(`/chat/licitacoes/${id}/checar`, { method: 'POST' }),
+  chatMarcar: (mensagemId, campos) =>
+    requisitar(`/chat/mensagens/${mensagemId}`, { method: 'PATCH', body: JSON.stringify(campos) }),
+
   // ------------------------------------------- agenda de portais (Seção 10)
   portais: () => requisitar('/portais'),
   criarPortal: (campos) => requisitar('/portais', { method: 'POST', body: JSON.stringify(campos) }),

@@ -336,21 +336,53 @@ novo: mesmos números (uso 3, 404/402/429/403, injeção barrada), 127/127, tela
 
 ---
 
-## Seção 6 — Monitor de chat do pregão
-- [ ] Estender `jobs/monitorar.js`/`servicos/monitor.js`: adaptador de mensagens da sessão
-      **só** onde há consulta pública sem login (candidato: Compras.gov.br — confirmar na seção 0).
-- [ ] Portal que exigir login vira `ultimo_status = 'bloqueado'`, com mensagem clara —
-      nunca se força (seção 5.4: 4 conexões simultâneas, 1,5 s entre chamadas, User-Agent honesto).
-- [ ] Mensagem nova do pregoeiro gera alerta (e-mail/WhatsApp), destacando palavras como
-      "convocado", "anexo", "diligência", "prazo".
-- [ ] Tela "Monitor de chat" com a lista por edital, abas **todos / não lidos / importantes /
-      arquivados**, marcar como lido ou importante, arquivar e desativar; e uma página "portais
-      compatíveis" que diz, portal a portal, se há consulta pública (e quando não há, diz isso).
-- [ ] Alerta de licitação estratégica **por segmento** da organização (iminência de deserta e
-      baixa concorrência já existem na seção 22 — falta o filtro por organização e o aviso).
+## Seção 6 — Monitor de chat do pregão — código feito em 14/11/2026; aceite com portal real pendente (6b)
+- [x] Camada de chat sobre o monitoramento (migração `034_chat_pregao.sql`): `monitoramentos.chat_*`
+      (ativo, status, aviso, arquivado, próxima leitura, link) e `chat_mensagens` por organização (lida e
+      importante são decisão de quem usa: a releitura nunca as reescreve). Limite `monitores_chat` do plano
+      agora é contado de verdade (avançado 20; essencial e profissional 0 → 402).
+- [x] Adaptador de mensagens `listarMensagens`: **Compras.gov.br** sonda a página pública de verdade e devolve
+      `bloqueado` (hCaptcha, ver `adaptadores/comprasgov.js`); **`generico_html`** lê o chat em HTML público
+      configurado em `config.chat` da fonte (URL com `{identificador}`, seletor e mapa de campos); PNCP não
+      publica chat → `sem_consulta`. Login (HTTP 401/403 ou campo de senha), robots.txt e chat montado por
+      JavaScript → `bloqueado`, sem autenticar. Releitura de bloqueado só a cada 6 h.
+- [x] Mensagem nova gera alerta (uma por leitura, vermelho se tiver convocado/anexo/diligência/prazo e
+      afins) pelo tipo de aviso novo `chat` (e-mail/WhatsApp/navegador). Worker lê a cada 5 min, só na janela
+      da sessão (1 h antes até 3 dias depois do fim das propostas; passou, o chat se encerra e devolve a vaga).
+- [x] Tela "Monitor de chat": abas todos / não lidos / importantes / arquivados (com contagem), marcar lida e
+      importante, arquivar, desativar/religar, ler agora (no mínimo 1 min entre leituras); aba "Portais
+      compatíveis" (o que se sabe de cada portal + o que o painel mediu nas suas leituras). Botão
+      "chat do pregão" na linha do tempo da licitação.
+- [x] Alerta de estratégica **por segmento** (grupo de palavras-chave da organização): deserta/fracassada
+      nova e prazo acabando em menos de 24 h, só para plano com `estrategicas`
+      (`estrategicas.alertarPorSegmento`, dentro da varredura diária das 05h).
 
-**Aceite:** sessão real monitorada mostra mensagem nova chegando como alerta, e um portal
-que exige login aparece como `bloqueado` sem tentativa de autenticação.
+**Aceite medido (14/11/2026, API real, MariaDB 10.11, banco zerado migra até a 034):** roteiro de **52
+conferências pela API com duas organizações, 52/52**, contra um **portal de teste local** (não é portal
+real): chat público lido (3 mensagens, as duas iguais continuam duas), releitura = 0 novas e nenhum alerta
+novo; mensagem "CONVOCADO … anexo … prazo" vira alerta vermelho com as palavras; `<script>` guardado como
+texto; lida/importante preservados após nova leitura; abas e contagens; a organização Y recebe 404 ao abrir,
+alterar, arquivar, desligar ou ler o chat de X e não vê o alerta; plano sem chat → 402; HTTP 403, formulário
+de senha e página em JavaScript → `bloqueado` (relê em ~6 h), PNCP → `sem_consulta`; janela: antes = espera,
+depois = encerra e devolve a vaga; **nenhuma das requisições ao portal levou Authorization ou Cookie**, com
+User-Agent do painel. `npm run chat` (job real): 10 chats lidos, 2 mensagens novas, 6 bloqueados. Tela
+conferida no navegador (Playwright, 1366 px e 390 px): 19/19, sem erro de console. Alerta por segmento: só
+a deserta do segmento casou (a de merenda, não), segunda rodada = 0 repetidos, organização sem o recurso
+foi pulada. Lint limpo, **234/234 testes** (20 novos em `testes/chat.test.js`). `code-review`: 9 achados,
+5 corrigidos (chat parava se o monitor do edital desligasse, teto de `monitoramentos`, ritmo do "ler agora",
+varredura derrubada por erro no aviso, premissa da janela), 4 deixados (abaixo).
+
+**Não verificado:** **nenhum portal real publica o chat sem login que o painel tenha conseguido ler** — o
+Compras.gov.br está atrás de CAPTCHA e esta sessão não tem rede para os outros. O aceite "sessão real
+monitorada mostra mensagem chegando" **não foi atendido**; só o caminho completo contra o portal de teste.
+Também não: e-mail/WhatsApp reais; MySQL 8.
+
+**Seção 6b — pendente:**
+- [ ] Conferir, portal a portal (BLL, Licitanet, Portal de Compras Públicas, BNC, CELIC-RS), se existe
+      consulta pública do chat sem login; onde houver, configurar `config.chat` na fonte e fazer o aceite real.
+- [ ] Mensagem repetida em portal sem hora e com janela rolante pode ser perdida (a chave usa a ocorrência).
+- [ ] Alerta por segmento: consultas por grupo (N+1) e `pode_escrever` da assinatura.
+- [ ] Teste automatizado de isolamento por organização do chat (hoje só o roteiro manual).
 
 ---
 

@@ -112,6 +112,22 @@ export default function LinhaDoTempo({ id }) {
     }
   };
 
+  // Chat do pregão (Seção 6): liga ou desliga a leitura das mensagens.
+  const alternarChat = async () => {
+    setOcupado('chat');
+    setAviso(null);
+    try {
+      const ligado = dados.monitoramento && dados.monitoramento.chat_ativo;
+      const r = ligado ? await api.chatDesativar(id) : await api.chatLigar(id);
+      setAviso(r.mensagem);
+      await carregar();
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setOcupado(null);
+    }
+  };
+
   if (erro && !dados) return <p className="text-sm text-erro">{erro}</p>;
   if (!dados) return <Loader2 size={16} className="animate-spin text-texto-suave" />;
 
@@ -157,6 +173,14 @@ export default function LinhaDoTempo({ id }) {
           >
             {ocupado === 'checar' ? <Loader2 size={12} className="animate-spin" /> : <RefreshCcw size={12} />}
             checar agora
+          </button>
+          <button
+            className="botao"
+            onClick={alternarChat}
+            disabled={Boolean(ocupado)}
+            title="Lê as mensagens do pregoeiro, só em portal que publica o chat sem login"
+          >
+            {m && m.chat_ativo ? 'desligar chat do pregão' : 'chat do pregão'}
           </button>
           <button
             className={vigiando ? 'botao' : 'botao-primario'}

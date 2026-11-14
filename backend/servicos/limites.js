@@ -268,18 +268,19 @@ async function uso(organizacaoId, agora = new Date()) {
        (SELECT COUNT(*) FROM empresa_perfis WHERE organizacao_id = ?) AS perfis_empresa,
        (SELECT COUNT(*) FROM perfis_busca WHERE organizacao_id = ? AND origem = 'boletim') AS perfis_busca,
        (SELECT COUNT(*) FROM monitoramentos WHERE organizacao_id = ? AND ativo = 1) AS monitoramentos,
+       (SELECT COUNT(*) FROM monitoramentos WHERE organizacao_id = ? AND chat_ativo = 1) AS monitores_chat,
        COALESCE((SELECT SUM(tamanho_bytes) FROM empresa_documentos WHERE organizacao_id = ?), 0)
        + COALESCE((SELECT SUM(tamanho_bytes) FROM licitacao_anexos WHERE organizacao_id = ?), 0)
        + COALESCE((SELECT SUM(tamanho_bytes) FROM pacotes WHERE organizacao_id = ?), 0) AS cofre_gb,
        (SELECT COUNT(*) FROM tokens_api WHERE organizacao_id = ? AND revogado_em IS NULL) AS tokens_api,
        (SELECT COUNT(*) FROM webhooks WHERE organizacao_id = ?) AS webhooks`,
-    [id, id, id, id, id, id, id, id, id, id, id]
+    [id, id, id, id, id, id, id, id, id, id, id, id]
   );
   const [mensais] = await db().query(
     'SELECT recurso, quantidade FROM uso_mensal WHERE organizacao_id = ? AND mes = ?',
     [id, mesDe(agora)]
   );
-  const resultado = { monitores_chat: 0 };
+  const resultado = {};
   for (const [chave, valor] of Object.entries(estoque)) resultado[chave] = Number(valor || 0);
   for (const chave of MENSAIS) resultado[chave] = 0;
   for (const m of mensais) resultado[m.recurso] = Number(m.quantidade);

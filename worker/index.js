@@ -1,11 +1,12 @@
 // Entrada do worker de filas. No EasyPanel: npm run worker
 // Mesma imagem da API, só muda o comando (seção 2.1).
 //
-// Dois relógios, porque a seção 14 pede dois:
+// Três relógios (os dois da seção 14, mais o do chat):
 //
 //   · a cada 30 min — `alertas_prazo` e `monitorar`. São os dois em que meia
 //     hora importa: um prazo que vence e um edital que mudou não esperam a
 //     hora cheia.
+//   · a cada 5 min  — o chat dos pregões ligados (Seção 6), só dentro da janela da sessão.
 //   · a cada hora   — a coleta e tudo o que pende dela, mais os jobs diários,
 //     semanais e mensais, cada um com seu horário.
 //
@@ -23,6 +24,7 @@ const prazos = require('../backend/jobs/prazos');
 const encerradas = require('../backend/jobs/encerradas');
 const descartarVencidas = require('../backend/jobs/descartar-vencidas');
 const monitorar = require('../backend/jobs/monitorar');
+const chat = require('../backend/jobs/chat');
 const estrategicas = require('../backend/jobs/estrategicas');
 const recorrencias = require('../backend/jobs/recorrencias');
 const iaResumos = require('../backend/jobs/ia-resumos');
@@ -42,6 +44,7 @@ const sinal = { parar: false };
 
 const MEIA_HORA = 30 * 60 * 1000;
 const UMA_HORA = 60 * 60 * 1000;
+const CINCO_MINUTOS = 5 * 60 * 1000;
 
 // Horários da seção 14.
 const HORA_DO_MERCADO = 2; // contratos, atas e acompanhamentos (Seção 12)
@@ -113,6 +116,7 @@ function registrarTodos() {
   encerradas.registrarNaFila();
   descartarVencidas.registrarNaFila();
   monitorar.registrarNaFila();
+  chat.registrarNaFila();
   estrategicas.registrarNaFila();
   recorrencias.registrarNaFila();
   iaResumos.registrarNaFila();
@@ -167,6 +171,42 @@ async function rodarFrequente() {
   const avisos = await notificar.rodadaDeAvisos();
   if (avisos.despacho && avisos.despacho.envios) console.log(notificar.descrever(avisos));
   for (const e of avisos.erros) console.error('Falha nos avisos:', e);
+}
+
+// ---------------------------------------------------------------------------
+// A cada 5 min (Seção 6): o chat dos pregões em andamento. Só olha o que a
+// organização ligou e que está na janela da sessão; sem chat ligado é uma
+// consulta ao banco e nada mais. `servicos/http.js` segura o ritmo por domínio
+// (seção 5.4), então não briga com a coleta pelas quatro vagas de requisição.
+// ---------------------------------------------------------------------------
+const estadoDoChat = { rodando: false };
+async function lerOsChats() {
+  try {
+    const lido = await chat.monitorarChat({ limite: 30 });
+    if (lido.checados) {
+      console.log(
+        `Chat: ${lido.checados} lido(s), ${lido.novas} mensagem(ns) nova(s)` +
+          (lido.bloqueados ? `, ${lido.bloqueados} bloqueado(s)` : '') + '.'
+      );
+    }
+    if (lido.erros.length) console.log(`Chat com erro em ${lido.erros.length}: ${lido.erros[0]}`);
+    // O aviso sai logo, não na próxima rodada de 30 min: mensagem de pregoeiro tem prazo curto.
+    if (lido.novas) {
+      const despacho = await notificar.despachar({});
+      if (despacho && despacho.envios) console.log(notificar.descrever({ despacho }));
+    }
+  } catch (erro) {
+    console.error('Falha na rodada do chat:', erro.message);
+  }
+}
+
+// Uma rodada por vez: se a anterior ainda lê (portal lento), esta é pulada.
+function rodarChat() {
+  if (sinal.parar || estadoDoChat.rodando) return Promise.resolve();
+  estadoDoChat.rodando = true;
+  return lerOsChats().finally(() => {
+    estadoDoChat.rodando = false;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -397,10 +437,13 @@ async function principal() {
     await rodarDeHoraEmHora();
   }, MEIA_HORA);
 
+  const relogioDoChat = setInterval(rodarChat, CINCO_MINUTOS);
+
   const encerrar = (nome) => {
     console.log(`\n${nome} recebido. Encerrando o worker...`);
     sinal.parar = true;
     clearInterval(relogio);
+    clearInterval(relogioDoChat);
     clearInterval(batimento);
     setTimeout(() => process.exit(0), 2000);
   };

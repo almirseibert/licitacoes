@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock, Newspaper, LayoutDashboard, ListTodo, ScrollText, BookMarked, BellRing, PieChart, Plug, Trophy, Rocket, LifeBuoy, Activity, ShieldCheck, History } from 'lucide-react';
+import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock, Newspaper, LayoutDashboard, ListTodo, ScrollText, BookMarked, BellRing, PieChart, Plug, Trophy, Rocket, LifeBuoy, Activity, ShieldCheck, History, MessagesSquare } from 'lucide-react';
 import { api, obterToken, obterUsuario, obterOrganizacao, guardarSessao, encerrarSessao } from './servicos/api';
 import Login from './paginas/Login';
 import Convite from './paginas/Convite';
@@ -29,6 +29,7 @@ import Assinatura from './paginas/Assinatura';
 import Organizacoes from './paginas/Organizacoes';
 import Dashboard from './paginas/Dashboard';
 import Tarefas from './paginas/Tarefas';
+import MonitorChat from './paginas/MonitorChat';
 import Assistente from './paginas/Assistente';
 import Ajuda from './paginas/Ajuda';
 import Status from './paginas/Status';
@@ -57,6 +58,8 @@ const TELAS = [
   { chave: 'mercado_contratos', rotulo: 'Contratos do mercado', icone: ScrollText, recurso: 'mercado' },
   { chave: 'mercado_atas', rotulo: 'Atas', icone: BookMarked, recurso: 'mercado' },
   { chave: 'acompanhamentos', rotulo: 'Acompanhamentos', icone: BellRing, recurso: 'acompanhamentos' },
+  // Seção 6: chat do pregão, onde o portal publica sem login.
+  { chave: 'monitor_chat', rotulo: 'Monitor de chat', icone: MessagesSquare, recurso: 'acompanhamentos' },
   // Seção 13: análise por segmento, concorrentes recorrentes e motivos de perda.
   { chave: 'analise_mercado', rotulo: 'Análise de mercado', icone: PieChart, recurso: 'mercado' },
   { chave: 'orgaos', rotulo: 'Órgãos', icone: Landmark, recurso: 'concorrentes' },
@@ -274,6 +277,7 @@ export default function App() {
         )}
         <div className="flex-1 min-h-0">
         {tela === 'dashboard' && <Dashboard aoIr={irPara} />}
+        {tela === 'monitor_chat' && <MonitorChat aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />}
         {tela === 'tarefas' && <Tarefas aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />}
         {tela === 'radar' && <Radar abrir={licitacaoAberta} aoAbrir={setLicitacaoAberta} />}
         {tela === 'fontes' && <Fontes />}

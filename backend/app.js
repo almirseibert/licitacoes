@@ -87,6 +87,8 @@ app.use('/api/gestao', ...modulo('gestao'), require('./rotas/gestao'));
 // Seção 12: catálogo público do mercado (contratos e atas) e acompanhamentos.
 app.use('/api/mercado', ...modulo('mercado'), require('./rotas/mercado').mercado);
 app.use('/api/acompanhamentos', ...modulo('acompanhamentos'), require('./rotas/mercado').acompanhamentos);
+// Seção 6: monitor de chat do pregão (vagas pelo limite `monitores_chat` do plano).
+app.use('/api/chat', ...modulo('acompanhamentos'), require('./rotas/chat'));
 
 // Seção 14: tokens e webhooks (tela de Integrações, com o login do painel) e a
 // API pública por token. `/api/v1` não passa por `autenticar`: o token é dela.

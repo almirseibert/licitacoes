@@ -281,6 +281,47 @@ function extrair(html, { config, fonteId, url }) {
   return resultado;
 }
 
+/**
+ * Mensagens do chat numa página HTML. Pura: o teste a exercita com HTML pronto.
+ *
+ * Zero linhas é resposta legítima (a sala ainda está vazia) — a não ser que a
+ * página peça login ou monte o chat por JavaScript, e aí é `bloqueado`: o painel
+ * não entra com senha nem simula navegador.
+ */
+function lerMensagens(html, chat, url) {
+  const $ = cheerio.load(html);
+
+  if ($('input[type="password"]').length) {
+    throw new PortalBloqueado('A página do chat pede login. O painel nunca entra no portal por você: abra o chat no portal.', url);
+  }
+
+  const linhas = $(chat.seletor_lista);
+  if (!linhas.length) {
+    const montaPorJavaScript = MARCAS_DE_JAVASCRIPT.some((m) => m.test(html)) || $('script[src]').length > 0;
+    if (montaPorJavaScript) {
+      throw new PortalBloqueado(
+        'A página do chat é montada por JavaScript e não traz nenhuma mensagem no HTML — ou o seletor está errado. ' +
+          'O painel não usa navegador automatizado: confira o seletor ou abra o chat no portal.',
+        url
+      );
+    }
+    return [];
+  }
+
+  const campos = chat.campos || {};
+  const mensagens = [];
+  linhas.each((_, no) => {
+    const texto = campos.texto ? textoDe($, no, campos.texto) : textoDe($, no, {});
+    if (!texto) return;
+    mensagens.push({
+      autor: campos.autor ? textoDe($, no, campos.autor) : null,
+      texto,
+      enviada_em: campos.hora ? paraData(textoDe($, no, campos.hora), campos.hora.formato_data) : null,
+    });
+  });
+  return mensagens;
+}
+
 module.exports = {
   chave: 'generico_html',
   nome: 'Portal em HTML — configurável pela tela (seção 5.3)',
@@ -295,6 +336,9 @@ module.exports = {
     { campo: 'uf_padrao', rotulo: 'UF, quando o portal é de um só estado', tipo: 'texto', padrao: '' },
     { campo: 'municipio_padrao', rotulo: 'Município, quando o portal é de um só', tipo: 'texto', padrao: '' },
     { campo: 'plataforma', rotulo: 'Nome da plataforma de disputa', tipo: 'texto', padrao: '' },
+    // Seção 6: só preencha se o portal tem consulta pública do chat, sem login
+    // (ver `listarMensagens` abaixo). Vazio = o monitor de chat diz "sem consulta".
+    { campo: 'chat', rotulo: 'Chat da sessão (JSON, opcional — só onde há consulta pública)', tipo: 'json', padrao: '' },
   ],
 
   /**
@@ -322,6 +366,53 @@ module.exports = {
   },
 
   /**
+   * Chat da sessão (Seção 6 do plano SaaS), só onde o portal tem consulta pública
+   * em HTML — configurada na mesma fonte, em `config.chat`:
+   *   { "url": "https://portal/chat?compra={identificador}",
+   *     "seletor_lista": ".mensagem",
+   *     "campos": { "autor": {"seletor": ".quem"}, "texto": {"seletor": ".texto"},
+   *                 "hora": {"seletor": ".hora", "formato_data": "DD/MM/YYYY HH:mm"} } }
+   * `{identificador}` é o da licitação no portal; `{link}` é o endereço dela.
+   * Sem `config.chat`, a fonte não tem consulta pública cadastrada e a leitura
+   * diz isso — o painel não tenta adivinhar uma URL.
+   */
+  async listarMensagens({ config = {}, chaveExterna, link }) {
+    const chat = config.chat;
+    if (!chat || !chat.url || !chat.seletor_lista) {
+      const erro = new Error('Esta fonte não tem consulta pública do chat configurada (campo "chat" da fonte).');
+      erro.semConsulta = true;
+      throw erro;
+    }
+
+    const identificador = String(chaveExterna || '').replace(/^\d+:/, '');
+    const url = String(chat.url)
+      .replace(/\{identificador\}/g, encodeURIComponent(identificador))
+      .replace(/\{link\}/g, encodeURIComponent(link || ''));
+
+    if (!(await podeBuscar(url))) {
+      throw new PortalBloqueado(
+        'O robots.txt deste portal não permite a leitura automática do chat. O painel respeita o robots.txt.',
+        url
+      );
+    }
+
+    let html;
+    try {
+      html = await (await buscar(url, { aceitar: 'text/html,application/xhtml+xml', tentativas: 3 })).text();
+    } catch (erro) {
+      if (erro.status === 401 || erro.status === 403) {
+        throw new PortalBloqueado(
+          `O portal recusou a leitura do chat (HTTP ${erro.status}): exige login. O painel nunca entra no portal por você.`,
+          url
+        );
+      }
+      throw erro;
+    }
+
+    return { mensagens: lerMensagens(html, chat, url), link: url };
+  },
+
+  /**
    * Este adaptador não detalha: o que a lista traz é o que o portal publica, e
    * abrir cada licitação seria uma requisição por linha num portal que já é
    * lento. O link vai para o card, e o detalhe se confere nele.
@@ -332,6 +423,7 @@ module.exports = {
 
   PortalBloqueado,
   extrair,
+  lerMensagens,
   paraData,
   paraNumero,
   podeBuscar,

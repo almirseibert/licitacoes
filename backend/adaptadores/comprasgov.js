@@ -56,6 +56,9 @@ function linkDoItem(compraId, numeroItem) {
 // Se um dia vierem, `propostas` para de lançar e passa a valer a pena extrair.
 const MARCAS_DE_PROPOSTA = [/Fornecedor<\/th>/i, /Valor\s+ofertado/i, /quadro-propostas/i];
 
+// Idem para o chat: marcas que só apareceriam se as mensagens viessem prontas no HTML.
+const MARCAS_DE_CHAT = [/mensagens?\s+do\s+(pregao|pregão)/i, /chat-mensagem/i, /lista-mensagens/i];
+
 module.exports = {
   chave: 'comprasgov',
   nome: 'Compras.gov.br — propostas e concorrentes',
@@ -73,6 +76,35 @@ module.exports = {
   async buscar() {
     throw new Error(
       'O Compras.gov.br não é fonte de busca neste painel: ele só completa as propostas de uma licitação que o PNCP já trouxe.'
+    );
+  },
+
+  /**
+   * Mensagens do chat da sessão (Seção 6 do plano SaaS). Mesma situação das
+   * propostas: o chat da compra mora na mesma aplicação Angular, atrás de
+   * hCaptcha. A página pública é pedida de verdade, uma vez por leitura, para
+   * que o painel perceba sozinho se o portal um dia passar a entregar o chat
+   * pronto — mas hoje só devolve a casca, e a leitura vira `bloqueado`.
+   * Nada de CAPTCHA, nada de navegador fingindo ser gente.
+   */
+  async listarMensagens({ link }) {
+    const compraId = idDaCompra(link);
+    if (!compraId) {
+      const erro = new Error('Sem o identificador da compra no Compras.gov.br: o painel não sabe qual chat abrir.');
+      erro.semConsulta = true;
+      throw erro;
+    }
+
+    const endereco = linkDaCompra(compraId);
+    const resposta = await buscar(endereco, { aceitar: 'text/html', tentativas: 2 });
+    const html = await resposta.text();
+
+    const entregouChat = MARCAS_DE_CHAT.some((marca) => marca.test(html));
+    throw new PortalBloqueado(
+      entregouChat
+        ? 'O Compras.gov.br passou a publicar o chat no HTML. Falta implementar a leitura — por ora, abra o link.'
+        : 'O chat do Compras.gov.br é carregado por JavaScript, atrás de CAPTCHA. O painel não resolve CAPTCHA nem entra com a sua senha: abra o chat no portal.',
+      endereco
     );
   },
 

@@ -23,6 +23,7 @@
     "resultados": "node backend/jobs/executar-resultados.js",
     "diagnostico": "node backend/jobs/executar-diagnostico.js",
     "monitorar": "node backend/jobs/executar-monitor.js",
+    "chat": "node backend/jobs/executar-chat.js",
     "estrategicas": "node backend/jobs/executar-estrategicas.js",
     "recorrencias": "node backend/jobs/executar-recorrencias.js",
     "ia": "node backend/jobs/executar-ia.js",

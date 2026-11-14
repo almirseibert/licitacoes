@@ -396,6 +396,16 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
   `/api/publico/legal`, `/api/admin/solicitacoes` e `/api/admin/nps`. Regras puras em `backend/regras/`
   (`testes/onboarding.test.js`, `testes/auditoria-suporte-status.test.js`). Variáveis: `SUPORTE_EMAIL`,
   `OPERADORA_*`. **Aceite medido**: ver o plano (Seção 17).
+- **Seção 6 — Monitor de chat do pregão, código entregue em 14/11/2026 (aceite com portal real pendente).**
+  Migração `034_chat_pregao.sql`. Lê as mensagens do pregoeiro **só onde o portal publica o chat sem login**:
+  Compras.gov.br fica `bloqueado` (CAPTCHA), PNCP não tem chat (`sem_consulta`) e o `generico_html` lê um
+  portal em HTML configurado em `config.chat` da fonte. Login, robots.txt ou página em JavaScript viram
+  `bloqueado` — o painel não autentica nem resolve CAPTCHA. Mensagem nova → alerta (vermelho com
+  convocado/anexo/diligência/prazo), tipo de aviso `chat`. Tela **Monitor de chat** (abas, lida, importante,
+  arquivar, desativar, portais compatíveis) e alerta de estratégica por segmento. `npm run chat`; o worker lê
+  a cada 5 min dentro da janela da sessão. Vagas pelo limite `monitores_chat` (plano avançado). Rotas
+  `/api/chat/*`. Regras puras em `backend/regras/chat.js` (`testes/chat.test.js`). **Aceite medido**: ver o
+  plano (Seção 6) — **medido contra portal de teste local**, nenhum portal real lido.
 - `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
   ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
 
@@ -1147,6 +1157,7 @@ linha de comando serve para rodar um agora e ver o número:
 | `npm run resultados -- --licitacao=<id>` | resultado de uma licitação |
 | `npm run diagnostico` | fecha as vencidas sem análise e imprime o ranking de bloqueios |
 | `npm run monitorar` | uma rodada do monitor (`-- --licitacao=<id>` checa uma agora) |
+| `npm run chat` | uma rodada do monitor de chat do pregão (`-- --limite=5`) |
 | `npm run estrategicas` | desertas, fracassadas e reaberturas — não vai à internet |
 | `npm run recorrencias` | calendário da seção 24 |
 | `npm run ia` | leitura assistida (sem `GEMINI_API_KEY`, fica desligada) |
