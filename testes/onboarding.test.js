@@ -103,12 +103,6 @@ test('NPS: nota de 0 a 10 inteira; a conta é % promotores − % detratores', ()
   assert.equal(r.resumirNps([null, undefined]).total, 0); // dispensa não conta como nota
 });
 
-test('termos: versão diferente da vigente é pendente', () => {
-  assert.equal(r.termosPendentes('2026-11-14', '2026-11-14'), false);
-  assert.equal(r.termosPendentes(null, '2026-11-14'), true);
-  assert.equal(r.termosPendentes('2026-01-01', '2026-11-14'), true);
-});
-
 // ------------------------------------------------------------ central de ajuda
 const ajuda = require('../backend/regras/ajuda');
 const { GUIAS } = require('../backend/config/dados/ajuda');

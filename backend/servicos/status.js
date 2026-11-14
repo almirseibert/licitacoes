@@ -3,6 +3,8 @@
 const pool = require('../config/db');
 const regras = require('../regras/status');
 const email = require('./email');
+const fila = require('./fila');
+const { dia } = require('../regras/gestao');
 
 const NOME_WORKER = 'worker';
 
@@ -19,51 +21,46 @@ async function baterWorker() {
 }
 
 async function ler(organizacaoId, agora = new Date()) {
-  const itens = [];
   const antes = Date.now();
-  let bancoOk = true;
+  let lido;
   try {
-    await pool.query('SELECT 1');
+    // Uma consulta que falha já diz que o banco não está respondendo: não há `SELECT 1` à parte.
+    lido = await Promise.all([
+      pool.query('SELECT em FROM worker_batimentos WHERE nome = ?', [NOME_WORKER]),
+      fila.resumo(),
+      pool.query(
+        "SELECT TIMESTAMPDIFF(MINUTE, MIN(agendada_para), NOW()) AS minutos FROM tarefas WHERE status = 'fila' AND agendada_para <= NOW()"
+      ),
+      pool.query('SELECT id, nome, ativa, intervalo_horas, ultima_coleta, ultimo_status FROM fontes ORDER BY nome'),
+      pool.query('SELECT data, total_itens, email_status FROM boletins WHERE organizacao_id = ? ORDER BY id DESC LIMIT 1', [organizacaoId]),
+    ]);
   } catch (erro) {
-    bancoOk = false;
     console.error('Status: banco não respondeu —', erro.message);
+    return {
+      geral: 'parado',
+      verificado_em: agora.toISOString(),
+      itens: [{ chave: 'banco', rotulo: 'Banco de dados', nivel: 'parado', mensagem: 'O banco não respondeu.' }],
+      fontes: [],
+    };
   }
-  itens.push({
-    chave: 'banco',
-    rotulo: 'Banco de dados',
-    nivel: bancoOk ? 'ok' : 'parado',
-    mensagem: bancoOk ? `Respondendo em ${Date.now() - antes} ms.` : 'O banco não respondeu.',
-  });
-  if (!bancoOk) return { geral: 'parado', verificado_em: agora.toISOString(), itens, fontes: [] };
+  const [[[batimento]], contagem, [[velha]], [fontes], [[ultimoBoletim]]] = lido;
 
-  const [[batimento]] = await pool.query('SELECT em FROM worker_batimentos WHERE nome = ?', [NOME_WORKER]);
-  itens.push({ chave: 'worker', rotulo: 'Worker (coleta, boletim e avisos)', ...regras.worker(batimento ? batimento.em : null, agora) });
-
-  const [filas] = await pool.query('SELECT status, COUNT(*) AS total FROM tarefas GROUP BY status');
-  const contagem = Object.fromEntries(filas.map((f) => [f.status, Number(f.total)]));
-  const [[velha]] = await pool.query(
-    "SELECT TIMESTAMPDIFF(MINUTE, MIN(agendada_para), NOW()) AS minutos FROM tarefas WHERE status = 'fila' AND agendada_para <= NOW()"
-  );
-  itens.push({ chave: 'fila', rotulo: 'Fila de tarefas', ...regras.fila(contagem, velha ? velha.minutos : 0) });
-
-  const [fontes] = await pool.query('SELECT id, nome, ativa, intervalo_horas, ultima_coleta, ultimo_status FROM fontes ORDER BY nome');
-  itens.push({ chave: 'coleta', rotulo: 'Coleta das fontes', ...regras.coleta(fontes, agora) });
-
-  const [[ultimoBoletim]] = await pool.query(
-    'SELECT data, total_itens, email_status FROM boletins WHERE organizacao_id = ? ORDER BY id DESC LIMIT 1',
-    [organizacaoId]
-  );
-  itens.push({
-    chave: 'boletim',
-    rotulo: 'Boletim da sua organização',
-    nivel: ultimoBoletim ? (['erro'].includes(ultimoBoletim.email_status) ? 'atrasado' : 'ok') : 'desligado',
-    mensagem: ultimoBoletim
-      ? `Último boletim em ${String(ultimoBoletim.data).slice(0, 10)}: ${ultimoBoletim.total_itens} licitação(ões), e-mail ${ultimoBoletim.email_status || 'enviado'}.`
-      : 'Nenhum boletim gerado ainda.',
-  });
-
-  itens.push({ chave: 'email', rotulo: 'Envio de e-mail', ...regras.recurso(email.servicoLigado(), 'O envio de e-mail', 'sem SMTP configurado o boletim e os avisos ficam só no painel') });
-  itens.push({ chave: 'ia', rotulo: 'Leitura assistida (IA)', ...regras.recurso(Boolean(process.env.GEMINI_API_KEY), 'A leitura assistida', 'o painel funciona inteiro sem ela') });
+  const itens = [
+    { chave: 'banco', rotulo: 'Banco de dados', nivel: 'ok', mensagem: `Respondendo em ${Date.now() - antes} ms.` },
+    { chave: 'worker', rotulo: 'Worker (coleta, boletim e avisos)', ...regras.worker(batimento ? batimento.em : null, agora) },
+    { chave: 'fila', rotulo: 'Fila de tarefas', ...regras.fila(contagem, velha ? velha.minutos : 0) },
+    { chave: 'coleta', rotulo: 'Coleta das fontes', ...regras.coleta(fontes, agora) },
+    {
+      chave: 'boletim',
+      rotulo: 'Boletim da sua organização',
+      nivel: ultimoBoletim ? (ultimoBoletim.email_status === 'erro' ? 'atrasado' : 'ok') : 'desligado',
+      mensagem: ultimoBoletim
+        ? `Último boletim em ${dia(ultimoBoletim.data)}: ${ultimoBoletim.total_itens} licitação(ões), e-mail ${ultimoBoletim.email_status || 'enviado'}.`
+        : 'Nenhum boletim gerado ainda.',
+    },
+    { chave: 'email', rotulo: 'Envio de e-mail', ...regras.recurso(email.servicoLigado(), 'O envio de e-mail', 'sem SMTP configurado o boletim e os avisos ficam só no painel') },
+    { chave: 'ia', rotulo: 'Leitura assistida (IA)', ...regras.recurso(Boolean(process.env.GEMINI_API_KEY), 'A leitura assistida', 'o painel funciona inteiro sem ela') },
+  ];
 
   return {
     geral: regras.geral(itens),
@@ -73,4 +70,4 @@ async function ler(organizacaoId, agora = new Date()) {
   };
 }
 
-module.exports = { baterWorker, ler, NOME_WORKER };
+module.exports = { baterWorker, ler };

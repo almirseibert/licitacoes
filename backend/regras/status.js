@@ -69,4 +69,4 @@ function geral(itens) {
   return 'ok';
 }
 
-module.exports = { worker, fila, coleta, recurso, geral, minutosDesde };
+module.exports = { worker, fila, coleta, recurso, geral };

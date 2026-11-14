@@ -84,6 +84,9 @@ const TELAS = [
 // Seção 12: as três telas do mercado são o mesmo componente, por tipo de lista.
 const TELAS_MERCADO = { mercado_contratos: 'contratos', mercado_atas: 'atas', acompanhamentos: 'acompanhamentos' };
 
+// Quem configura a organização (a permissão em si é conferida pelo backend).
+const PAPEIS_ADMIN = ['dono', 'admin'];
+
 // Situações em que vale um aviso fixo no topo (Seção 3).
 const AVISAR = ['teste_vencido', 'vencida', 'suspensa'];
 
@@ -150,7 +153,7 @@ export default function App() {
       .then((e) => {
         setOnb(e);
         // Organização nova: o painel abre no assistente (só para quem pode configurá-la).
-        if (!e.concluido && ['dono', 'admin'].includes(e.papel)) setTela((t) => (['dashboard', 'radar'].includes(t) ? 'primeiros_passos' : t));
+        if (!e.concluido && PAPEIS_ADMIN.includes(e.papel)) setTela((t) => (['dashboard', 'radar'].includes(t) ? 'primeiros_passos' : t));
       })
       .catch(() => {});
   }, [usuario]);
@@ -223,7 +226,7 @@ export default function App() {
         </div>
 
         <div className="flex-1 py-2">
-          {TELAS.filter((t) => (!t.soSuperadmin || (plano && plano.superadmin)) && (!t.soAdmin || (plano && ['dono', 'admin'].includes(plano.papel)))).map(({ chave, rotulo, icone: Icone, recurso }) => (
+          {TELAS.filter((t) => (!t.soSuperadmin || (plano && plano.superadmin)) && (!t.soAdmin || (plano && PAPEIS_ADMIN.includes(plano.papel)))).map(({ chave, rotulo, icone: Icone, recurso }) => (
             <button
               key={chave}
               onClick={() => irPara(chave)}
@@ -313,7 +316,7 @@ export default function App() {
         {tela === 'assinatura' && <Assinatura aba="assinatura" key="assinatura" />}
         {tela === 'uso' && <Assinatura aba="uso" key="uso" />}
         {tela === 'organizacoes' && <Organizacoes />}
-        {tela === 'primeiros_passos' && <Assistente aoConcluir={recarregarOnb} aoIr={irPara} />}
+        {tela === 'primeiros_passos' && <Assistente estado={onb} aoConcluir={recarregarOnb} aoIr={irPara} />}
         {tela === 'ajuda' && <Ajuda key={parametros.aba || 'guias'} abaInicial={parametros.aba} superadmin={Boolean(plano && plano.superadmin)} aoIr={irPara} />}
         {tela === 'status' && <Status aoIr={irPara} />}
         {tela === 'privacidade' && <Privacidade aoIr={irPara} />}
@@ -321,8 +324,8 @@ export default function App() {
         </div>
       </main>
 
-      {onb && !onb.termos.aceita && <AceiteTermos aoAceitar={recarregarOnb} aoSair={sair} />}
-      {onb && onb.termos.aceita && onb.nps.devido && !npsFechado && <PesquisaNps aoFechar={() => { setNpsFechado(true); recarregarOnb(); }} />}
+      {onb && !onb.termos.aceita && <AceiteTermos aoAceitar={() => setOnb((o) => ({ ...o, termos: { ...o.termos, aceita: true } }))} aoSair={sair} />}
+      {onb && onb.termos.aceita && onb.nps.devido && !npsFechado && <PesquisaNps aoFechar={() => setNpsFechado(true)} />}
     </div>
   );
 }

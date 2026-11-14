@@ -12,6 +12,7 @@ const { VERSAO_TERMOS } = require('../config/dados/legal');
 // novo desde ontem", e um boletim vazio no primeiro minuto é o pior começo.
 const DIAS_PRIMEIRO_BOLETIM = 15;
 const GRUPO_ASSISTENTE = 'Geral';
+const NOME_DO_FILTRO = 'Filtro principal';
 
 async function termosDoUsuario(usuarioId) {
   const [[linha]] = await pool.query(
@@ -29,15 +30,11 @@ async function aceitarTermos({ usuarioId, organizacaoId, ip }, conexao = pool) {
 }
 
 async function npsDoUsuario(organizacaoId, usuarioId, agora = new Date()) {
-  const [[membro]] = await pool.query(
-    'SELECT criado_em FROM organizacao_membros WHERE organizacao_id = ? AND usuario_id = ?',
-    [organizacaoId, usuarioId]
-  );
+  const [[[membro]], [[ultima]]] = await Promise.all([
+    pool.query('SELECT criado_em FROM organizacao_membros WHERE organizacao_id = ? AND usuario_id = ?', [organizacaoId, usuarioId]),
+    pool.query('SELECT nota, criada_em FROM nps_respostas WHERE usuario_id = ? ORDER BY criada_em DESC, id DESC LIMIT 1', [usuarioId]),
+  ]);
   if (!membro) return { devido: false };
-  const [[ultima]] = await pool.query(
-    'SELECT nota, criada_em FROM nps_respostas WHERE usuario_id = ? ORDER BY criada_em DESC, id DESC LIMIT 1',
-    [usuarioId]
-  );
   return { devido: regras.npsDevido({ membroDesde: membro.criado_em, ultima: ultima || null, agora }) };
 }
 
@@ -49,25 +46,26 @@ async function registrarNps({ organizacaoId, usuarioId, nota, comentario }) {
 
 /** O que a tela do assistente precisa saber, tudo da organização do token. */
 async function estado({ organizacaoId, usuarioId, agora = new Date() }) {
-  const [[org]] = await pool.query('SELECT nome, onboarding_concluido_em FROM organizacoes WHERE id = ?', [organizacaoId]);
+  const [[[org]], [[perfil]], [[contagens]], [[ultimoBoletim]], termos, nps] = await Promise.all([
+    pool.query('SELECT nome, onboarding_concluido_em FROM organizacoes WHERE id = ?', [organizacaoId]),
+    pool.query(
+      'SELECT razao_social, cnpj, cnaes FROM empresa_perfis WHERE organizacao_id = ? ORDER BY padrao DESC, id ASC LIMIT 1',
+      [organizacaoId]
+    ),
+    pool.query(
+      `SELECT (SELECT COUNT(*) FROM palavras_chave WHERE organizacao_id = ? AND ativa = 1) AS palavras,
+              (SELECT COUNT(*) FROM perfis_busca WHERE organizacao_id = ? AND origem = 'boletim' AND ativo = 1) AS filtros`,
+      [organizacaoId, organizacaoId]
+    ),
+    pool.query(
+      'SELECT id, data, total_itens, email_status, criado_em FROM boletins WHERE organizacao_id = ? ORDER BY id DESC LIMIT 1',
+      [organizacaoId]
+    ),
+    termosDoUsuario(usuarioId),
+    npsDoUsuario(organizacaoId, usuarioId, agora),
+  ]);
   if (!org) return null;
-
-  const [[perfil]] = await pool.query(
-    'SELECT razao_social, cnpj, cnaes FROM empresa_perfis WHERE organizacao_id = ? ORDER BY padrao DESC, id ASC LIMIT 1',
-    [organizacaoId]
-  );
-  const [[{ palavras }]] = await pool.query(
-    'SELECT COUNT(*) AS palavras FROM palavras_chave WHERE organizacao_id = ? AND ativa = 1',
-    [organizacaoId]
-  );
-  const [[{ filtros }]] = await pool.query(
-    "SELECT COUNT(*) AS filtros FROM perfis_busca WHERE organizacao_id = ? AND origem = 'boletim' AND ativo = 1",
-    [organizacaoId]
-  );
-  const [[ultimoBoletim]] = await pool.query(
-    'SELECT id, data, total_itens, email_status, criado_em FROM boletins WHERE organizacao_id = ? ORDER BY id DESC LIMIT 1',
-    [organizacaoId]
-  );
+  const { palavras, filtros } = contagens;
   const cnaes = perfil && perfil.cnaes ? limites.lerJson(perfil.cnaes, []) : [];
 
   const lista = regras.passos({
@@ -77,7 +75,6 @@ async function estado({ organizacaoId, usuarioId, agora = new Date() }) {
     filtro: filtros,
     boletim: Boolean(ultimoBoletim),
   });
-  const [termos, nps] = await Promise.all([termosDoUsuario(usuarioId), npsDoUsuario(organizacaoId, usuarioId, agora)]);
 
   return {
     organizacao: org.nome,
@@ -149,8 +146,8 @@ async function concluir({ organizacaoId, dados }) {
     // Primeiro filtro do boletim, com o que a pessoa acabou de dizer (e só ele:
     // as palavras de antes continuam no Radar, mas o filtro nasce do assistente).
     const [[filtro]] = await conexao.query(
-      "SELECT id FROM perfis_busca WHERE organizacao_id = ? AND origem = 'boletim' AND nome = 'Filtro principal'",
-      [organizacaoId]
+      "SELECT id FROM perfis_busca WHERE organizacao_id = ? AND origem = 'boletim' AND nome = ?",
+      [organizacaoId, NOME_DO_FILTRO]
     );
     const valores = [JSON.stringify(dados.palavras), JSON.stringify(dados.exclusoes), JSON.stringify(dados.ufs)];
     if (filtro) {
@@ -161,8 +158,8 @@ async function concluir({ organizacaoId, dados }) {
     } else {
       await conexao.query(
         `INSERT INTO perfis_busca (organizacao_id, nome, palavras, exclusoes, ufs, municipios, modalidades, horarios)
-         VALUES (?, 'Filtro principal', ?, ?, ?, '[]', '[]', ?)`,
-        [organizacaoId, ...valores, JSON.stringify(regrasBoletim.HORARIOS_PADRAO)]
+         VALUES (?, ?, ?, ?, ?, '[]', '[]', ?)`,
+        [organizacaoId, NOME_DO_FILTRO, ...valores, JSON.stringify(regrasBoletim.HORARIOS_PADRAO)]
       );
     }
 
@@ -196,24 +193,27 @@ async function primeiroBoletim({ organizacaoId, agora = new Date() }) {
   if (!(await boletim.podeReceber(organizacaoId))) {
     return { erro: 'O plano desta organização não inclui boletim, ou a assinatura não está em dia.', status: 402 };
   }
-  const { data, hora } = boletim.agoraNoFuso(agora);
-  await pool.query(
-    `DELETE b FROM boletins b
-       JOIN perfis_busca p ON p.id = b.perfil_id AND p.organizacao_id = b.organizacao_id
-      WHERE b.organizacao_id = ? AND p.nome = 'Filtro principal' AND b.data = ? AND b.horario = ? AND b.total_itens = 0`,
-    [organizacaoId, data, hora]
+  // O boletim é do filtro que o assistente criou; os outros da organização seguem o próprio horário.
+  const [[filtro]] = await pool.query(
+    `SELECT id FROM perfis_busca WHERE organizacao_id = ? AND origem = 'boletim' AND nome = ?`,
+    [organizacaoId, NOME_DO_FILTRO]
   );
+  if (!filtro) return { erro: 'Faça os passos anteriores antes: o boletim precisa de um filtro com palavra-chave.', status: 400 };
 
-  const rodada = await boletim.rodar({ agora, org: organizacaoId, forcar: true, dias: DIAS_PRIMEIRO_BOLETIM });
+  const { data, hora } = boletim.agoraNoFuso(agora);
+  await pool.query('DELETE FROM boletins WHERE perfil_id = ? AND organizacao_id = ? AND data = ? AND horario = ? AND total_itens = 0', [
+    filtro.id, organizacaoId, data, hora,
+  ]);
+
+  const rodada = await boletim.rodar({ agora, org: organizacaoId, perfilId: filtro.id, forcar: true, dias: DIAS_PRIMEIRO_BOLETIM });
   if (rodada.erros.length) throw new Error(rodada.erros[0]);
 
   const [[ultimo]] = await pool.query(
-    `SELECT b.id, b.numero, b.data, b.horario, b.total_itens, b.email_status, b.email_detalhe
-       FROM boletins b JOIN perfis_busca p ON p.id = b.perfil_id AND p.organizacao_id = b.organizacao_id
-      WHERE b.organizacao_id = ? AND p.nome = 'Filtro principal' ORDER BY b.id DESC LIMIT 1`,
-    [organizacaoId]
+    `SELECT id, numero, data, horario, total_itens, email_status, email_detalhe
+       FROM boletins WHERE perfil_id = ? AND organizacao_id = ? ORDER BY id DESC LIMIT 1`,
+    [filtro.id, organizacaoId]
   );
-  if (!ultimo) return { erro: 'Faça os passos anteriores antes: o boletim precisa de um filtro com palavra-chave.', status: 400 };
+  if (!ultimo) return { erro: 'O plano desta organização não inclui boletim, ou a assinatura não está em dia.', status: 402 };
 
   const [itens] = await pool.query(
     `SELECT l.id, l.objeto, l.orgao_nome, l.uf, l.municipio, l.modalidade, l.valor_estimado, l.fim_propostas, bi.palavra
@@ -224,7 +224,4 @@ async function primeiroBoletim({ organizacaoId, agora = new Date() }) {
   return { boletim: ultimo, itens, dias: DIAS_PRIMEIRO_BOLETIM };
 }
 
-module.exports = {
-  DIAS_PRIMEIRO_BOLETIM, estado, concluir, primeiroBoletim, aceitarTermos, termosDoUsuario,
-  npsDoUsuario, registrarNps,
-};
+module.exports = { estado, concluir, primeiroBoletim, aceitarTermos, termosDoUsuario, registrarNps };

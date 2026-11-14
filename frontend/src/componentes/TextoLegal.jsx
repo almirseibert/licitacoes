@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { api } from '../servicos/api';
+import Abas from './Abas';
 
 const ABAS = [
   ['termos', 'Termos de uso'],
@@ -38,21 +39,7 @@ export default function TextoLegal({ abaInicial = 'termos' }) {
           Minuta ainda sem revisão de advogado. Vale como descrição do que o painel faz, e pode mudar.
         </p>
       )}
-      <div className="flex gap-1 mb-4 border-b border-borda" role="tablist">
-        {ABAS.map(([chave, rotulo]) => (
-          <button
-            key={chave}
-            role="tab"
-            aria-selected={aba === chave}
-            onClick={() => setAba(chave)}
-            className={`px-3 py-2 text-xs border-b-2 -mb-px ${
-              aba === chave ? 'border-texto text-texto' : 'border-transparent text-texto-suave hover:text-texto'
-            }`}
-          >
-            {rotulo}
-          </button>
-        ))}
-      </div>
+      <Abas abas={ABAS} ativa={aba} aoMudar={setAba} />
 
       {aba === 'aviso_ia' ? (
         <div className="space-y-3 text-sm leading-relaxed">

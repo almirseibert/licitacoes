@@ -39,7 +39,7 @@ const registrarDaRequisicao = (req, acao, entidade, entidadeId, detalhe) =>
  * Roda antes do `autenticar` na pilha, mas só lê `req.usuario` no fim da resposta.
  */
 function middleware(req, res, next) {
-  if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+  if (!regras.reconhece(req.method, req.originalUrl.replace(/^\/api/, ''))) return next();
 
   let corpoResposta;
   const jsonOriginal = res.json.bind(res);

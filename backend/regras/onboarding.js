@@ -3,6 +3,8 @@
 // CNPJ com dígito errado, palavra-chave repetida por maiúscula, UF inventada,
 // pesquisa de NPS perguntada de novo cedo demais.
 
+const { normalizar } = require('./texto');
+
 const UFS = [
   'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA',
   'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO',
@@ -40,9 +42,6 @@ function formatarCnpj(valor) {
   return d.length === 14 ? d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : String(valor || '');
 }
 
-const chaveDaPalavra = (p) =>
-  String(p).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
-
 /**
  * Palavras-chave vindas do formulário (texto com uma por linha, ou lista).
  * Separa por quebra de linha e ponto e vírgula — vírgula não, porque
@@ -65,7 +64,7 @@ function limparPalavras(entrada) {
       descartadas.push({ termo: termo.slice(0, 30) + '…', motivo: `longa demais (máximo ${MAX_LETRAS_PALAVRA} letras)` });
       continue;
     }
-    const chave = chaveDaPalavra(termo);
+    const chave = normalizar(termo);
     if (vistas.has(chave)) {
       descartadas.push({ termo, motivo: 'repetida' });
       continue;
@@ -207,11 +206,7 @@ function resumirNps(notas) {
   return { total, promotores, neutros, detratores, nps };
 }
 
-/** Termos: a pessoa precisa ter aceitado a versão vigente. */
-const termosPendentes = (versaoAceita, versaoVigente) => versaoAceita !== versaoVigente;
-
 module.exports = {
-  UFS, MAX_PALAVRAS, DIAS_ATE_NPS, DIAS_NPS_DISPENSADO, DIAS_NPS_RESPONDIDO,
-  cnpjValido, formatarCnpj, limparPalavras, limparCnaes, limparUfs,
-  validarAssistente, passos, npsDevido, validarNps, resumirNps, termosPendentes, soDigitos,
+  UFS, MAX_PALAVRAS, cnpjValido, formatarCnpj, limparPalavras, limparCnaes, limparUfs,
+  validarAssistente, passos, npsDevido, validarNps, resumirNps,
 };

@@ -3,6 +3,7 @@ import { Loader2 } from 'lucide-react';
 import { api } from '../servicos/api';
 import { dataHora } from '../servicos/formato';
 import TextoLegal from '../componentes/TextoLegal';
+import Abas from '../componentes/Abas';
 
 /**
  * Privacidade e dados (Seção 17): termos, política e aviso da IA, a cópia dos
@@ -17,19 +18,7 @@ export default function Privacidade({ aoIr }) {
         <h1 className="font-titulo text-xl">Privacidade e dados</h1>
         <p className="text-xs text-texto-suave">O que o painel guarda, o que você pode baixar e como apagar.</p>
       </header>
-      <div className="flex gap-1 mb-5 border-b border-borda" role="tablist">
-        {[['textos', 'Termos e política'], ['dados', 'Meus dados']].map(([chave, rotulo]) => (
-          <button
-            key={chave}
-            role="tab"
-            aria-selected={aba === chave}
-            onClick={() => setAba(chave)}
-            className={`px-3 py-2 text-xs border-b-2 -mb-px ${aba === chave ? 'border-texto text-texto' : 'border-transparent text-texto-suave hover:text-texto'}`}
-          >
-            {rotulo}
-          </button>
-        ))}
-      </div>
+      <Abas abas={[['textos', 'Termos e política'], ['dados', 'Meus dados']]} ativa={aba} aoMudar={setAba} />
       <div className="max-w-2xl">
         {aba === 'textos' ? <TextoLegal /> : <MeusDados aoIr={aoIr} />}
       </div>

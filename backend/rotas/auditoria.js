@@ -29,17 +29,19 @@ rotas.get('/', async (req, res) => {
   if (ate) { onde.push('a.criado_em < DATE_ADD(?, INTERVAL 1 DAY)'); valores.push(`${ate} 00:00:00`); }
 
   try {
-    const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM auditoria a WHERE ${onde.join(' AND ')}`, valores);
-    const [linhas] = await pool.query(
-      `SELECT a.id, a.criado_em, a.usuario_id, COALESCE(a.usuario_nome, 'Pessoa removida') AS usuario, a.acao, a.entidade, a.entidade_id, a.detalhe, a.ip
-         FROM auditoria a WHERE ${onde.join(' AND ')} ORDER BY a.id DESC LIMIT ? OFFSET ?`,
-      [...valores, POR_PAGINA, (pagina - 1) * POR_PAGINA]
-    );
-    const [pessoas] = await pool.query(
-      `SELECT DISTINCT usuario_id AS id, usuario_nome AS nome FROM auditoria
-        WHERE organizacao_id = ? AND usuario_id IS NOT NULL ORDER BY usuario_nome LIMIT 200`,
-      [req.organizacaoId]
-    );
+    const [[[{ total }]], [linhas], [pessoas]] = await Promise.all([
+      pool.query(`SELECT COUNT(*) AS total FROM auditoria a WHERE ${onde.join(' AND ')}`, valores),
+      pool.query(
+        `SELECT a.id, a.criado_em, a.usuario_id, COALESCE(a.usuario_nome, 'Pessoa removida') AS usuario, a.acao, a.entidade, a.entidade_id, a.detalhe, a.ip
+           FROM auditoria a WHERE ${onde.join(' AND ')} ORDER BY a.id DESC LIMIT ? OFFSET ?`,
+        [...valores, POR_PAGINA, (pagina - 1) * POR_PAGINA]
+      ),
+      pool.query(
+        `SELECT DISTINCT usuario_id AS id, usuario_nome AS nome FROM auditoria
+          WHERE organizacao_id = ? AND usuario_id IS NOT NULL ORDER BY usuario_nome LIMIT 200`,
+        [req.organizacaoId]
+      ),
+    ]);
     res.json({
       total: Number(total),
       pagina,

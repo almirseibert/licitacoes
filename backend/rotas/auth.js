@@ -121,7 +121,7 @@ rotas.post('/cadastro', async (req, res) => {
       .enfileirar('repontuar', { organizacaoId: org.insertId }, { prioridade: 5, chaveUnica: `repontuar:${org.insertId}` })
       .catch((erro) => console.error('Repontuação da organização nova não entrou na fila:', erro.message));
 
-    await auditoria.registrar({
+    auditoria.registrar({
       organizacaoId: org.insertId,
       usuario: { id: usuario.insertId, nome },
       acao: 'criou_conta',
@@ -175,7 +175,7 @@ rotas.post('/login', async (req, res) => {
     // Entra direto na primeira (o painel troca depois, sem senha de novo).
     const principal = organizacoes[0];
     const token = assinar(usuario.id, usuario.nome, usuario.email, principal.id, principal.papel);
-    await auditoria.registrar({
+    auditoria.registrar({
       organizacaoId: principal.id,
       usuario: { id: usuario.id, nome: usuario.nome },
       acao: 'entrou',

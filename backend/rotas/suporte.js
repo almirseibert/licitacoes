@@ -16,8 +16,6 @@ const rotas = express.Router();
 
 const COLUNAS = 's.id, s.assunto, s.categoria, s.status, s.criada_em, s.atualizada_em, s.usuario_id, u.nome AS aberta_por';
 
-const comProtocolo = (s) => ({ ...s, protocolo: regras.protocolo(s.id, s.criada_em), categoria_rotulo: regras.CATEGORIAS[s.categoria], status_rotulo: regras.STATUS[s.status] });
-
 /** Admin e dono veem todas da organização; os demais, só as que abriram. */
 const veTodas = (papel) => NIVEL_PAPEL[papel] >= NIVEL_PAPEL.admin;
 
@@ -33,7 +31,7 @@ async function carregar(req, id) {
 
 // GET /api/suporte/ajuda?q= — guias da central, com busca.
 rotas.get('/ajuda', (req, res) => {
-  res.json({ guias: ajuda.buscar(GUIAS, req.query.q), total: GUIAS.length });
+  res.json({ guias: ajuda.buscar(GUIAS, req.query.q) });
 });
 
 // GET /api/suporte/solicitacoes
@@ -50,7 +48,7 @@ rotas.get('/solicitacoes', async (req, res) => {
         WHERE s.organizacao_id = ?${filtro} ORDER BY s.atualizada_em DESC, s.id DESC LIMIT 200`,
       parametros
     );
-    res.json({ solicitacoes: linhas.map(comProtocolo), categorias: regras.CATEGORIAS, status: regras.STATUS });
+    res.json({ solicitacoes: linhas.map(regras.comProtocolo), categorias: regras.CATEGORIAS });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível carregar as solicitações.', erro);
   }
@@ -109,7 +107,7 @@ rotas.get('/solicitacoes/:id', async (req, res) => {
         WHERE m.solicitacao_id = ? ORDER BY m.id`,
       [s.id]
     );
-    res.json({ ...comProtocolo(s), mensagens });
+    res.json({ ...regras.comProtocolo(s), mensagens });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível carregar a solicitação.', erro);
   }

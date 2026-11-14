@@ -250,9 +250,9 @@ async function perfisAtivos(organizacaoId) {
 
 /**
  * Rodada do worker. `forcar` (linha de comando) ignora o horário e gera agora,
- * no slot da hora corrente. `simular` não grava nem envia.
+ * no slot da hora corrente; `perfilId` limita a rodada a um filtro. `simular` não grava nem envia.
  */
-async function rodar({ agora = new Date(), org = null, simular = false, forcar = false, dias = DIAS_JANELA } = {}) {
+async function rodar({ agora = new Date(), org = null, perfilId = null, simular = false, forcar = false, dias = DIAS_JANELA } = {}) {
   const { data, hora } = agoraNoFuso(agora);
   const [orgs] = org
     ? [[{ id: escopo.idOrganizacao(org) }]]
@@ -272,6 +272,7 @@ async function rodar({ agora = new Date(), org = null, simular = false, forcar =
         [id, data]
       );
       for (const perfil of perfis) {
+        if (perfilId && perfil.id !== perfilId) continue;
         const ja = gerados.filter((g) => g.perfil_id === perfil.id).map((g) => g.horario);
         const horario = simular || forcar ? hora : regras.horarioDevido(perfil.horarios, hora, ja);
         if (horario === null) continue;

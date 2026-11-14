@@ -30,7 +30,7 @@ export default function Status({ aoIr }) {
   }, []);
   useEffect(() => {
     carregar();
-    const t = setInterval(carregar, 60000);
+    const t = setInterval(() => { if (!document.hidden) carregar(); }, 60000);
     return () => clearInterval(t);
   }, [carregar]);
 

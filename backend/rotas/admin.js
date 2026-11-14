@@ -120,14 +120,7 @@ rotas.get('/solicitacoes', async (req, res) => {
       status ? [status] : []
     );
     res.json({
-      solicitacoes: linhas.map((s) => ({
-        ...s,
-        protocolo: regrasSuporte.protocolo(s.id, s.criada_em),
-        categoria_rotulo: regrasSuporte.CATEGORIAS[s.categoria],
-        status_rotulo: regrasSuporte.STATUS[s.status],
-      })),
-      categorias: regrasSuporte.CATEGORIAS,
-      status: regrasSuporte.STATUS,
+      solicitacoes: linhas.map(regrasSuporte.comProtocolo),
     });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível listar as solicitações.', erro);
@@ -150,7 +143,7 @@ rotas.get('/solicitacoes/:id', async (req, res) => {
          LEFT JOIN usuarios u ON u.id = m.usuario_id WHERE m.solicitacao_id = ? ORDER BY m.id`,
       [s.id]
     );
-    res.json({ ...s, protocolo: regrasSuporte.protocolo(s.id, s.criada_em), categoria_rotulo: regrasSuporte.CATEGORIAS[s.categoria], status_rotulo: regrasSuporte.STATUS[s.status], mensagens });
+    res.json({ ...regrasSuporte.comProtocolo(s), mensagens });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível carregar a solicitação.', erro);
   }

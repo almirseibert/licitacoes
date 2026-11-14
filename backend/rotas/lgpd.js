@@ -10,8 +10,16 @@ const { responderErro } = require('../middlewares/responder-erro');
 const auditoria = require('../servicos/auditoria');
 const servico = require('../servicos/lgpd');
 const regras = require('../regras/lgpd');
+const { diaNoFuso } = require('../regras/gestao');
 
 const rotas = express.Router();
+
+const podePedir = (req, org) =>
+  regras.podePedirExclusao({
+    papel: req.papel,
+    organizacaoId: req.organizacaoId,
+    cobrancaRecorrente: servico.temCobrancaRecorrente(org),
+  });
 
 // GET /api/lgpd — a situação do pedido de exclusão.
 rotas.get('/', async (req, res) => {
@@ -23,11 +31,7 @@ rotas.get('/', async (req, res) => {
       exclusao_agendada_em: org.exclusao_agendada_em,
       exclusao_pedida_por: org.pedida_por_nome,
       dias_de_carencia: regras.DIAS_DE_CARENCIA,
-      pode_pedir: regras.podePedirExclusao({
-        papel: req.papel,
-        organizacaoId: req.organizacaoId,
-        cobrancaRecorrente: await servico.temCobrancaRecorrente(req.organizacaoId),
-      }),
+      pode_pedir: podePedir(req, org),
     });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível carregar a situação dos seus dados.', erro);
@@ -39,7 +43,7 @@ rotas.get('/exportar', exigirPapel('admin'), async (req, res) => {
   try {
     const dados = await servico.exportar(req.organizacaoId);
     await auditoria.registrarDaRequisicao(req, 'exportou_dados', 'lgpd', null, null);
-    const dia = new Date().toISOString().slice(0, 10);
+    const dia = diaNoFuso();
     res.setHeader('Content-Disposition', `attachment; filename="meus-dados-${dia}.json"`);
     res.json(dados);
   } catch (erro) {
@@ -53,11 +57,7 @@ rotas.post('/exclusao', exigirPapel('dono'), async (req, res) => {
   try {
     const org = await servico.situacaoDaExclusao(req.organizacaoId);
     if (!org) return res.status(404).json({ erro: 'Organização não encontrada.' });
-    const pode = regras.podePedirExclusao({
-      papel: req.papel,
-      organizacaoId: req.organizacaoId,
-      cobrancaRecorrente: await servico.temCobrancaRecorrente(req.organizacaoId),
-    });
+    const pode = podePedir(req, org);
     if (!pode.ok) return res.status(403).json({ erro: pode.motivo });
     if (org.exclusao_agendada_em) return res.status(409).json({ erro: 'A exclusão já está agendada. Cancele o pedido para mudar a data.' });
     if (!regras.confirmacaoConfere(org.nome, confirmacao)) {

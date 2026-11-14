@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Loader2, PlayCircle } from 'lucide-react';
 import { api } from '../servicos/api';
 import { dataHora } from '../servicos/formato';
+import Abas from '../componentes/Abas';
 
 const COR_STATUS = { aberta: 'text-atencao', em_andamento: 'text-voltagem', respondida: 'text-ok', encerrada: 'text-texto-suave' };
 
@@ -19,19 +20,7 @@ export default function Ajuda({ superadmin, aoIr, abaInicial = 'guias' }) {
         <h1 className="font-titulo text-xl">Ajuda</h1>
         <p className="text-xs text-texto-suave">Guias curtos por ferramenta e o canal com o suporte.</p>
       </header>
-      <div className="flex gap-1 mb-5 border-b border-borda" role="tablist">
-        {abas.map(([chave, rotulo]) => (
-          <button
-            key={chave}
-            role="tab"
-            aria-selected={aba === chave}
-            onClick={() => setAba(chave)}
-            className={`px-3 py-2 text-xs border-b-2 -mb-px ${aba === chave ? 'border-texto text-texto' : 'border-transparent text-texto-suave hover:text-texto'}`}
-          >
-            {rotulo}
-          </button>
-        ))}
-      </div>
+      <Abas abas={abas} ativa={aba} aoMudar={setAba} />
       {aba === 'guias' && <Guias aoIr={aoIr} aoPedirSuporte={() => setAba('solicitacoes')} />}
       {aba === 'solicitacoes' && <Solicitacoes />}
       {aba === 'atendimento' && <Atendimento />}
@@ -116,7 +105,7 @@ function Solicitacoes() {
   }, []);
   useEffect(carregar, [carregar]);
 
-  if (aberta) return <Conversa id={aberta} voltar={() => { setAberta(null); carregar(); }} buscar={api.solicitacao} enviar={(id, t) => api.escreverSolicitacao(id, t)} podeEncerrar />;
+  if (aberta) return <Conversa id={aberta} voltar={() => { setAberta(null); carregar(); }} buscar={api.solicitacao} enviar={api.escreverSolicitacao} podeEncerrar />;
   if (nova) return <NovaSolicitacao categorias={dados ? dados.categorias : {}} voltar={(id) => { setNova(false); if (id) setAberta(id); else carregar(); }} />;
 
   return (
@@ -133,7 +122,7 @@ function Solicitacoes() {
           <thead><tr><th>Protocolo</th><th>Assunto</th><th>Aberta em</th><th>Status</th></tr></thead>
           <tbody>
             {dados.solicitacoes.map((s) => (
-              <tr key={s.id} className="cursor-pointer" onClick={() => setAberta(s.id)}>
+              <tr key={s.id}>
                 <td className="font-mono text-[11px]">{s.protocolo}</td>
                 <td><button className="underline-offset-2 hover:underline text-left" onClick={() => setAberta(s.id)}>{s.assunto}</button></td>
                 <td>{dataHora(s.criada_em)}</td>
@@ -283,9 +272,12 @@ function Atendimento() {
 
   const carregar = useCallback(() => {
     api.adminSolicitacoes(filtro).then(setDados).catch((e) => setErro(e.message));
-    api.adminNps().then(setNps).catch(() => {});
   }, [filtro]);
   useEffect(carregar, [carregar]);
+  // O NPS não depende do filtro nem da conversa aberta: busca uma vez.
+  useEffect(() => {
+    api.adminNps().then(setNps).catch(() => {});
+  }, []);
 
   if (aberta) {
     return <Conversa id={aberta} voltar={() => { setAberta(null); carregar(); }} buscar={api.adminSolicitacao} enviar={api.adminResponder} comStatus />;
@@ -312,7 +304,7 @@ function Atendimento() {
           <thead><tr><th>Protocolo</th><th>Organização</th><th>Assunto</th><th>Categoria</th><th>Atualizada</th><th>Status</th></tr></thead>
           <tbody>
             {dados.solicitacoes.map((s) => (
-              <tr key={s.id} className="cursor-pointer" onClick={() => setAberta(s.id)}>
+              <tr key={s.id}>
                 <td className="font-mono text-[11px]">{s.protocolo}</td>
                 <td>{s.organizacao}</td>
                 <td><button className="hover:underline text-left" onClick={() => setAberta(s.id)}>{s.assunto}</button></td>

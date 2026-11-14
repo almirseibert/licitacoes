@@ -80,6 +80,7 @@ CREATE TABLE IF NOT EXISTS auditoria (
   criado_em      DATETIME DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_auditoria_org (organizacao_id, criado_em),
   INDEX idx_auditoria_entidade (organizacao_id, entidade, criado_em),
+  INDEX idx_auditoria_criado (criado_em),   -- a limpeza de 24 meses varre por data, sem organização
   CONSTRAINT fk_auditoria_org FOREIGN KEY (organizacao_id) REFERENCES organizacoes(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

@@ -16,7 +16,7 @@ rotas.get('/', async (req, res) => {
   try {
     const estado = await servico.estado({ organizacaoId: req.organizacaoId, usuarioId: req.usuario.id });
     if (!estado) return res.status(404).json({ erro: 'Organização não encontrada.' });
-    res.json({ ...estado, papel: req.papel });
+    res.json({ ...estado, papel: req.papel, ufs: regras.UFS });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível carregar o assistente.', erro);
   }
@@ -52,7 +52,7 @@ rotas.post('/termos/aceitar', async (req, res) => {
   try {
     await servico.aceitarTermos({ usuarioId: req.usuario.id, organizacaoId: req.organizacaoId, ip: req.ip });
     await auditoria.registrarDaRequisicao(req, 'aceitou_termos', 'conta', null, null);
-    res.json({ ok: true, termos: await servico.termosDoUsuario(req.usuario.id) });
+    res.json({ ok: true });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível registrar o aceite.', erro);
   }

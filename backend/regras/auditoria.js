@@ -54,6 +54,13 @@ function valorDeControle(v) {
   return undefined;
 }
 
+/** A rota é uma das auditadas? Só método e caminho — barato, para o middleware decidir antes de embrulhar a resposta. */
+function reconhece(metodo, caminho) {
+  const limpo = String(caminho || '').split('?')[0].replace(/\/+$/, '') || '/';
+  const m = String(metodo || '').toUpperCase();
+  return COMPILADAS.some((r) => r.metodo === m && r.re.test(limpo));
+}
+
 /**
  * O que fazer com uma requisição que deu certo. `null` = não é auditada.
  * @param {string} metodo
@@ -131,4 +138,4 @@ const rotulo = (acao) => ROTULOS[acao] || acao;
 
 const ENTIDADES = [...new Set([...REGRAS.map((r) => r[3]), 'sessao', 'conta', 'lgpd', 'suporte'])];
 
-module.exports = { classificar, rotulo, ROTULOS, ENTIDADES, REGRAS };
+module.exports = { classificar, reconhece, rotulo, ROTULOS, ENTIDADES };

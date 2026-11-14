@@ -7,6 +7,7 @@
 const DIAS_DE_CARENCIA = 7;
 
 const path = require('path');
+const { normalizar } = require('./texto');
 const { ehOperadora } = require('../servicos/escopo');
 
 // Colunas que nunca saem na exportação: senha, segredo de integração, hash de token,
@@ -22,9 +23,6 @@ const TABELAS_FORA_DA_EXPORTACAO = new Set(['tokens_api', 'notificacoes_push']);
 
 // Teto de linhas por tabela na exportação (a resposta é montada em memória).
 const LINHAS_POR_TABELA = 50000;
-
-const normalizar = (t) =>
-  String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
 /** O dono digitou o nome da organização igual (sem ligar para caixa, acento e espaços)? */
 function confirmacaoConfere(nomeOrganizacao, digitado) {
@@ -85,6 +83,6 @@ function arquivoDaOrganizacao(relativo, organizacaoId) {
 const vencida = (agendadaEm, agora = new Date()) => Boolean(agendadaEm) && new Date(agendadaEm).getTime() <= new Date(agora).getTime();
 
 module.exports = {
-  DIAS_DE_CARENCIA, COLUNA_SECRETA, TABELAS_FORA_DA_EXPORTACAO, LINHAS_POR_TABELA,
+  DIAS_DE_CARENCIA, TABELAS_FORA_DA_EXPORTACAO, LINHAS_POR_TABELA,
   confirmacaoConfere, dataDaExclusao, podePedirExclusao, semSegredos, arquivoDaOrganizacao, vencida,
 };

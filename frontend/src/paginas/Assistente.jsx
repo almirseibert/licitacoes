@@ -1,9 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Check, Circle, Loader2 } from 'lucide-react';
 import { api } from '../servicos/api';
 import { data as formatarData, moeda } from '../servicos/formato';
-
-const UFS = ['AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS', 'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC', 'SE', 'SP', 'TO'];
 
 const EMAIL_SEM_ENVIO = {
   sem_email: 'O servidor ainda não tem e-mail configurado, então nada foi enviado — a lista abaixo é o que o boletim traria.',
@@ -17,29 +15,26 @@ const EMAIL_SEM_ENVIO = {
  * boletim. Tudo o que grava pode ser mudado depois nas telas de sempre. Dado que
  * a pessoa não sabe fica em branco — o painel não preenche por ela.
  */
-export default function Assistente({ aoConcluir, aoIr }) {
-  const [estado, setEstado] = useState(null);
+export default function Assistente({ estado, aoConcluir, aoIr }) {
+  if (!estado) return <div className="p-6 text-sm text-texto-suave"><span className="flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> carregando…</span></div>;
+  return <Passos estado={estado} aoConcluir={aoConcluir} aoIr={aoIr} />;
+}
+
+function Passos({ estado, aoConcluir, aoIr }) {
   const [erro, setErro] = useState(null);
   const [passo, setPasso] = useState(1);
   const [ocupado, setOcupado] = useState(false);
-  const [campos, setCampos] = useState({ razao_social: '', cnpj: '', cnaes: '', palavras: '', exclusoes: '', ufs: [] });
+  // Quem volta ao assistente vê o que já está salvo.
+  const [campos, setCampos] = useState({
+    razao_social: estado.empresa.razao_social || '',
+    cnpj: estado.empresa.cnpj || '',
+    cnaes: (estado.empresa.cnaes || []).map((x) => x.codigo).join('\n'),
+    palavras: '',
+    exclusoes: '',
+    ufs: [],
+  });
   const [descartadas, setDescartadas] = useState([]);
   const [boletim, setBoletim] = useState(null);
-
-  const recarregar = () => api.onboarding().then(setEstado).catch(() => {});
-
-  useEffect(() => {
-    api.onboarding().then((e) => {
-      setEstado(e);
-      // Quem volta ao assistente vê o que já está salvo.
-      setCampos((c) => ({
-        ...c,
-        razao_social: e.empresa.razao_social || '',
-        cnpj: e.empresa.cnpj || '',
-        cnaes: (e.empresa.cnaes || []).map((x) => x.codigo).join('\n'),
-      }));
-    }).catch((e) => setErro(e.message));
-  }, []);
 
   const mudar = (chave) => (e) => setCampos({ ...campos, [chave]: e.target.value });
   const alternarUf = (uf) =>
@@ -62,7 +57,6 @@ export default function Assistente({ aoConcluir, aoIr }) {
       setDescartadas(r.descartadas || []);
       setPasso(3);
       aoConcluir();
-      recarregar();
     } catch (e) {
       setErro(e.message);
     } finally {
@@ -76,7 +70,6 @@ export default function Assistente({ aoConcluir, aoIr }) {
     try {
       setBoletim(await api.primeiroBoletim());
       aoConcluir();
-      recarregar();
     } catch (e) {
       setErro(e.message);
     } finally {
@@ -84,9 +77,6 @@ export default function Assistente({ aoConcluir, aoIr }) {
     }
   };
 
-  if (!estado) {
-    return <div className="p-6 text-sm text-texto-suave">{erro || <span className="flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> carregando…</span>}</div>;
-  }
   if (!['dono', 'admin'].includes(estado.papel)) {
     return (
       <div className="p-6 text-sm">
@@ -144,7 +134,7 @@ export default function Assistente({ aoConcluir, aoIr }) {
             <fieldset className="mb-4">
               <legend className="text-[11px] uppercase tracking-wide text-texto-suave mb-1">Estados onde atendem (nenhum = o Brasil todo)</legend>
               <div className="flex flex-wrap gap-1">
-                {UFS.map((uf) => (
+                {estado.ufs.map((uf) => (
                   <button
                     key={uf}
                     type="button"

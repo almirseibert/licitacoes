@@ -25,6 +25,14 @@ function protocolo(id, criadaEm) {
   return `SOL-${ano}-${String(id).padStart(6, '0')}`;
 }
 
+/** A solicitação como a tela a mostra: com protocolo e os rótulos de categoria e status. */
+const comProtocolo = (s) => ({
+  ...s,
+  protocolo: protocolo(s.id, s.criada_em),
+  categoria_rotulo: CATEGORIAS[s.categoria],
+  status_rotulo: STATUS[s.status],
+});
+
 function validarNova(corpo) {
   const c = corpo || {};
   const assunto = String(c.assunto || '').replace(/\s+/g, ' ').trim();
@@ -59,4 +67,4 @@ function statusAposMensagem(statusAtual, autor, statusPedido) {
   return statusAtual === 'em_andamento' ? 'em_andamento' : 'aberta';
 }
 
-module.exports = { CATEGORIAS, STATUS, MAX_ASSUNTO, MAX_TEXTO, protocolo, validarNova, validarMensagem, statusAposMensagem };
+module.exports = { CATEGORIAS, STATUS, protocolo, comProtocolo, validarNova, validarMensagem, statusAposMensagem };

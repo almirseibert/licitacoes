@@ -2,7 +2,7 @@
 // Um guia entra no resultado se TODAS as palavras da busca aparecem nele; a ordem
 // vem de onde apareceram (título e ferramenta valem mais que o texto dos passos).
 
-const sem = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const { normalizar: sem } = require('./texto');
 
 const PESOS = [
   ['titulo', 5],

@@ -22,12 +22,24 @@ const ARQUIVOS_DA_ORGANIZACAO = [
 ];
 
 /** Toda tabela do banco que tem `organizacao_id` (descoberta no schema, para não esquecer nenhuma nova). */
-async function tabelasDaOrganizacao() {
-  const [linhas] = await pool.query(
-    `SELECT DISTINCT table_name AS t FROM information_schema.columns
-      WHERE table_schema = DATABASE() AND column_name = 'organizacao_id' ORDER BY table_name`
-  );
-  return linhas.map((l) => l.t);
+// O comprovante da exclusão (`lgpd_exclusoes`) tem `organizacao_id` mas não é dado da organização.
+// O esquema só muda em migração, então a lista fica em memória até o processo reiniciar.
+let tabelasEmCache = null;
+function tabelasDaOrganizacao() {
+  if (!tabelasEmCache) {
+    tabelasEmCache = pool
+      .query(
+        `SELECT DISTINCT table_name AS t FROM information_schema.columns
+          WHERE table_schema = DATABASE() AND column_name = 'organizacao_id' AND table_name <> 'lgpd_exclusoes'
+          ORDER BY table_name`
+      )
+      .then(([linhas]) => linhas.map((l) => l.t))
+      .catch((erro) => {
+        tabelasEmCache = null; // não guarda a falha
+        throw erro;
+      });
+  }
+  return tabelasEmCache;
 }
 
 async function exportar(organizacaoId) {
@@ -86,10 +98,7 @@ async function situacaoDaExclusao(organizacaoId) {
  * Existe cobrança recorrente num gateway? É o provedor da assinatura, não o status
  * da organização: uma conta suspensa por atraso continua com a cobrança viva no gateway.
  */
-async function temCobrancaRecorrente(organizacaoId) {
-  const [[linha]] = await pool.query('SELECT provedor FROM assinaturas WHERE organizacao_id = ?', [organizacaoId]);
-  return Boolean(linha && linha.provedor && linha.provedor !== 'manual');
-}
+const temCobrancaRecorrente = (org) => Boolean(org.provedor && org.provedor !== 'manual');
 
 async function agendar(organizacaoId, usuarioId, agora = new Date()) {
   const quando = regras.dataDaExclusao(agora);
@@ -203,5 +212,5 @@ async function excluirVencidas({ agora = new Date() } = {}) {
 }
 
 module.exports = {
-  exportar, situacaoDaExclusao, temCobrancaRecorrente, agendar, cancelar, excluir, excluirVencidas, tabelasDaOrganizacao,
+  exportar, situacaoDaExclusao, temCobrancaRecorrente, agendar, cancelar, excluir, excluirVencidas,
 };
