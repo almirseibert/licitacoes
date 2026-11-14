@@ -32,6 +32,7 @@ const COLUNAS_ORG = [
   'motivo_descarte',
   'codigo_barrou',
   'descartado_em',
+  'responsavel_id',
 ];
 
 // Decisão de quem usa o painel: a coleta e a repontuação nunca escrevem
@@ -47,6 +48,7 @@ const COLUNAS_DECISAO = [
   'motivo_descarte',
   'codigo_barrou',
   'descartado_em',
+  'responsavel_id',
 ];
 
 // Colunas do catálogo, listadas em vez de `l_.*`: três delas (o resultado)
@@ -160,6 +162,19 @@ function agregadoDasOrganizacoes() {
 }
 
 /**
+ * O usuário é membro ATIVO desta organização? É a regra de quem pode ser
+ * responsável por licitação ou tarefa (Seção 8) — um lugar só para as rotas.
+ */
+async function ehMembroAtivo(conexao, organizacaoId, usuarioId) {
+  const [[m]] = await conexao.query(
+    `SELECT 1 AS ok FROM organizacao_membros m JOIN usuarios u ON u.id = m.usuario_id
+      WHERE m.organizacao_id = ? AND m.usuario_id = ? AND u.ativo = 1`,
+    [idOrganizacao(organizacaoId), Number(usuarioId) || 0]
+  );
+  return Boolean(m);
+}
+
+/**
  * Garante a linha da organização para a licitação (para quem marca favorito
  * ou move de etapa algo que a coleta ainda não pontuou para ela). Devolve
  * false se a licitação não existe no catálogo.
@@ -214,6 +229,7 @@ module.exports = {
   agruparPorOrganizacao,
   agregadoDasOrganizacoes,
   garantirLinha,
+  ehMembroAtivo,
   organizacoesAtivas,
   organizacoesInteressadas,
 };

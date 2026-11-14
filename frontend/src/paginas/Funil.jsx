@@ -3,6 +3,7 @@ import { Loader2, ExternalLink, X } from 'lucide-react';
 import { api } from '../servicos/api';
 import { moeda, resumir, faixaPontuacao } from '../servicos/formato';
 import Contagem from '../componentes/Contagem';
+import PorMim from '../componentes/PorMim';
 
 /**
  * Funil em Kanban (seção 10): oito etapas fixas, arrastar e soltar.
@@ -22,6 +23,7 @@ export default function Funil({ aoAbrir }) {
   const [arrastando, setArrastando] = useState(null);
   const [alvo, setAlvo] = useState(null);
   const [pedindo, setPedindo] = useState(null); // { licitacao, etapa, campos }
+  const [por, setPor] = useState('todos');
 
   const carregar = async () => {
     setCarregando(true);
@@ -33,7 +35,7 @@ export default function Funil({ aoAbrir }) {
 
       // O funil mostra o que saiu da triagem, mais a triagem recente.
       // A API entrega no máximo 200 por página; o funil busca as duas primeiras.
-      const base = { pontuacao_min: 0, incluir_descartadas: 1, por_pagina: 200, ordem: 'prazo' };
+      const base = { pontuacao_min: 0, incluir_descartadas: 1, por_pagina: 200, ordem: 'prazo', por };
       const [p1, p2] = await Promise.all([
         api.licitacoes({ ...base, pagina: 1 }),
         api.licitacoes({ ...base, pagina: 2 }),
@@ -49,7 +51,8 @@ export default function Funil({ aoAbrir }) {
 
   useEffect(() => {
     carregar();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [por]);
 
   const mover = async (licitacao, etapa, extras = {}) => {
     try {
@@ -91,6 +94,9 @@ export default function Funil({ aoAbrir }) {
           {cards.length} licitações · arraste o card, ou use o seletor dentro dele
         </p>
         {carregando && <Loader2 size={14} className="animate-spin text-texto-suave" />}
+        <div className="ml-auto">
+          <PorMim valor={por} aoMudar={setPor} />
+        </div>
       </div>
 
       {erro && <p className="mx-4 mt-2 px-3 py-2 text-xs border border-erro/40 text-erro rounded bg-erro/5">{erro}</p>}

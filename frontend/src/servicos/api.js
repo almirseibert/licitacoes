@@ -602,4 +602,20 @@ export const api = {
     const dia = new Date().toISOString().slice(0, 10);
     return salvarComo(`/licitacoes/relatorio?meses=${meses}&formato=xlsx`, `relatorio-mensal-${dia}.xlsx`);
   },
+
+  // Gestão por licitação e dashboard (Seção 8).
+  membros: () => requisitar('/gestao/membros'),
+  tarefas: (filtro = {}) => {
+    const q = new URLSearchParams(Object.entries(filtro).filter(([, v]) => v !== undefined && v !== null && v !== ''));
+    return requisitar(`/gestao/tarefas${q.toString() ? `?${q}` : ''}`);
+  },
+  criarTarefa: (campos) => requisitar('/gestao/tarefas', { method: 'POST', body: JSON.stringify(campos) }),
+  salvarTarefa: (id, campos) => requisitar(`/gestao/tarefas/${id}`, { method: 'PATCH', body: JSON.stringify(campos) }),
+  apagarTarefa: (id) => requisitar(`/gestao/tarefas/${id}`, { method: 'DELETE' }),
+  andamentos: (licitacaoId) => requisitar(`/gestao/andamentos?licitacao_id=${licitacaoId}`),
+  registrarAndamento: (campos) => requisitar('/gestao/andamentos', { method: 'POST', body: JSON.stringify(campos) }),
+  apagarAndamento: (id) => requisitar(`/gestao/andamentos/${id}`, { method: 'DELETE' }),
+  anexosDa: (licitacaoId) => requisitar(`/gestao/anexos?licitacao_id=${licitacaoId}`),
+  agenda: (de, ate, por) => requisitar(`/gestao/agenda?de=${de}&ate=${ate}${por === 'mim' ? '&por=mim' : ''}`),
+  dashboard: () => requisitar('/gestao/dashboard'),
 };

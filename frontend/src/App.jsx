@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock, Newspaper } from 'lucide-react';
+import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock, Newspaper, LayoutDashboard, ListTodo } from 'lucide-react';
 import { api, obterToken, obterUsuario, obterOrganizacao, guardarSessao, encerrarSessao } from './servicos/api';
 import Login from './paginas/Login';
 import Convite from './paginas/Convite';
@@ -23,13 +23,17 @@ import Contratos from './paginas/Contratos';
 import Relatorio from './paginas/Relatorio';
 import Assinatura from './paginas/Assinatura';
 import Organizacoes from './paginas/Organizacoes';
+import Dashboard from './paginas/Dashboard';
+import Tarefas from './paginas/Tarefas';
 import Alertas from './componentes/Alertas';
 import AlternarTema from './componentes/AlternarTema';
 import { definirTema, seguirSistema, temaGuardado } from './servicos/tema';
 
 const TELAS = [
+  { chave: 'dashboard', rotulo: 'Dashboard', icone: LayoutDashboard, recurso: 'gestao' },
   { chave: 'radar', rotulo: 'Radar', icone: IconeRadar },
   { chave: 'funil', rotulo: 'Funil', icone: KanbanSquare },
+  { chave: 'tarefas', rotulo: 'Tarefas', icone: ListTodo, recurso: 'gestao' },
   { chave: 'boletins', rotulo: 'Boletins', icone: Newspaper, recurso: 'boletim' },
   { chave: 'fontes', rotulo: 'Fontes', icone: Database },
   { chave: 'palavras', rotulo: 'Palavras-chave', icone: Tags },
@@ -69,7 +73,7 @@ function voltarParaRaiz() {
 
 export default function App() {
   const [usuario, setUsuario] = useState(() => (obterToken() ? obterUsuario() : null));
-  const [tela, setTela] = useState('radar');
+  const [tela, setTela] = useState('dashboard');
   // O sino e o funil abrem a gaveta de uma licitação pelo Radar.
   const [licitacaoAberta, setLicitacaoAberta] = useState(null);
   const [link, setLink] = useState(linkDeEmail);
@@ -99,6 +103,12 @@ export default function App() {
       .catch(() => {});
     api.assinatura().then(setPlano).catch(() => {});
   }, [usuario]);
+
+  // Plano sem gestão (ou bloqueado) não abre no Dashboard, que daria erro.
+  useEffect(() => {
+    if (plano && tela === 'dashboard' && !temRecurso('gestao')) setTela('radar');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plano]);
 
   const temRecurso = (recurso) =>
     !recurso || !plano || plano.isenta || (plano.plano && plano.plano.recursos.includes(recurso));
@@ -165,6 +175,8 @@ export default function App() {
             <button
               key={chave}
               onClick={() => setTela(chave)}
+              aria-label={rotulo}
+              title={rotulo}
               className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
                 tela === chave
                   ? 'text-texto bg-realce/[0.06] border-l-2 border-texto'
@@ -206,6 +218,8 @@ export default function App() {
           </p>
         )}
         <div className="flex-1 min-h-0">
+        {tela === 'dashboard' && <Dashboard aoIr={setTela} />}
+        {tela === 'tarefas' && <Tarefas aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />}
         {tela === 'radar' && <Radar abrir={licitacaoAberta} aoAbrir={setLicitacaoAberta} />}
         {tela === 'fontes' && <Fontes />}
         {tela === 'palavras' && <Palavras />}

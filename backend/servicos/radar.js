@@ -27,9 +27,9 @@ async function centroDoRaio(q, organizacaoId) {
 }
 
 /** Os filtros da tela, prontos para o SQL — listagem, exportação e link usam este. */
-async function filtrosDe(q, organizacaoId) {
+async function filtrosDe(q, organizacaoId, usuarioId = null) {
   const centro = await centroDoRaio(q, organizacaoId);
-  return filtrosRadar.montarFiltros(q, { organizacaoId, centro });
+  return filtrosRadar.montarFiltros(q, { organizacaoId, centro, usuarioId });
 }
 
 // Colunas do cartão do Radar. A garantia vem das exigências lidas do edital

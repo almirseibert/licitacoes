@@ -9,6 +9,7 @@ import Contagem from '../componentes/Contagem';
 import Filtros from '../componentes/Filtros';
 import { Etiquetas, ExpansaoDoCartao, linkDoPortal, PesquisasSalvas, SaidasDoRadar } from '../componentes/RadarExtras';
 import Detalhe from './Detalhe';
+import PorMim from '../componentes/PorMim';
 
 const CHAVE_FILTROS = 'licitacoes.filtros';
 
@@ -23,6 +24,9 @@ const FILTROS_PADRAO = {
   exclusivo_me: '',
   novas_24h: '',
   favorito: '',
+  // Seção 8: "por mim / por todos" e as listas do trabalho.
+  por: 'todos',
+  lista: '',
   em_aberto: '1',
   ordem: 'relevancia',
   pagina: 1,
@@ -150,6 +154,30 @@ export default function Radar({ abrir = null, aoAbrir = null }) {
             <span>última coleta: {dataHora(resumo.ultima_coleta)}</span>
           </div>
         )}
+
+        <div className="flex items-center gap-2">
+          <PorMim valor={filtros.por} aoMudar={(por) => setFiltros({ ...filtros, por, pagina: 1 })} />
+          <select
+            className="campo-caixa text-xs"
+            aria-label="Lista"
+            value={filtros.lista}
+            // Favoritas, gerenciadas e finalizadas são escolha da equipe: a
+            // nota mínima e o "em aberto" esconderiam justamente o que se pediu.
+            onChange={(e) =>
+              setFiltros({
+                ...filtros,
+                lista: e.target.value,
+                ...(e.target.value ? { pontuacao_min: 0, em_aberto: '' } : {}),
+                pagina: 1,
+              })
+            }
+          >
+            <option value="">todas as listas</option>
+            <option value="favoritas">favoritas</option>
+            <option value="gerenciadas">gerenciadas</option>
+            <option value="finalizadas">finalizadas</option>
+          </select>
+        </div>
 
         <div className="ml-auto flex items-center gap-2">
           <button

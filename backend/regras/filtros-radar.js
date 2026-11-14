@@ -46,6 +46,34 @@ function lerBusca(busca) {
   return { frases, palavras };
 }
 
+// Etapas que contam como trabalho em curso e como trabalho encerrado. A
+// triagem ainda não é gestão; a descartada encerra junto com o resultado.
+const ETAPAS_GERENCIADAS = ['Analisando', 'Vou disputar', 'Proposta enviada', 'Em disputa'];
+const ETAPAS_FINALIZADAS = ['Ganhamos', 'Perdemos', 'Descartada'];
+const emEtapas = (etapas) => `l.etapa IN (${etapas.map((e) => `'${e}'`).join(',')})`;
+const LISTAS = {
+  favoritas: 'l.favorito = 1',
+  gerenciadas: emEtapas(ETAPAS_GERENCIADAS),
+  finalizadas: emEtapas(ETAPAS_FINALIZADAS),
+  // O que a equipe acompanha (agenda): favorita, com dono ou em gestão.
+  acompanhadas: `(l.favorito = 1 OR l.responsavel_id IS NOT NULL OR ${emEtapas(ETAPAS_GERENCIADAS)})`,
+};
+
+/**
+ * "Minha" licitação: sou responsável por ela ou tenho tarefa nela (Seção 8).
+ * Um lugar só para Radar, Funil e Agenda. Sem usuário, null — quem chama não
+ * pode tratar isso como "todas".
+ */
+function sqlPorMim(usuarioId) {
+  const id = Number(usuarioId);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  return {
+    sql: `(l.responsavel_id = ? OR l.id IN (SELECT ta.licitacao_id FROM org_tarefas ta
+            WHERE ta.organizacao_id = l.organizacao_id AND ta.responsavel_id = ?))`,
+    valores: [id, id],
+  };
+}
+
 /** UFs das regiões pedidas ("Sul,Sudeste"). Região desconhecida é ignorada. */
 function ufsDasRegioes(valor) {
   return lista(valor).flatMap((r) => REGIOES[r] || []);
@@ -62,7 +90,8 @@ function montarFiltros(q = {}, contexto = {}) {
   const valores = [];
   const avisos = [];
 
-  if (q.incluir_descartadas !== '1') onde.push('l.descartada = 0');
+  // A lista "finalizadas" inclui a descartada: descartar também encerra.
+  if (q.incluir_descartadas !== '1' && q.lista !== 'finalizadas') onde.push('l.descartada = 0');
 
   if (q.grupo) {
     onde.push('l.grupo = ?');
@@ -163,6 +192,19 @@ function montarFiltros(q = {}, contexto = {}) {
     valores.push(q.etapa);
   }
   if (q.favorito === '1') onde.push('l.favorito = 1');
+  // Seção 8: as três listas do trabalho e a alternância "por mim / por todos".
+  if (LISTAS[q.lista]) onde.push(LISTAS[q.lista]);
+  if (q.por === 'mim') {
+    const minha = sqlPorMim(contexto.usuarioId);
+    if (minha) {
+      onde.push(minha.sql);
+      valores.push(...minha.valores);
+    } else {
+      // Sem usuário não há "mim": filtrar nada mostraria tudo como se fosse dele.
+      onde.push('1 = 0');
+      avisos.push('Não foi possível saber quem é você para filtrar "por mim".');
+    }
+  }
   if (q.novas_24h === '1') onde.push('l.criado_em >= DATE_SUB(NOW(), INTERVAL 24 HOUR)');
   if (q.com_edital === '1') onde.push("l.arquivos_status IN ('ok','parcial')");
   // "Monitorada" é o monitor de mudança do edital (Fase 11). O monitor de chat
@@ -224,7 +266,7 @@ const CAMPOS = [
   'fonte_id', 'valor_min', 'valor_max', 'pontuacao_min', 'prazo_dias', 'em_aberto',
   'inclusao_de', 'inclusao_ate', 'prazo_de', 'prazo_ate', 'pode_participar', 'objeto_social',
   'exclusivo_me', 'srp', 'etapa', 'favorito', 'novas_24h', 'com_edital', 'monitorada', 'orgao',
-  'numero_edital', 'processo', 'texto_itens', 'observacao', 'ordem', 'incluir_descartadas',
+  'numero_edital', 'processo', 'texto_itens', 'observacao', 'ordem', 'incluir_descartadas', 'lista', 'por',
 ];
 
 // O que é decisão da organização (nota, favorito, etapa, descarte, grupo da
@@ -232,6 +274,7 @@ const CAMPOS = [
 // mostraria a quem tem o link exatamente o que a equipe escolheu.
 const CAMPOS_DE_DECISAO = [
   'pontuacao_min', 'pode_participar', 'objeto_social', 'etapa', 'favorito', 'grupo', 'monitorada', 'incluir_descartadas',
+  'lista', 'por',
 ];
 
 /** Filtros de um link público: sem os de decisão, sem nota mínima, com as descartadas. */
@@ -253,4 +296,4 @@ function limparFiltros(filtros) {
   return limpo;
 }
 
-module.exports = { montarFiltros, limparFiltros, filtrosPublicos, comoLike, lerBusca, ufsDasRegioes, REGIOES, ESFERAS, CAMPOS };
+module.exports = { LISTAS, sqlPorMim, montarFiltros, limparFiltros, filtrosPublicos, comoLike, lerBusca, ufsDasRegioes, REGIOES, ESFERAS, CAMPOS };

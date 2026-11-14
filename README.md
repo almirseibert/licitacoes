@@ -214,6 +214,30 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
     público. Testes em `testes/radar.test.js`.
   - Não verificado: comparação com o ConLicitação no mesmo filtro (sem acesso a ele daqui).
     Pendente (Seção 7b no plano): CAPAG, monitor de chat, município por código IBGE.
+- **Seção 8 — Gestão por licitação e dashboard, entregue em 13/11/2026.** Migração
+  `023_gestao.sql`: `org_tarefas` (tarefa da equipe — não confundir com `tarefas`, a fila do
+  worker), `org_andamentos` (o que aconteceu no processo, com os tipos da Seção 9) e
+  `org_licitacoes.responsavel_id`. Regras puras em `backend/regras/gestao.js`; rotas em
+  `backend/rotas/gestao.js` (`/api/gestao/*`, módulo `gestao` do plano).
+  - **Tarefas** (tela nova e aba no detalhe): visões atrasadas / hoje / futuras / concluídas,
+    "por mim / por todos", responsável só da própria equipe (membro ativo). "Hoje" é o dia de
+    Brasília, não o `CURDATE()` do banco em UTC.
+  - **Andamentos** na Linha do tempo ("adicionar andamento", com tipo e quando aconteceu),
+    junto dos eventos do monitor; só quem registrou ou um admin apaga.
+  - **Por mim / por todos** no Radar, no Funil e na Agenda (responsável pela licitação ou com
+    tarefa nela) e as listas **favoritas / gerenciadas / finalizadas** no Radar. Nenhum dos dois
+    passa para o link público.
+  - **Detalhe** com Tarefas, Anotações, Anexos, Resultados e **Habilitação** (exigência ×
+    cofre) à frente, e o seletor de responsável no cabeçalho.
+  - **Calendário**: agenda do mês (prazo e abertura das licitações acompanhadas, tarefas,
+    andamentos) com a agenda do dia; as recorrências viraram a segunda aba.
+  - **Dashboard** (tela inicial): boletins não lidos, documentos vencendo, tarefas atrasadas,
+    novos andamentos, oportunidades do dia e vigentes, vigentes por UF (gráfico + tabela) e
+    **valor total em disputa**.
+  - Tirar alguém da equipe deixa as licitações e tarefas abertas dela sem responsável.
+  - **Aceite medido**: ver o plano (Seção 8) — duas pessoas da organização 1 veem a mesma
+    tarefa; a organização 16 não a vê e recebe 404 ao editar/apagar pelo id. Testes em
+    `testes/gestao.test.js`.
 - `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
   ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
 
@@ -1131,6 +1155,16 @@ GET    /api/feriados?ano=2026                  POST /api/feriados  (estadual/mun
 POST   /api/feriados/importar                  baixa os nacionais da BrasilAPI
 DELETE /api/feriados/:id                       so os cadastrados a mao
 GET    /api/contratos                          lista, faturado em 12m e faixa
+GET    /api/gestao/tarefas                     ?visao=atrasadas|hoje|futuras|concluidas&por=mim&licitacao_id=
+POST   /api/gestao/tarefas                     cria (responsavel_id da equipe; padrao: quem cria)
+PATCH  /api/gestao/tarefas/:id                 titulo, prazo, responsavel, status
+DELETE /api/gestao/tarefas/:id
+GET    /api/gestao/andamentos?licitacao_id=    andamentos da licitacao, com os tipos
+POST   /api/gestao/andamentos                  { licitacao_id, tipo, texto, ocorrido_em ISO com fuso }
+GET    /api/gestao/agenda?de=&ate=&por=mim     licitacao, tarefa e andamento por dia (ate 62 dias)
+GET    /api/gestao/dashboard                   cartoes, oportunidades, por UF, valor em disputa
+GET    /api/gestao/membros                     quem pode ser responsavel
+GET    /api/gestao/anexos?licitacao_id=        anexos da licitacao
 GET    /api/contratos/:id                      contrato com o checklist
 POST   /api/contratos                          abre o contrato de uma licitacao ganha
 PATCH  /api/contratos/:id                      datas, valores, gestor e situacao

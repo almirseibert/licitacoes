@@ -491,7 +491,23 @@ rotas.delete('/equipe/:usuarioId', autenticar, confirmarVinculo, exigirPapel('ad
       alvoId,
     ]);
     esquecerVinculo(alvoId, req.organizacaoId);
-    res.json({ ok: true, mensagem: 'A pessoa saiu da organização e perdeu o acesso a ela.' });
+    // O que estava com ela fica sem responsável — à vista no "sem responsável",
+    // em vez de preso a quem não entra mais (Seção 8).
+    const [l] = await pool.query(
+      'UPDATE org_licitacoes SET responsavel_id = NULL WHERE organizacao_id = ? AND responsavel_id = ?',
+      [req.organizacaoId, alvoId]
+    );
+    const [t] = await pool.query(
+      "UPDATE org_tarefas SET responsavel_id = NULL WHERE organizacao_id = ? AND responsavel_id = ? AND status = 'aberta'",
+      [req.organizacaoId, alvoId]
+    );
+    const soltas = l.affectedRows + t.affectedRows;
+    res.json({
+      ok: true,
+      mensagem:
+        'A pessoa saiu da organização e perdeu o acesso a ela.' +
+        (soltas ? ` ${l.affectedRows} licitação(ões) e ${t.affectedRows} tarefa(s) ficaram sem responsável.` : ''),
+    });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível remover a pessoa.', erro);
   }

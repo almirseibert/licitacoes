@@ -27,7 +27,7 @@ cofre de senha de portal e a assinatura digital (ver a tabela de divergências n
 | Fase | Seções | O que o cliente ganha | Marco |
 |---|---|---|---|
 | **A — Fundação SaaS** | 0 ✅, 1 (1a ✅, 1b ✅, 1c), 2 ✅, 3 ✅ | Conta própria, equipe, dados isolados, tema claro/escuro, plano e cobrança | Dá para cobrar e isolar clientes |
-| **B — Paridade de captação** | 4 ✅, 7 ✅, 8, 9, 10 | Boletim diário, banco de licitações completo, gestão com tarefas, avisos por tipo, documentos | Substitui o uso diário do ConLicitação na captação |
+| **B — Paridade de captação** | 4 ✅, 7 ✅, 8 ✅, 9, 10 | Boletim diário, banco de licitações completo, gestão com tarefas, avisos por tipo, documentos | Substitui o uso diário do ConLicitação na captação |
 | **C — IA e inteligência** | 5, 11, 12, 13, 14, 15, 17 | Pergunte ao Edital, resumo com checklist, acompanhamentos, contratos e atas, concorrentes e mercado, API, onboarding | **Versão 1 vendável** — fim da Fase C |
 | **D — Estratégia e automação** | 6, 16 | Monitor de chat, alerta de deserta por segmento, consultor jurídico | Planos mais caros |
 | **E — Ecossistema** | 18 | Seguro garantia, assessoria cadastral, cursos por parceria | Receita complementar |
@@ -364,22 +364,55 @@ sem microfone (o botão só aparece onde o navegador oferece a API).
 
 ---
 
-## Seção 8 — Gestão por licitação e dashboard (Fase B)
+## Seção 8 — Gestão por licitação e dashboard (Fase B) — ✅ feito em 13/11/2026
 O funil já guarda etapa, anotação, anexo e linha do tempo. Falta o trabalho em equipe.
-- [ ] `org_tarefas` (organizacao_id, licitacao_id, titulo, descricao, responsavel_id, prazo, status)
-      com as visões **atrasadas / hoje / futuras / concluídas**. Não confundir com `tarefas`, que é a
-      fila interna do worker.
-- [ ] `org_andamentos` (licitacao_id, texto, autor_id, tipo) — a linha do tempo com "adicionar
-      andamento"; reaproveita `LinhaDoTempo.jsx`.
-- [ ] Alternância **"por mim / por todos"** em Funil e Radar; favoritas, gerenciadas, finalizadas.
-- [ ] Detalhe da licitação com abas Tarefas, Anotações, Anexos, Resultados e Habilitação (a aba
-      Habilitação é o cruzamento exigência × cofre que já existe — destacar, é diferencial).
-- [ ] **Calendário** de licitação, tarefa e andamento, e agenda do dia (`Calendario.jsx` hoje só
-      mostra recorrência).
-- [ ] **Dashboard**: cartões (boletim não lido, documentos vencendo, tarefas atrasadas, novos
-      andamentos), oportunidades do dia / vigentes / por UF, e **valor total em disputa**.
+- [x] `org_tarefas` (organizacao_id, licitacao_id, titulo, descricao, responsavel_id, prazo, status)
+      com as visões **atrasadas / hoje / futuras / concluídas** (migração `023_gestao.sql`, regras
+      puras em `regras/gestao.js`, rotas em `rotas/gestao.js`). "Hoje" é o dia de Brasília, não o
+      `CURDATE()` UTC do banco. Tarefa sem prazo cai em "futuras". Responsável: membro ativo da
+      própria organização. Não confundir com `tarefas`, que é a fila interna do worker.
+- [x] `org_andamentos` (licitacao_id, texto, autor_id, tipo, ocorrido_em) — "adicionar andamento" na
+      `LinhaDoTempo.jsx`, junto dos eventos do monitor. Tipos = os da Seção 9 (esclarecimento,
+      aviso, impugnação, recurso, status, resultado, outro). Data com fuso obrigatório, nunca no
+      futuro; apaga só quem registrou ou admin.
+- [x] Alternância **"por mim / por todos"** em Funil, Radar e Agenda ("minha" = sou responsável pela
+      licitação — `org_licitacoes.responsavel_id` — ou tenho tarefa nela); listas favoritas,
+      gerenciadas (Analisando → Em disputa), finalizadas (Ganhamos, Perdemos, Descartada). Nenhuma
+      das duas vai para o link público.
+- [x] Detalhe da licitação com abas Tarefas, Anotações, Anexos, Resultados e **Habilitação**
+      (exigência × cofre) à frente, e seletor de responsável no cabeçalho.
+- [x] **Calendário** de licitação (prazo e abertura das acompanhadas), tarefa e andamento, com a
+      agenda do dia; recorrências na segunda aba.
+- [x] **Dashboard** (tela inicial; cai no Radar se o plano não tem `gestao`): cartões (boletim não
+      lido, documentos vencendo/vencidos, tarefas atrasadas, novos andamentos), oportunidades do dia
+      / vigentes / **por UF** (barras + tabela, dica no hover) e **valor total em disputa**.
+- [x] Tirar alguém da equipe deixa as licitações e as tarefas abertas dela sem responsável.
 
-**Aceite:** duas pessoas da mesma organização veem a mesma tarefa; a de outra organização, nunca.
+**Aceite (medido):** MariaDB 10.11, as 150 licitações reais de RS da Seção 7. Pela API, com duas
+pessoas da organização 1 (ids 1 e 2) e a organização 16: a tarefa criada pela pessoa 1 para a 2
+aparece igual para as duas (mesmo id, mesma visão), e a 2 a conclui; a organização 16 lista **0**
+tarefas e **0** andamentos da mesma licitação, recebe **404** ao editar e ao apagar a tarefa e ao
+apagar o andamento da organização 1 pelo id, e **400** ao atribuir tarefa a alguém da
+organização 1. Visões com tarefas de ontem/hoje/amanhã/sem prazo: 1/1/2/0, e após concluir
+0/1/2/1 — medido de novo às 21h03 de Brasília (00h03 UTC, já 14/11 no banco): as mesmas 1/1/2/0, e o andamento das 09h30 de "amanhã" UTC recusado como futuro. Contra SQL independente: listas favoritas 3, gerenciadas 6, finalizadas 2; valor em
+disputa 6 licitações / R$ 5.664.803,32; vigentes 138; agenda de novembro prazo 5 e abertura 4 (=
+SQL com o dia de Brasília), tarefas 3, andamentos 2. Andamento "09:30-03:00" gravado 12:30 UTC.
+Validações 400 (título vazio, 30/02, visão, tipo, período > 62 dias, membro inativo) e 404
+(licitação inexistente). Tirar o membro 3 da equipe soltou 1 licitação e 1 tarefa. Migração em
+banco zerado. Lint limpo, **95/95** testes (`testes/gestao.test.js`, 8 novos). Tela conferida
+com Playwright (Dashboard, Tarefas, Agenda, Funil "por mim", Detalhe Tarefas/Linha do
+tempo/Anexos; 1366 escuro e 390 claro, sem rolagem lateral, sem erro no console). Menu ganhou
+`aria-label` (no celular ele é só ícone). `code-review` (10 achados, 9 corrigidos) e `simplify` ("por mim" e
+listas num lugar só em `filtros-radar.js`, dashboard numa passada só por UF, equipe buscada uma
+vez no detalhe, apagar andamento ligado na tela) aplicados.
+
+**Seção 8b — pendente:**
+- [ ] Download do anexo pela aba Anexos (hoje lista, anexa e remove; o arquivo sai no pacote do
+      envio).
+- [ ] Tarefa/andamento só em licitação que a organização tem (`org_licitacoes`); hoje aceita
+      qualquer uma do catálogo, como as anotações.
+- [ ] Aviso de tarefa atrasada por e-mail/WhatsApp — é tipo da Seção 9.
+- [ ] Registrar a troca de responsável na linha do tempo (hoje só a etapa vira anotação).
 
 ---
 

@@ -43,7 +43,7 @@ const MAX_LINKS = 50;
 // GET /api/licitacoes
 rotas.get('/', async (req, res) => {
   try {
-    const { onde, valores, avisos } = await filtrosDe(req.query, req.organizacaoId);
+    const { onde, valores, avisos } = await filtrosDe(req.query, req.organizacaoId, req.usuario && req.usuario.id);
     const ordem = ORDENACOES[req.query.ordem] || ORDENACOES.relevancia;
     // 20 por página, como a referência (Seção 7); a tela deixa escolher.
     const porPagina = Math.min(Math.max(Number(req.query.por_pagina) || 20, 1), 200);
@@ -54,7 +54,7 @@ rotas.get('/', async (req, res) => {
       pool.query(
       `SELECT ${COLUNAS_LISTA}, l.grupo, l.palavra_casada, l.pontuacao,
               l.pode_participar, l.motivo_participacao, l.objeto_social,
-              l.etapa, l.favorito, f.nome AS fonte_nome
+              l.etapa, l.favorito, l.responsavel_id, f.nome AS fonte_nome
          FROM ${escopo.daOrganizacao(req.organizacaoId)} l
          JOIN fontes f ON f.id = l.fonte_id
          ${onde}
@@ -85,7 +85,7 @@ rotas.get('/', async (req, res) => {
 // `?formato=docx` sai em Word (Seção 7), para ler e encaminhar.
 rotas.get('/exportar', limites.exigirLimite('exportacoes_mes'), async (req, res) => {
   try {
-    const { onde, valores } = await filtrosDe(req.query, req.organizacaoId);
+    const { onde, valores } = await filtrosDe(req.query, req.organizacaoId, req.usuario && req.usuario.id);
     const ordem = ORDENACOES[req.query.ordem] || ORDENACOES.relevancia;
     const emWord = req.query.formato === 'docx';
 
@@ -348,6 +348,8 @@ const CAMPOS_DO_FUNIL = [
   'valor_final',
   'vencedor',
   'cnpj_vencedor',
+  // Quem cuida da licitação na equipe (Seção 8).
+  'responsavel_id',
 ];
 
 rotas.patch('/:id', async (req, res) => {
@@ -398,6 +400,10 @@ rotas.patch('/:id', async (req, res) => {
           return res.status(400).json({ erro: `Código de exigência desconhecido: ${codigo}.` });
         }
       }
+    }
+
+    if (corpo.responsavel_id !== undefined && corpo.responsavel_id !== null && corpo.responsavel_id !== '') {
+      if (!(await escopo.ehMembroAtivo(pool, req.organizacaoId, corpo.responsavel_id))) return res.status(400).json({ erro: 'O responsável precisa ser alguém da sua equipe.' });
     }
 
     for (const campo of CAMPOS_DO_FUNIL) {

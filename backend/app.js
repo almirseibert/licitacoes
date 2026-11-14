@@ -63,6 +63,7 @@ app.use('/api/oportunidades', ...modulo('estrategicas'), require('./rotas/oportu
 app.use('/api/ia', ...modulo('ia'), require('./rotas/ia'));
 app.use('/api/boletins', ...modulo('boletim'), require('./rotas/boletins').rotas);
 app.use('/api/contratos', ...modulo('contratos'), require('./rotas/contratos'));
+app.use('/api/gestao', ...modulo('gestao'), require('./rotas/gestao'));
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ erro: 'Rota não encontrada.' });

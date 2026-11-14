@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Eye, EyeOff, RefreshCcw, AlertTriangle, FileDiff, CalendarClock, Trophy, RotateCcw, Flag } from 'lucide-react';
+import { Loader2, Eye, EyeOff, RefreshCcw, AlertTriangle, FileDiff, CalendarClock, Trophy, RotateCcw, Flag, MessageSquareText, Plus, Trash2 } from 'lucide-react';
 import { api } from '../servicos/api';
 import { dataHora } from '../servicos/formato';
 
@@ -19,6 +19,7 @@ const ICONES = {
   situacao: Flag,
   resultado: Trophy,
   reaberta: RotateCcw,
+  andamento: MessageSquareText,
 };
 
 const CORES = {
@@ -34,14 +35,63 @@ export default function LinhaDoTempo({ id }) {
   const [aviso, setAviso] = useState(null);
   const [ocupado, setOcupado] = useState(null);
 
+  // Andamentos (Seção 8): o que a equipe registrou do processo, na mesma linha
+  // dos eventos que o monitor observou. Registrado à mão, e assinado.
+  const [andamentos, setAndamentos] = useState([]);
+  const [tipos, setTipos] = useState([]);
+  const [novo, setNovo] = useState({ tipo: 'esclarecimento', texto: '', ocorrido_em: '' });
+  const [erroAndamentos, setErroAndamentos] = useState(null);
+
   const carregar = () =>
-    api
-      .linhaDoTempo(id)
-      .then((r) => {
+    Promise.all([
+      api.linhaDoTempo(id),
+      // Sem andamentos (plano sem gestão, falha) a linha do tempo do monitor
+      // continua; a tela diz por que os andamentos não aparecem.
+      api.andamentos(id).then(
+        (a) => {
+          setErroAndamentos(null);
+          return a;
+        },
+        (e) => {
+          setErroAndamentos(e.message);
+          return { dados: [], tipos: [] };
+        }
+      ),
+    ])
+      .then(([r, a]) => {
         setDados(r);
+        setAndamentos(a.dados || []);
+        setTipos(a.tipos || []);
         setErro(null);
       })
       .catch((e) => setErro(e.message));
+
+  const apagarAndamento = async (andamentoId) => {
+    if (!window.confirm('Apagar este andamento?')) return;
+    try {
+      await api.apagarAndamento(andamentoId);
+      await carregar();
+    } catch (e) {
+      setErro(e.message);
+    }
+  };
+
+  const registrar = async (e) => {
+    e.preventDefault();
+    if (!novo.texto.trim()) return;
+    setOcupado('andamento');
+    try {
+      // datetime-local é a hora de quem digita; vai ao backend como instante.
+      const ocorrido = novo.ocorrido_em ? new Date(novo.ocorrido_em).toISOString() : '';
+      await api.registrarAndamento({ ...novo, ocorrido_em: ocorrido, licitacao_id: id });
+      setNovo((n) => ({ ...n, texto: '', ocorrido_em: '' }));
+      await carregar();
+    } catch (e2) {
+      setErro(e2.message);
+    } finally {
+      setOcupado(null);
+    }
+  };
 
   useEffect(() => {
     carregar();
@@ -78,7 +128,15 @@ export default function LinhaDoTempo({ id }) {
       ocorrido_em: dados.licitacao.criado_em,
     },
     ...dados.eventos,
-  ];
+    ...andamentos.map((a) => ({
+      id: `andamento-${a.id}`,
+      tipo: 'andamento',
+      descricao: `${(tipos.find((t) => t.chave === a.tipo) || {}).rotulo || a.tipo}: ${a.texto}`,
+      ocorrido_em: a.ocorrido_em,
+      autor: a.autor_nome,
+      andamentoId: a.id,
+    })),
+  ].sort((x, y) => new Date(x.ocorrido_em) - new Date(y.ocorrido_em));
 
   return (
     <div className="space-y-4">
@@ -124,6 +182,40 @@ export default function LinhaDoTempo({ id }) {
         </p>
       )}
 
+      {erroAndamentos && <p className="text-xs text-atencao">Andamentos indisponíveis: {erroAndamentos}</p>}
+      {!erroAndamentos && tipos.length > 0 && (
+      <form onSubmit={registrar} className="flex flex-wrap gap-2 items-center">
+        <select
+          className="campo-caixa"
+          aria-label="Tipo de andamento"
+          value={novo.tipo}
+          onChange={(e) => setNovo({ ...novo, tipo: e.target.value })}
+        >
+          {tipos.map((t) => (
+            <option key={t.chave} value={t.chave}>{t.rotulo}</option>
+          ))}
+        </select>
+        <input
+          className="campo-caixa flex-1 min-w-[12rem]"
+          placeholder="adicionar andamento (ex.: órgão respondeu o esclarecimento)"
+          aria-label="Andamento"
+          value={novo.texto}
+          onChange={(e) => setNovo({ ...novo, texto: e.target.value })}
+        />
+        <input
+          type="datetime-local"
+          className="campo-caixa"
+          aria-label="Quando aconteceu (vazio = agora)"
+          title="Quando aconteceu (vazio = agora)"
+          value={novo.ocorrido_em}
+          onChange={(e) => setNovo({ ...novo, ocorrido_em: e.target.value })}
+        />
+        <button className="botao-primario flex items-center gap-1" disabled={Boolean(ocupado)}>
+          {ocupado === 'andamento' ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Adicionar
+        </button>
+      </form>
+      )}
+
       <ul className="space-y-0">
         {linhas.map((e, i) => {
           const Icone = ICONES[e.tipo] || Flag;
@@ -143,7 +235,21 @@ export default function LinhaDoTempo({ id }) {
                   )}
                   {e.descricao}
                 </p>
-                <p className="text-[11px] text-texto-suave">{dataHora(e.ocorrido_em)}</p>
+                <p className="text-[11px] text-texto-suave">
+                  {dataHora(e.ocorrido_em)}
+                  {e.autor ? ` · ${e.autor}` : ''}
+                  {e.andamentoId && (
+                    <button
+                      type="button"
+                      className="ml-2 align-middle hover:text-erro"
+                      aria-label="Apagar andamento"
+                      title="Apagar andamento (só quem registrou ou um administrador)"
+                      onClick={() => apagarAndamento(e.andamentoId)}
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  )}
+                </p>
                 {e.dados && <Detalhes dados={e.dados} />}
               </div>
             </li>
@@ -151,7 +257,7 @@ export default function LinhaDoTempo({ id }) {
         })}
       </ul>
 
-      {dados.eventos.length === 0 && (
+      {dados.eventos.length === 0 && andamentos.length === 0 && (
         <p className="text-sm text-texto-suave">
           Nenhuma mudança observada ainda. O painel compara a lista de arquivos e as datas a cada checagem;
           se o edital mudar, aparece aqui e o alerta sai em vermelho.
