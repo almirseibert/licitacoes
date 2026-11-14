@@ -223,7 +223,30 @@ function criarLimitador({ maximo, janelaMs }) {
   };
 }
 
+/**
+ * Id da entrega, o MESMO para o mesmo lote do mesmo webhook. A entrega é "pelo menos uma vez": se
+ * o processo cair entre o 2xx do cliente e o registro dos itens, a rodada seguinte reenvia o lote
+ * — e, com o id determinístico, o cliente reconhece o repetido (cabeçalho `X-Painel-Entrega`) e
+ * descarta. Lote diferente (outros itens) tem outro id.
+ */
+function entregaIdDoLote(webhookId, licitacaoIds) {
+  const alvo = [...licitacaoIds].map(Number).sort((a, b) => a - b).join(',');
+  const h = crypto.createHash('sha256').update(`webhook:${Number(webhookId)}:${alvo}`).digest('hex');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
+}
+
+/**
+ * Quantas tentativas com token inválido por minuto cada IP tem. Sem `CONFIAR_PROXY` o IP visto é o
+ * do último salto (todo mundo atrás do proxy parece um só) e 30 por minuto derrubaria todos os
+ * clientes por causa de um: o teto sobe, e o aviso da instalação diz para configurar o proxy.
+ */
+function limiteDeFalhas(confiarProxy) {
+  return Number(confiarProxy) > 0 ? 30 : 300;
+}
+
 module.exports = {
+  entregaIdDoLote,
+  limiteDeFalhas,
   PREFIXO_TOKEN,
   MAX_IPS,
   MAX_ITENS_POR_ENTREGA,

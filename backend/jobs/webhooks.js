@@ -19,15 +19,10 @@ const boletim = require('./boletim');
 const DIAS_JANELA = 7;
 const MAX_FALHAS = 10;
 const MAX_NOVOS = 200;
+// Webhooks entregues ao mesmo tempo (cada um é um destino de cliente; 10 s de limite por lote).
+const ENTREGAS_EM_PARALELO = 4;
 
-function lerJson(valor, padrao) {
-  if (valor && typeof valor === 'object') return valor;
-  try {
-    return JSON.parse(valor) || padrao;
-  } catch {
-    return padrao;
-  }
-}
+const lerJson = (valor, padrao) => limites.lerJson(valor, padrao) || padrao;
 
 /** O mesmo segredo que a tela mostrou na criação: sal do banco + segredo da aplicação. */
 function segredoDe(linha) {
@@ -114,7 +109,8 @@ async function entregarUm(linha, { simular = false } = {}) {
       perfil,
       itens: lote,
       urlPublica,
-      entregaId: webhook.novaEntregaId(),
+      // Mesmo id para o mesmo lote: se o registro falhar depois do 2xx, o reenvio é reconhecível.
+      entregaId: regras.entregaIdDoLote(linha.id, lote.map((l) => l.id)),
     });
     const r = await webhook.entregar({ webhook: linha, segredo, payload });
     if (!r.ok) {
@@ -122,7 +118,7 @@ async function entregarUm(linha, { simular = false } = {}) {
       break;
     }
     // INSERT IGNORE: a chave primária segura a repetição se duas rodadas se cruzarem.
-    await pool.query('INSERT IGNORE INTO webhook_itens (webhook_id, licitacao_id) VALUES ?', [lote.map((l) => [linha.id, l.id])]);
+    await pool.query('INSERT IGNORE INTO webhook_itens (webhook_id, organizacao_id, licitacao_id) VALUES ?', [lote.map((l) => [linha.id, linha.organizacao_id, l.id])]);
     entregues += lote.length;
   }
   await anotar(linha.id, falha || { ok: true, detalhe: `${entregues} oportunidade(s) entregue(s)` });
@@ -147,16 +143,36 @@ async function rodar({ org = null, webhookId = null, simular = false } = {}) {
   );
   const resultado = { webhooks: lista.length, entregas: [], erros: [] };
   const pode = new Map();
-  for (const linha of lista) {
+  const condicao = async (organizacaoId) => {
+    if (!pode.has(organizacaoId)) pode.set(organizacaoId, podeEntregar(organizacaoId));
+    return pode.get(organizacaoId);
+  };
+  // Em paralelo, com teto: um destino lento (até 10 s por lote) não segura os outros. O resultado
+  // volta na ordem do webhook, que é a que o relatório do job mostra.
+  const porPosicao = new Array(lista.length);
+  await emParalelo(lista, ENTREGAS_EM_PARALELO, async (linha, i) => {
     try {
-      if (!pode.has(linha.organizacao_id)) pode.set(linha.organizacao_id, await podeEntregar(linha.organizacao_id));
-      if (!pode.get(linha.organizacao_id)) continue;
-      resultado.entregas.push({ organizacao_id: linha.organizacao_id, ...(await entregarUm(linha, { simular })) });
+      if (!(await condicao(linha.organizacao_id))) return;
+      porPosicao[i] = { organizacao_id: linha.organizacao_id, ...(await entregarUm(linha, { simular })) };
     } catch (erro) {
       resultado.erros.push(`webhook ${linha.id}: ${erro.sqlMessage || erro.message}`);
     }
-  }
+  });
+  resultado.entregas = porPosicao.filter(Boolean);
   return resultado;
 }
 
-module.exports = { rodar, entregarUm, selecionarNovos, segredoDe, MAX_FALHAS };
+/** Roda `fn(item, posição)` com no máximo `limite` ao mesmo tempo; espera todos. */
+async function emParalelo(itens, limite, fn) {
+  let proximo = 0;
+  const trabalhador = async () => {
+    while (proximo < itens.length) {
+      const i = proximo;
+      proximo += 1;
+      await fn(itens[i], i);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limite, itens.length) }, trabalhador));
+}
+
+module.exports = { rodar, emParalelo, entregarUm, selecionarNovos, segredoDe, MAX_FALHAS };

@@ -2,37 +2,16 @@
 // médio, órgãos, portais, motivos de perda e margem — num período, de uma
 // organização. Só lê. As contas ficam em regras/desempenho.js.
 //
-// Uma participação é uma licitação da organização em "Proposta enviada", "Em
-// disputa", "Ganhamos" ou "Perdemos", datada por COALESCE(proposta_em,
-// etapa_em, fim_propostas) — a mesma definição do relatório mensal
-// (servicos/exportar.js) — se uma mudar, a outra muda junto. Contrato, proposta e histórico de preços entram por
-// LEFT JOIN: licitação sem eles continua contada.
+// A definição de participação mora em servicos/participacoes.js (a mesma do relatório mensal).
+// Contrato, proposta e histórico de preços entram por LEFT JOIN: licitação sem eles continua contada.
 const pool = require('../config/db');
 const { daOrganizacao } = require('./escopo');
 const { cnpjDaEmpresa } = require('./perfil');
 const { referenciaPara } = require('./preco');
-const { diaNoFuso, periodoEmUtc } = require('../regras/gestao');
+const { diaNoFuso } = require('../regras/gestao');
+const { participacoes } = require('./participacoes');
 const precos = require('../regras/preco');
 const regras = require('../regras/desempenho');
-
-const DATA_DA_PARTICIPACAO = 'COALESCE(l.proposta_em, l.etapa_em, l.fim_propostas)';
-const ETAPAS = regras.ETAPAS_DISPUTADAS.map((e) => `'${e}'`).join(', ');
-
-/** WHERE das participações no período (os limites entram como parâmetro, já em UTC). */
-function filtroDoPeriodo(periodo) {
-  const partes = [`l.etapa IN (${ETAPAS})`, `${DATA_DA_PARTICIPACAO} IS NOT NULL`];
-  const parametros = [];
-  if (periodo.de) {
-    const { inicio, fim } = periodoEmUtc(periodo.de, periodo.ate);
-    partes.push(`${DATA_DA_PARTICIPACAO} BETWEEN ? AND ?`);
-    parametros.push(inicio, fim);
-  } else {
-    const { fim } = periodoEmUtc(periodo.ate, periodo.ate);
-    partes.push(`${DATA_DA_PARTICIPACAO} <= ?`);
-    parametros.push(fim);
-  }
-  return { sql: partes.join(' AND '), parametros };
-}
 
 /** Preço de referência (o que fecharia pela mediana) de cada licitação que tem custo; uma busca por grupo+modalidade. */
 async function anexarReferencia(linhas) {
@@ -71,30 +50,7 @@ async function itensVencidos(organizacaoId, filtro, cnpj) {
 
 async function desempenho(organizacaoId, q = {}) {
   const periodo = regras.periodoDesempenho(q, { hoje: diaNoFuso() });
-  const filtro = filtroDoPeriodo(periodo);
-  const [[linhas], cnpj] = await Promise.all([
-    pool.query(
-    `SELECT l.id, l.objeto, l.orgao_cnpj, l.orgao_nome, l.uf, l.modalidade, l.grupo, l.plataforma_disputa,
-            l.valor_estimado, l.valor_proposto, l.valor_final, l.custo_estimado, l.vencedor, l.cnpj_vencedor,
-            l.beneficio_me, l.etapa, ${DATA_DA_PARTICIPACAO} AS data,
-            c.id AS contrato_id, c.valor AS contrato_valor, c.valor_executado AS contrato_executado,
-            c.situacao AS contrato_situacao,
-            p.valor_total AS proposta_valor, p.custo_total AS proposta_custo,
-            (SELECT hp.desconto FROM historico_precos hp
-              WHERE hp.chave_externa = l.chave_externa AND hp.sem_homologacao = 0 AND hp.desconto IS NOT NULL
-              ORDER BY hp.id LIMIT 1) AS desconto_mercado
-       FROM ${daOrganizacao(organizacaoId)} l
-       LEFT JOIN contratos c ON c.licitacao_id = l.id AND c.organizacao_id = ?
-       LEFT JOIN propostas p ON p.id = (
-              SELECT p2.id FROM propostas p2
-               WHERE p2.organizacao_id = ? AND p2.licitacao_id = l.id AND p2.status IN ('final', 'enviada')
-               ORDER BY FIELD(p2.status, 'enviada', 'final'), p2.id DESC LIMIT 1)
-      WHERE ${filtro.sql}
-      ORDER BY data DESC`,
-    [organizacaoId, organizacaoId, ...filtro.parametros]
-    ),
-    cnpjDaEmpresa(organizacaoId),
-  ]);
+  const [{ linhas, filtro }, cnpj] = await Promise.all([participacoes(organizacaoId, periodo, { completo: true }), cnpjDaEmpresa(organizacaoId)]);
   // A referência de preço e os itens vencidos não dependem um do outro.
   const [, vencidos] = await Promise.all([anexarReferencia(linhas), itensVencidos(organizacaoId, filtro, cnpj)]);
   const resumo = regras.resumir(linhas);

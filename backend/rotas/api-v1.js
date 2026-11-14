@@ -10,6 +10,10 @@ const escopo = require('../servicos/escopo');
 const limites = require('../servicos/limites');
 const { POR_MINUTO } = require('../servicos/api');
 const { filtrosDe, comEtiquetas, COLUNAS_LISTA } = require('../servicos/radar');
+const funil = require('../regras/funil');
+const contratos = require('../servicos/contrato');
+
+const SITUACOES = new Set(['aguardando_assinatura', 'vigente', 'encerrado', 'rescindido', 'prorrogado']);
 
 const rotas = express.Router();
 
@@ -139,6 +143,55 @@ rotas.get('/licitacoes/:id', async (req, res) => {
     });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível carregar a licitação.', erro);
+  }
+});
+
+// GET /api/v1/funil — quantas licitações há em cada etapa do funil DA organização (sem as descartadas).
+// Etapa sem nenhuma licitação sai com zero: o painel mostra o funil inteiro, na ordem.
+rotas.get('/funil', async (req, res) => {
+  try {
+    const [linhas] = await pool.query(
+      'SELECT etapa, COUNT(*) AS total FROM org_licitacoes WHERE organizacao_id = ? AND descartada = 0 GROUP BY etapa',
+      [req.organizacaoId]
+    );
+    const porEtapa = new Map(linhas.map((l) => [l.etapa, Number(l.total)]));
+    const [[descartadas]] = await pool.query(
+      'SELECT COUNT(*) AS total FROM org_licitacoes WHERE organizacao_id = ? AND descartada = 1',
+      [req.organizacaoId]
+    );
+    res.json({
+      etapas: funil.ETAPAS.map((e) => ({ etapa: e.chave, descricao: e.descricao, total: porEtapa.get(e.chave) || 0 })),
+      descartadas: Number(descartadas.total),
+    });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível carregar o funil.', erro);
+  }
+});
+
+// GET /api/v1/contratos — os contratos da organização (recurso `contratos` do plano). `?situacao=vigente`.
+rotas.get('/contratos', limites.exigirRecurso('contratos'), async (req, res) => {
+  try {
+    const lista = await contratos.listar({ organizacaoId: req.organizacaoId, situacao: SITUACOES.has(req.query.situacao) ? req.query.situacao : null });
+    res.json({
+      dados: lista.map((c) => ({
+        id: c.id,
+        licitacao_id: c.licitacao_id,
+        numero: c.numero,
+        orgao: c.orgao_nome,
+        uf: c.uf,
+        objeto: c.objeto,
+        situacao: c.situacao,
+        assinado_em: c.assinado_em,
+        vigencia_inicio: c.vigencia_inicio,
+        vigencia_fim: c.vigencia_fim,
+        valor: c.valor == null ? null : Number(c.valor),
+        valor_executado: c.valor_executado == null ? null : Number(c.valor_executado),
+        garantia_exigida: Boolean(c.garantia_exigida),
+        garantia_entregue_em: c.garantia_entregue_em,
+      })),
+    });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível listar os contratos.', erro);
   }
 });
 

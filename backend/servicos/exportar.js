@@ -10,6 +10,9 @@ const { daOrganizacao } = require('./escopo');
 const planilha = require('./planilha');
 const docx = require('./docx');
 const { LACUNA } = require('../regras/boletim');
+const regrasDesempenho = require('../regras/desempenho');
+const { diaNoFuso } = require('../regras/gestao');
+const { participacoes } = require('./participacoes');
 
 /** Data e hora como o Excel entende, pelo texto: dia de calendário em pt-BR. */
 function comoDataHora(valor) {
@@ -107,62 +110,12 @@ async function radarEmExcel(opcoes = {}) {
  * produziria desconto de 100%.
  */
 async function relatorioMensal({ organizacaoId, meses = 12 } = {}) {
-  const [linhas] = await pool.query(
-    `SELECT DATE_FORMAT(COALESCE(l.proposta_em, l.etapa_em, l.fim_propostas), '%Y-%m') AS mes,
-            COUNT(*) AS disputei,
-            SUM(l.etapa = 'Ganhamos') AS ganhei,
-            SUM(l.etapa = 'Perdemos') AS perdi,
-            SUM(l.etapa NOT IN ('Ganhamos','Perdemos')) AS em_andamento,
-            SUM(COALESCE(l.valor_final, l.valor_proposto)) AS valor_proposto,
-            SUM(CASE WHEN l.etapa = 'Ganhamos' THEN COALESCE(l.valor_final, l.valor_proposto) END) AS valor_ganho,
-            -- A média é só sobre quem tem os dois números, e o CASE é o que
-            -- garante isso: linha sem estimado não entra no divisor.
-            AVG(CASE
-                  WHEN l.valor_estimado > 0 AND COALESCE(l.valor_proposto, l.valor_final) > 0
-                  THEN 1 - (COALESCE(l.valor_proposto, l.valor_final) / l.valor_estimado)
-                END) AS desconto_medio,
-            SUM(CASE
-                  WHEN l.valor_estimado > 0 AND COALESCE(l.valor_proposto, l.valor_final) > 0
-                  THEN 1 ELSE 0
-                END) AS com_desconto,
-            -- Proposta acima do estimado do órgão é desconto negativo, e um só
-            -- registro desses derruba a média de um mês inteiro. A linha não é
-            -- descartada — propor acima do estimado acontece, e às vezes ganha
-            -- —, mas o mês diz quantas foram, para a média ser explicável em vez
-            -- de misteriosa.
-            SUM(CASE
-                  WHEN l.valor_estimado > 0 AND COALESCE(l.valor_proposto, l.valor_final) > l.valor_estimado
-                  THEN 1 ELSE 0
-                END) AS acima_do_estimado
-       FROM ${daOrganizacao(organizacaoId)} l
-      WHERE l.etapa IN ('Proposta enviada','Em disputa','Ganhamos','Perdemos')
-        AND COALESCE(l.proposta_em, l.etapa_em, l.fim_propostas) IS NOT NULL
-        AND COALESCE(l.proposta_em, l.etapa_em, l.fim_propostas) >= DATE_SUB(CURDATE(), INTERVAL ? MONTH)
-      GROUP BY mes
-      ORDER BY mes DESC`,
-    [meses]
-  );
-
-  const numero = (v) => (v === null || v === undefined ? null : Number(v));
-
-  const meses_linhas = linhas.map((m) => ({
-    mes: m.mes,
-    disputei: Number(m.disputei),
-    ganhei: Number(m.ganhei),
-    perdi: Number(m.perdi),
-    em_andamento: Number(m.em_andamento),
-    // Taxa de vitória sobre o que já teve resultado: contar o que está em
-    // disputa como derrota faria o número piorar sozinho com o tempo.
-    taxa_vitoria:
-      Number(m.ganhei) + Number(m.perdi) > 0
-        ? Math.round((Number(m.ganhei) / (Number(m.ganhei) + Number(m.perdi))) * 1000) / 1000
-        : null,
-    valor_proposto: numero(m.valor_proposto),
-    valor_ganho: numero(m.valor_ganho),
-    desconto_medio: m.desconto_medio === null ? null : Math.round(Number(m.desconto_medio) * 10000) / 10000,
-    com_desconto: Number(m.com_desconto),
-    acima_do_estimado: Number(m.acima_do_estimado),
-  }));
+  // As mesmas participações de "Meu desempenho" (servicos/participacoes.js), agrupadas por mês: os
+  // dois relatórios não têm mais definições próprias para diferir nas bordas do período.
+  const hoje = diaNoFuso();
+  const periodo = { de: regrasDesempenho.mesesAntes(hoje, Number(meses) || 12), ate: hoje };
+  const { linhas } = await participacoes(organizacaoId, periodo);
+  const meses_linhas = regrasDesempenho.resumirPorMes(linhas);
 
   const total = meses_linhas.reduce(
     (acc, m) => ({
@@ -173,10 +126,7 @@ async function relatorioMensal({ organizacaoId, meses = 12 } = {}) {
     }),
     { disputei: 0, ganhei: 0, perdi: 0, valor_ganho: 0 }
   );
-
-  // Somar ponto flutuante acumula resto: três valores que terminam em centavos
-  // somam 110427.70999999999, e esse número ia cru para a célula da planilha e
-  // para o JSON da tela. Dinheiro se arredonda no centavo.
+  // Somar ponto flutuante acumula resto: dinheiro se arredonda no centavo.
   total.valor_ganho = Math.round(total.valor_ganho * 100) / 100;
 
   return {

@@ -15,21 +15,17 @@ const pool = require('../config/db');
 const { responderErro } = require('../middlewares/responder-erro');
 const limites = require('./limites');
 const regras = require('../regras/api');
+const { confiarProxy } = require('../config/ambiente');
 
 const POR_MINUTO = 60;
-const FALHAS_POR_MINUTO = 30;
+const FALHAS_POR_MINUTO = regras.limiteDeFalhas(confiarProxy);
 const porToken = regras.criarLimitador({ maximo: POR_MINUTO, janelaMs: 60000 });
 const falhasPorIp = regras.criarLimitador({ maximo: FALHAS_POR_MINUTO, janelaMs: 60000 });
 
-function lerLista(valor) {
-  if (Array.isArray(valor)) return valor;
-  try {
-    const v = JSON.parse(valor);
-    return Array.isArray(v) ? v : [];
-  } catch {
-    return [];
-  }
-}
+const lerLista = (valor) => {
+  const v = limites.lerJson(valor, []);
+  return Array.isArray(v) ? v : [];
+};
 
 function ipDe(req) {
   return regras.normalizarIp(req.ip) || String(req.ip || '');
@@ -93,26 +89,63 @@ async function autenticarToken(req, res, next) {
   }
 }
 
-/** Passo 6: a cota mensal do plano. Lê uma linha só — a API é chamada o tempo todo. */
+/**
+ * Reserva UMA chamada da cota do mês, de forma atômica: o UPDATE só conta se ainda cabe, então
+ * duas chamadas ao mesmo tempo não passam juntas do teto (antes: ler e depois somar).
+ * @returns {Promise<boolean>} se coube
+ */
+async function reservarChamada(organizacaoId, limite) {
+  const mes = limites.mesDe();
+  await pool.query(
+    "INSERT IGNORE INTO uso_mensal (organizacao_id, mes, recurso, quantidade) VALUES (?, ?, 'api_chamadas_mes', 0)",
+    [organizacaoId, mes]
+  );
+  const [r] = await pool.query(
+    `UPDATE uso_mensal SET quantidade = quantidade + 1
+      WHERE organizacao_id = ? AND mes = ? AND recurso = 'api_chamadas_mes' ${limite === null ? '' : 'AND quantidade < ?'}`,
+    limite === null ? [organizacaoId, mes] : [organizacaoId, mes, limite]
+  );
+  return r.affectedRows > 0;
+}
+
+/** Devolve a chamada reservada (resposta 5xx: erro nosso não gasta a cota do cliente). */
+function estornarChamada(organizacaoId) {
+  return pool
+    .query(
+      "UPDATE uso_mensal SET quantidade = GREATEST(quantidade - 1, 0) WHERE organizacao_id = ? AND mes = ? AND recurso = 'api_chamadas_mes'",
+      [organizacaoId, limites.mesDe()]
+    )
+    .catch((erro) => console.error('API: não foi possível estornar a chamada:', erro.code || erro.message));
+}
+
+/** Passo 6: a cota mensal do plano (reserva atômica; falha do servidor devolve a chamada). */
 async function cotaMensal(req, res, next) {
   try {
     const dados = await limites.daOrganizacao(req.organizacaoId);
     if (!dados) return recusar(res, 401, 'Organização não encontrada para este token.');
     if (dados.isenta) return next();
-    const mes = limites.mesDe();
-    const [[linha]] = await pool.query(
-      "SELECT quantidade FROM uso_mensal WHERE organizacao_id = ? AND mes = ? AND recurso = 'api_chamadas_mes'",
-      [req.organizacaoId, mes]
-    );
-    const usado = linha ? Number(linha.quantidade) : 0;
-    const r = limites.cabe(dados.plano && dados.plano.limites, 'api_chamadas_mes', usado, 1);
-    if (!r.ok) {
-      const corpo = limites.erroLimite(dados.plano, dados.planos, 'api_chamadas_mes', { usado, limite: r.limite });
+    const teto = dados.plano && dados.plano.limites && 'api_chamadas_mes' in dados.plano.limites ? dados.plano.limites.api_chamadas_mes : 0;
+    const limite = teto === null ? null : Number(teto);
+    if (!(await reservarChamada(req.organizacaoId, limite))) {
+      const [[linha]] = await pool.query(
+        "SELECT quantidade FROM uso_mensal WHERE organizacao_id = ? AND mes = ? AND recurso = 'api_chamadas_mes'",
+        [req.organizacaoId, limites.mesDe()]
+      );
+      const corpo = limites.erroLimite(dados.plano, dados.planos, 'api_chamadas_mes', { usado: linha ? Number(linha.quantidade) : 0, limite });
       res.set('Retry-After', '3600');
       return res.status(429).json(corpo);
     }
-    await limites.registrarUso(req.organizacaoId, 'api_chamadas_mes');
-    res.set('X-Cota-Mensal-Restante', r.limite === null ? 'ilimitada' : String(Math.max(0, r.limite - usado - 1)));
+    res.on('finish', () => {
+      if (res.statusCode >= 500) estornarChamada(req.organizacaoId);
+    });
+    if (limite === null) res.set('X-Cota-Mensal-Restante', 'ilimitada');
+    else {
+      const [[linha]] = await pool.query(
+        "SELECT quantidade FROM uso_mensal WHERE organizacao_id = ? AND mes = ? AND recurso = 'api_chamadas_mes'",
+        [req.organizacaoId, limites.mesDe()]
+      );
+      res.set('X-Cota-Mensal-Restante', String(Math.max(0, limite - (linha ? Number(linha.quantidade) : 0))));
+    }
     return next();
   } catch (erro) {
     return responderErro(res, 500, 'Não foi possível conferir a cota da API.', erro);
@@ -122,4 +155,4 @@ async function cotaMensal(req, res, next) {
 /** A pilha completa de `/api/v1`: `app.use('/api/v1', ...pilhaApi, rotas)`. */
 const pilhaApi = [autenticarToken, limites.assinaturaValida, limites.exigirRecurso('api'), cotaMensal];
 
-module.exports = { autenticarToken, cotaMensal, pilhaApi, POR_MINUTO };
+module.exports = { autenticarToken, cotaMensal, reservarChamada, pilhaApi, POR_MINUTO };

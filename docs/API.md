@@ -39,7 +39,7 @@ deste arquivo) — sem isso o IP visto é o do proxy.
 | Profissional | 2 | 2 | 10.000 |
 | Avançado | 5 | 5 | 100.000 |
 
-- Cada chamada autenticada consome 1 da cota. Estourou: **429** com `Retry-After`, e o corpo diz o plano
+- Cada chamada autenticada consome 1 da cota (a reserva é atômica: chamadas simultâneas não passam do teto; resposta 5xx devolve a chamada). Estourou: **429** com `Retry-After`, e o corpo diz o plano
   que resolve. O contador zera no dia 1.
 - Além da cota, há um teto de **60 chamadas por minuto por token** (429 com `Retry-After`, em segundos).
   O teto é contado por processo do servidor.
@@ -110,6 +110,19 @@ A mesma licitação com os itens (`itens[]`: número, descrição, quantidade, u
 Aceita qualquer licitação do catálogo; se a sua organização ainda não a pontuou, `pontuacao` e `etapa`
 vêm `null`.
 
+### `GET /funil`
+
+Quantas licitações **da sua organização** há em cada etapa do funil (Triagem … Ganhamos/Perdemos), na ordem
+do painel, sem as descartadas, e quantas foram descartadas:
+`{ "etapas": [{ "etapa": "Triagem", "descricao": "…", "total": 12 }, …], "descartadas": 3 }`.
+
+### `GET /contratos`
+
+Os contratos da organização (recurso `contratos` do plano; sem ele, **402**). `?situacao=vigente`
+(`aguardando_assinatura`, `vigente`, `prorrogado`, `encerrado`, `rescindido`). Cada item traz número, órgão,
+UF, objeto, situação, datas de assinatura e de vigência, valor e valor executado (`null` quando não
+informado — nunca zero inventado) e a garantia.
+
 ## Erros
 
 Sempre `{ "erro": "mensagem em português" }`.
@@ -120,7 +133,7 @@ Sempre `{ "erro": "mensagem em português" }`.
 | 402 | plano sem o recurso `api`, ou organização suspensa / assinatura vencida |
 | 403 | IP fora da lista do token |
 | 404 | licitação inexistente |
-| 429 | passou de 60 por minuto, da cota do mês, ou 30 tokens inválidos em um minuto vindos do mesmo IP |
+| 429 | passou de 60 por minuto, da cota do mês, ou 30 tokens inválidos em um minuto vindos do mesmo IP (300 quando o painel roda sem `CONFIAR_PROXY`, porque aí todos os clientes têm o IP do proxy) |
 
 ## Webhook de novas oportunidades
 
@@ -134,7 +147,10 @@ Cadastre em **Integrações → Webhooks**: nome, endereço **https**, e o filtr
 - Uma licitação sai **uma vez por webhook**. Descartada pela organização não sai.
 - Roda de hora em hora, junto da coleta. Até 50 oportunidades por pedido; se houver mais, vão vários pedidos.
 - A entrega é **pelo menos uma vez**: se o painel cair entre o seu 2xx e o registro, o lote sai de novo
-  (com outro `entrega_id`). Use o `id` da licitação como chave para ignorar repetição.
+  (com o **mesmo** `entrega_id`: o id é derivado do webhook e dos itens do lote). Ignore o `entrega_id` que
+  você já processou — e, como segunda proteção, use o `id` da licitação como chave.
+- Webhooks de organizações diferentes (e vários da mesma) são entregues em paralelo, até 4 ao mesmo tempo;
+  um destino lento não atrasa os outros.
 - Filtro do boletim pausado não alimenta o webhook.
 - Sua URL precisa responder **2xx em até 10 s**. Qualquer outra coisa (inclusive redirecionamento)
   conta como falha, e as oportunidades continuam pendentes para a próxima rodada.

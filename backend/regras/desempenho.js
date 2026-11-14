@@ -154,6 +154,35 @@ function agruparPor(linhas, chaveDe, rotuloDe) {
     .sort((a, b) => b.participacoes - a.participacoes || b.valor_ganho - a.valor_ganho || a.rotulo.localeCompare(b.rotulo, 'pt-BR'));
 }
 
+/**
+ * Chave do órgão para agrupar. A mesma licitação do mesmo órgão chega às vezes com CNPJ e às vezes
+ * sem (outra fonte de coleta): sem cuidado viram dois grupos. `mapaDeOrgaos` aprende, nas próprias
+ * linhas, qual CNPJ pertence a cada nome; a linha sem CNPJ usa o do nome, se algum o tem.
+ */
+const soDigitos = (v) => String(v || '').replace(/\D/g, '');
+const nomeDoOrgao = (l) => String(l.orgao_nome || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+function mapaDeOrgaos(linhas) {
+  const mapa = new Map();
+  for (const l of linhas) {
+    const cnpj = soDigitos(l.orgao_cnpj);
+    const nome = nomeDoOrgao(l);
+    if (cnpj && nome && !mapa.has(nome)) mapa.set(nome, cnpj);
+  }
+  return mapa;
+}
+
+function chaveDoOrgao(l, mapa) {
+  const cnpj = soDigitos(l.orgao_cnpj) || mapa.get(nomeDoOrgao(l)) || '';
+  return cnpj || nomeDoOrgao(l) || '—';
+}
+
+/** Por órgão: com e sem CNPJ na mesma linha de coleta viram o mesmo grupo (ver `mapaDeOrgaos`). */
+function agruparPorOrgao(linhas) {
+  const mapa = mapaDeOrgaos(linhas);
+  return agruparPor(linhas, (l) => chaveDoOrgao(l, mapa), (l) => l.orgao_nome || 'Órgão não informado');
+}
+
 /** O valor de uma licitação ganha — o mesmo do relatório mensal: resultado, senão a proposta. */
 function valorGanho(l) {
   return positivo(l.valor_final) || positivo(l.valor_proposto) || null;
@@ -168,6 +197,51 @@ function descontoDaProposta(l) {
   const estimado = positivo(l.valor_estimado);
   const meu = positivo(l.valor_proposto) || (l.etapa === 'Ganhamos' ? positivo(l.valor_final) : null);
   return estimado && meu ? 1 - meu / estimado : null;
+}
+
+/**
+ * O valor da MINHA proposta: o proposto; na ganha, na falta dele, o do resultado. Na perdida o
+ * `valor_final` é o do vencedor — usá-lo como "meu" valor proposto inflaria o total e o desconto.
+ */
+function valorProposto(l) {
+  return positivo(l.valor_proposto) || (l.etapa === 'Ganhamos' ? positivo(l.valor_final) : null);
+}
+
+/** 'AAAA-MM' do dia de Brasília da participação (`data` já vem em horário de Brasília — servicos/participacoes.js). */
+const mesDaParticipacao = (l) => (l.data instanceof Date ? l.data.toISOString() : String(l.data)).slice(0, 7);
+
+/**
+ * O relatório mensal: as MESMAS participações de "Meu desempenho", agrupadas por mês (mais novo
+ * primeiro). Soma só quem tem o valor — mês sem valor registrado conta a disputa e dá `null`, não zero.
+ */
+function resumirPorMes(linhas) {
+  const meses = new Map();
+  for (const l of linhas) {
+    const mes = mesDaParticipacao(l);
+    if (!meses.has(mes)) meses.set(mes, []);
+    meses.get(mes).push(l);
+  }
+  const somaOuNull = (valores) => (valores.length ? dinheiro(valores.reduce((s, v) => s + v, 0)) : null);
+  return [...meses.entries()]
+    .sort((a, b) => (a[0] < b[0] ? 1 : -1))
+    .map(([mes, ls]) => {
+      const ganhas = ls.filter((l) => l.etapa === 'Ganhamos');
+      const perdidas = ls.filter((l) => l.etapa === 'Perdemos');
+      const descontos = ls.map(descontoDaProposta).filter((d) => d !== null);
+      return {
+        mes,
+        disputei: ls.length,
+        ganhei: ganhas.length,
+        perdi: perdidas.length,
+        em_andamento: ls.length - ganhas.length - perdidas.length,
+        taxa_vitoria: taxaDeVitoria(ganhas.length, perdidas.length),
+        valor_proposto: somaOuNull(ls.map(valorProposto).filter((v) => v !== null)),
+        valor_ganho: somaOuNull(ganhas.map(valorGanho).filter((v) => v !== null)),
+        desconto_medio: arredondar4(media(descontos)),
+        com_desconto: descontos.length,
+        acima_do_estimado: descontos.filter((d) => d < 0).length,
+      };
+    });
 }
 
 const resumirObjeto = (texto) => (texto && texto.length > 140 ? `${texto.slice(0, 140)}…` : texto);
@@ -240,7 +314,7 @@ function resumir(linhas) {
 
   return {
     totais,
-    por_orgao: agruparPor(linhas, (l) => l.orgao_cnpj || l.orgao_nome || '—', (l) => l.orgao_nome || 'Órgão não informado').slice(0, TOPO),
+    por_orgao: agruparPorOrgao(linhas).slice(0, TOPO),
     por_portal: agruparPor(linhas, (l) => l.plataforma_disputa || '—', (l) => l.plataforma_disputa || 'Portal não informado'),
     motivos,
     principal,
@@ -274,5 +348,8 @@ module.exports = {
   resumirMargens,
   descontoDaProposta,
   agruparPor,
+  agruparPorOrgao,
+  valorProposto,
+  resumirPorMes,
   resumir,
 };

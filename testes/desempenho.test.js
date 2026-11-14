@@ -142,3 +142,47 @@ test('desconto: o valor_final da perdida é o do vencedor e não vira desconto m
   assert.equal(r.resumir([{ etapa: 'Ganhamos', valor_estimado: 100, valor_proposto: null, valor_final: 80 }]).totais.desconto_medio, 0.2);
   assert.equal(r.resumir([perdida]).totais.com_desconto, 0);
 });
+
+// ------------------------------------------------------------------ Seção 15b
+test('15b: valor proposto é o MEU — na perdida o valor final é do vencedor e não entra', () => {
+  assert.equal(r.valorProposto({ etapa: 'Perdemos', valor_proposto: null, valor_final: 500 }), null);
+  assert.equal(r.valorProposto({ etapa: 'Perdemos', valor_proposto: 700, valor_final: 500 }), 700);
+  assert.equal(r.valorProposto({ etapa: 'Ganhamos', valor_proposto: null, valor_final: 650 }), 650);
+});
+
+test('15b: o relatório mensal agrupa as mesmas linhas por mês e soma só quem tem valor', () => {
+  const linhas = [
+    { etapa: 'Ganhamos', data: new Date('2026-10-31T20:30:00Z'), valor_estimado: 1000, valor_proposto: 900, valor_final: 900 },
+    { etapa: 'Perdemos', data: new Date('2026-09-10T12:00:00Z'), valor_estimado: 1000, valor_proposto: null, valor_final: 500 },
+    { etapa: 'Perdemos', data: new Date('2026-09-30T22:00:00Z'), valor_estimado: 2000, valor_proposto: 2400, valor_final: null },
+    { etapa: 'Proposta enviada', data: new Date('2026-09-05T15:00:00Z'), valor_estimado: null, valor_proposto: 700, valor_final: null },
+  ];
+  const meses = r.resumirPorMes(linhas);
+  assert.deepEqual(meses.map((m) => m.mes), ['2026-10', '2026-09'], 'mais novo primeiro');
+  const set = meses[1];
+  assert.equal(set.disputei, 3);
+  assert.equal(set.perdi, 2);
+  assert.equal(set.em_andamento, 1);
+  assert.equal(set.taxa_vitoria, 0);
+  assert.equal(set.valor_proposto, 3100, 'a perdida sem proposta não soma o valor do vencedor');
+  assert.equal(set.valor_ganho, null, 'mês sem ganha: null, não zero');
+  assert.equal(set.com_desconto, 1, 'só a que tem estimado e proposta');
+  assert.equal(set.acima_do_estimado, 1, 'proposta de 2400 contra estimado de 2000');
+  assert.equal(set.desconto_medio, -0.2);
+  assert.equal(meses[0].valor_ganho, 900);
+});
+
+test('15b: órgão com e sem CNPJ na mesma coleta é um grupo só; sem nome nem CNPJ vai para "—"', () => {
+  const linhas = [
+    { orgao_nome: 'Prefeitura de Canoas', orgao_cnpj: '88.111.222/0001-33', etapa: 'Ganhamos', valor_proposto: 10 },
+    { orgao_nome: 'PREFEITURA DE CANOAS', orgao_cnpj: null, etapa: 'Perdemos' },
+    { orgao_nome: 'Prefeitura de Canoás', orgao_cnpj: '', etapa: 'Perdemos' },
+    { orgao_nome: 'Câmara de Pelotas', orgao_cnpj: null, etapa: 'Perdemos' },
+    { orgao_nome: null, orgao_cnpj: null, etapa: 'Perdemos' },
+  ];
+  const grupos = r.agruparPorOrgao(linhas);
+  const canoas = grupos.find((g) => /canoas/i.test(g.rotulo));
+  assert.equal(canoas.participacoes, 3);
+  assert.equal(grupos.length, 3);
+  assert.ok(grupos.some((g) => g.rotulo === 'Órgão não informado' && g.participacoes === 1));
+});

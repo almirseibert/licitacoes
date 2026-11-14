@@ -37,7 +37,7 @@ const TABELAS_EXPORTADAS = new Set([
   'org_exigencias', 'org_licitacoes', 'org_oportunidades', 'org_portais', 'org_tarefas',
   'organizacao_membros', 'pacotes', 'palavras_chave', 'palavras_excluidas', 'palavras_sugeridas',
   'perfis_busca', 'propostas', 'questionamentos', 'regras_pontuacao', 'resumo_consideracoes',
-  'servico_pedidos', 'solicitacoes', 'termos_aceites', 'uso_mensal', 'webhooks',
+  'servico_pedidos', 'solicitacoes', 'termos_aceites', 'uso_mensal', 'webhook_itens', 'webhooks',
 ]);
 const TABELA_DO_COMPROVANTE = 'lgpd_exclusoes';
 

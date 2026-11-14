@@ -132,3 +132,35 @@ test('limitador: passa até o máximo, barra o excedente e libera na janela segu
   assert.equal(l.tentar('b', 4000).ok, true, 'outra chave tem a janela dela');
   assert.equal(l.tentar('a', 61000).ok, true, 'janela nova');
 });
+
+// ------------------------------------------------------------------ Seção 14b
+test('14b: o mesmo lote do mesmo webhook tem sempre o mesmo entrega_id (reenvio reconhecível)', () => {
+  const a = r.entregaIdDoLote(7, [3, 1, 2]);
+  assert.equal(a, r.entregaIdDoLote(7, [1, 2, 3]), 'a ordem dos itens não muda o id');
+  assert.match(a, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  assert.notEqual(a, r.entregaIdDoLote(8, [1, 2, 3]), 'outro webhook, outro id');
+  assert.notEqual(a, r.entregaIdDoLote(7, [1, 2, 4]), 'outros itens, outro id');
+});
+
+test('14b: sem CONFIAR_PROXY o teto de tokens inválidos por IP sobe (o IP visto é o do proxy)', () => {
+  assert.equal(r.limiteDeFalhas(0), 300);
+  assert.equal(r.limiteDeFalhas(1), 30);
+  assert.equal(r.limiteDeFalhas(undefined), 300);
+});
+
+test('14b: webhooks em paralelo respeitam o teto e o resultado volta por posição', async () => {
+  const { emParalelo } = require('../backend/jobs/webhooks');
+  let ativos = 0;
+  let pico = 0;
+  const saida = [];
+  await emParalelo([...Array(10).keys()], 4, async (item, i) => {
+    ativos += 1;
+    pico = Math.max(pico, ativos);
+    await new Promise((r) => setTimeout(r, 5 + (10 - item)));
+    saida[i] = item * 2;
+    ativos -= 1;
+  });
+  assert.equal(pico, 4, 'nunca mais de 4 ao mesmo tempo, e chegou a 4');
+  assert.deepEqual(saida, [0, 2, 4, 6, 8, 10, 12, 14, 16, 18]);
+  await emParalelo([], 4, () => assert.fail('lista vazia não chama nada'));
+});
