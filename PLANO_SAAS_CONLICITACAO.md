@@ -27,7 +27,7 @@ cofre de senha de portal e a assinatura digital (ver a tabela de divergências n
 | Fase | Seções | O que o cliente ganha | Marco |
 |---|---|---|---|
 | **A — Fundação SaaS** | 0 ✅, 1 (1a ✅, 1b ✅, 1c), 2 ✅, 3 ✅ | Conta própria, equipe, dados isolados, tema claro/escuro, plano e cobrança | Dá para cobrar e isolar clientes |
-| **B — Paridade de captação** | 4 ✅, 7 ✅, 8 ✅, 9, 10 | Boletim diário, banco de licitações completo, gestão com tarefas, avisos por tipo, documentos | Substitui o uso diário do ConLicitação na captação |
+| **B — Paridade de captação** | 4 ✅, 7 ✅, 8 ✅, 9 ✅, 10 | Boletim diário, banco de licitações completo, gestão com tarefas, avisos por tipo, documentos | Substitui o uso diário do ConLicitação na captação |
 | **C — IA e inteligência** | 5, 11, 12, 13, 14, 15, 17 | Pergunte ao Edital, resumo com checklist, acompanhamentos, contratos e atas, concorrentes e mercado, API, onboarding | **Versão 1 vendável** — fim da Fase C |
 | **D — Estratégia e automação** | 6, 16 | Monitor de chat, alerta de deserta por segmento, consultor jurídico | Planos mais caros |
 | **E — Ecossistema** | 18 | Seguro garantia, assessoria cadastral, cursos por parceria | Receita complementar |
@@ -411,25 +411,62 @@ vez no detalhe, apagar andamento ligado na tela) aplicados.
       envio).
 - [ ] Tarefa/andamento só em licitação que a organização tem (`org_licitacoes`); hoje aceita
       qualquer uma do catálogo, como as anotações.
-- [ ] Aviso de tarefa atrasada por e-mail/WhatsApp — é tipo da Seção 9.
+- [x] Aviso de tarefa atrasada por e-mail/WhatsApp — entregue na Seção 9.
 - [ ] Registrar a troca de responsável na linha do tempo (hoje só a etapa vira anotação).
 
 ---
 
-## Seção 9 — Avisos por tipo e por canal (Fase B)
+## Seção 9 — Avisos por tipo e por canal (Fase B) — ✅ feito em 14/11/2026
 Hoje `servicos/alertas.js`, `email.js` e `whatsapp.js` mandam um aviso só, para um destino só.
-- [ ] `notificacoes_config` (usuario_id, canal e-mail / WhatsApp / push, tipos). Tipos:
+- [x] `notificacoes_config` (organizacao_id, usuario_id — NULL = caixa da organização —, canal
+      e-mail / WhatsApp / push, tipo, ativo), migração `024_notificacoes.sql`. Tipos:
       esclarecimento, aviso, impugnação, recurso, status, resultado, documento vencendo, tarefa
-      atrasada, nova oportunidade.
-- [ ] Destino de e-mail e de WhatsApp **por usuário e por organização** — é o que tira
-      `configuracoes` (chave `alerta_*`) do escopo global (pendência da Seção 1b).
-- [ ] Push do navegador (Web Push + service worker), opcional por usuário.
-- [ ] WhatsApp: modelos de mensagem **submetidos à Meta antes do lançamento** (alerta de prazo,
-      resumo do dia, convocação no chat). Resposta "favoritar" e "criar tarefa" é diferencial,
-      mas só depois do alerta simples funcionar.
+      atrasada, nova oportunidade — e **prazo** (o aviso de 48 h/2 h, o mais antigo do painel).
+      Linha ausente = padrão; volume nasce desligado (nova oportunidade por e-mail/WhatsApp, que
+      o boletim já cobre; aviso e documento por WhatsApp). Regras em `regras/notificacoes.js`.
+- [x] Destino de e-mail e de WhatsApp **por usuário e por organização**: `notificacoes_destinos`
+      (e-mail vazio = o de login) + a caixa `alerta_*` de `org_configuracoes` (a 1b já tinha tirado
+      do escopo global). Endereço que é de alguém da equipe obedece às escolhas dessa pessoa, e o
+      mesmo endereço recebe um envio só. Despacho único no worker (`servicos/notificar.js`,
+      `npm run notificar`), com `alertas.notificado_em` e `FOR UPDATE SKIP LOCKED`; andamento
+      registrado vira aviso do seu tipo (o autor não recebe); tarefa atrasada vira aviso pessoal
+      ao responsável (pendência da 8b), que só aparece no sino dele.
+- [x] Push do navegador (Web Push + `frontend/public/sw.js`, VAPID no ambiente), opcional por
+      pessoa; só endpoint https de serviço de push conhecido; 404/410 apaga a inscrição.
+- [x] WhatsApp por **modelo** (`WHATSAPP_MODELO`) e textos dos três modelos em
+      `docs/whatsapp-modelos.md`. A submissão à Meta é ato da conta comercial — fica na 9b.
 
-**Aceite:** um usuário desliga "recurso" por WhatsApp e continua recebendo "esclarecimento" por
-e-mail, verificado com SMTP e WhatsApp reais de teste.
+**Aceite (medido):** MariaDB 10.11, banco com as licitações reais de RS. SMTP **real** (servidor
+`smtp-server` local, porta 2525, nodemailer de verdade) e a Graph API da Meta **simulada** em
+`WHATSAPP_API_URL` — não houve número da Meta para teste. Pela API, organização 1: a pessoa 2
+cadastrou o WhatsApp e desligou "recurso" por WhatsApp; a pessoa 1 registrou um andamento de
+recurso e um de esclarecimento. Despacho: **2 alertas → 2 envios** — e-mail da pessoa 2 com
+**recurso + esclarecimento**, WhatsApp da pessoa 2 só com **esclarecimento**; a pessoa 1 (autora)
+nada. Medido duas vezes (antes e depois da revisão), igual. Segunda rodada: **0** despachados.
+Prazo + nova oportunidade + tarefa atrasada (vencida em 10/11, responsável pessoa 2): 4 alertas
+em 5 envios; a caixa da organização com o mesmo e-mail da pessoa 2 (`TEMA@…`) gerou **um**
+e-mail só; a tarefa atrasada foi só à pessoa 2; a tarefa concluída e a de dezembro não geraram
+aviso; o alerta da organização 16 foi só ao e-mail da 16. Push real cifrado (`aes128gcm` +
+VAPID) entregue a um servidor https local; a inscrição que respondeu 410 foi apagada (2 → 1).
+WhatsApp com `WHATSAPP_MODELO` saiu como template, com o texto sem quebra de linha. Isolamento:
+organização 16 apaga push da 1 → 0 removidas; membro muda a caixa da organização → **403**;
+alerta pessoal da pessoa 2 invisível no sino da pessoa 1 e **404** ao marcá-lo lido; endpoint de
+push `https://10.0.0.5` e `http://169.254.169.254` → **400**; tipo/canal/e-mail/WhatsApp
+inválidos → 400; sem token → 401. Migração em banco zerado. Lint limpo, **104/104** testes
+(`testes/notificacoes.test.js`, 9 novos). Tela conferida com Playwright (Configurações → Avisos,
+1366 e 390, sem rolagem lateral, sem erro no console; desligar "Impugnação por WhatsApp" pela
+tela gravou). `code-review` (10 achados, 8 corrigidos; ficaram: marcar antes de mandar — tentar
+de novo duplicaria para quem já recebeu — e envio em série, que o WhatsApp faz de propósito pelo
+espaçamento da 5.4).
+
+**Seção 9b — pendente:**
+- [ ] Aceite com **SMTP e WhatsApp reais de teste** (número da Meta + conta de e-mail de
+      verdade): o código já foi exercitado com SMTP local e simulador da Graph API.
+- [ ] Submeter à Meta os modelos de `docs/whatsapp-modelos.md` e configurar `WHATSAPP_MODELO`.
+- [ ] Resposta "favoritar" / "criar tarefa" pelo WhatsApp (webhook da Meta).
+- [ ] Registro por envio (`notificacoes_envios`) para reenviar só o canal que falhou.
+- [ ] Push conferido num navegador real com FCM (aqui: servidor https local com o protocolo
+      Web Push).
 
 ---
 

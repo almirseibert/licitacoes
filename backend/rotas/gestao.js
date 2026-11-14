@@ -20,6 +20,7 @@ const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const escopo = require('../servicos/escopo');
 const gestao = require('../regras/gestao');
+const alertas = require('../servicos/alertas');
 const { LISTAS, sqlPorMim } = require('../regras/filtros-radar');
 
 const rotas = express.Router();
@@ -209,6 +210,30 @@ rotas.get('/andamentos', async (req, res) => {
   }
 });
 
+/**
+ * Andamento registrado vira aviso para o resto da equipe, do tipo dele (Seção 9):
+ * é o que deixa alguém desligar "recurso" no WhatsApp e manter "esclarecimento"
+ * no e-mail. Quem registrou não é avisado (`autorId`). Falha aqui não desfaz o
+ * andamento: é aviso, não dado.
+ */
+async function avisarAndamento(req, id, licitacaoId, campos) {
+  try {
+    const [[l]] = await pool.query('SELECT objeto FROM licitacoes WHERE id = ?', [licitacaoId]);
+    const rotulo = (gestao.TIPOS_ANDAMENTO.find((t) => t.chave === campos.tipo) || {}).rotulo || 'Andamento';
+    const objeto = String((l && l.objeto) || '').replace(/\s+/g, ' ').slice(0, 120);
+    await alertas.criar({
+      organizacaoId: req.organizacaoId,
+      autorId: quem(req),
+      tipo: campos.tipo,
+      chave: `andamento:${id}`,
+      licitacaoId,
+      mensagem: `${rotulo}: ${String(campos.texto).replace(/\s+/g, ' ').slice(0, 300)} — ${objeto}`,
+    });
+  } catch (e) {
+    console.error('Andamento registrado, mas o aviso não foi criado:', e.message);
+  }
+}
+
 rotas.post('/andamentos', async (req, res) => {
   const { campos, erro } = gestao.lerAndamento(req.body);
   if (erro) return res.status(400).json({ erro });
@@ -221,6 +246,7 @@ rotas.post('/andamentos', async (req, res) => {
        VALUES (?, ?, ?, ?, COALESCE(?, NOW()), ?)`,
       [req.organizacaoId, licitacaoId, campos.tipo, campos.texto, campos.ocorrido_em, quem(req)]
     );
+    await avisarAndamento(req, r.insertId, licitacaoId, campos);
     res.status(201).json({ ok: true, id: r.insertId });
   } catch (e) {
     responderErro(res, 500, 'Não foi possível registrar o andamento.', e);

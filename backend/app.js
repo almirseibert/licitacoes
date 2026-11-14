@@ -53,6 +53,8 @@ app.use('/api/empresa', ...protegida, require('./rotas/empresa'));
 app.use('/api/kits', ...protegida, require('./rotas/kits'));
 app.use('/api/modelos-declaracao', ...protegida, require('./rotas/modelos'));
 app.use('/api/alertas', ...protegida, require('./rotas/alertas'));
+// Sem `leitorSoLe`: quem só lê a organização ainda escolhe como quer ser avisado.
+app.use('/api/notificacoes', ...comToken, assinaturaValida, require('./rotas/notificacoes'));
 app.use('/api/calendario', ...protegida, require('./rotas/calendario'));
 app.use('/api/feriados', ...protegida, require('./rotas/feriados'));
 app.use('/api/precos-referencia', ...modulo('historico'), require('./rotas/precos-referencia'));

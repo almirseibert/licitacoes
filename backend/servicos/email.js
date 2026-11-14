@@ -23,7 +23,7 @@ async function destinatario(organizacaoId) {
 }
 
 async function configurado(organizacaoId) {
-  return Boolean(smtp.host && smtp.de && (await destinatario(organizacaoId)));
+  return Boolean(servicoLigado() && (await destinatario(organizacaoId)));
 }
 
 function obterTransporte() {
@@ -58,18 +58,23 @@ function montarCorpo(avisos) {
 
 function montarAssunto(avisos) {
   if (avisos.length === 1) return `[Licitações] ${String(avisos[0].mensagem).slice(0, 120)}`;
-  return `[Licitações] ${avisos.length} avisos de prazo`;
+  return `[Licitações] ${avisos.length} avisos`;
+}
+
+/** O servidor tem SMTP? (Sem ele, nenhum e-mail sai, para ninguém.) */
+function servicoLigado() {
+  return Boolean(smtp.host && smtp.de);
 }
 
 /**
- * Envia os avisos em um único e-mail.
+ * Envia os avisos em um único e-mail para `para` (Seção 9: o destino é de cada
+ * pessoa ou da caixa da organização; quem escolhe é o despacho).
  * @returns {{enviado:boolean, motivo?:string, assunto?:string}}
  */
-async function enviarAvisos(organizacaoId, avisos) {
+async function enviarAvisos(para, avisos) {
   if (!avisos || !avisos.length) return { enviado: false, motivo: 'nada a enviar' };
 
-  const para = await destinatario(organizacaoId);
-  if (!smtp.host || !smtp.de || !para) {
+  if (!servicoLigado() || !para) {
     if (!avisouDesligado) {
       console.log(
         'E-mail de alerta desligado: defina SMTP_HOST e SMTP_DE no .env, e o destinatário em Configurações (ou ALERTA_PARA).'
@@ -117,6 +122,7 @@ async function enviarTransacional({ para, assunto, texto }) {
 
 module.exports = {
   enviarAvisos,
+  servicoLigado,
   enviarTransacional,
   configurado,
   destinatario,

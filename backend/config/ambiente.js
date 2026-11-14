@@ -109,5 +109,17 @@ module.exports = {
     token: process.env.WHATSAPP_TOKEN || '',
     telefoneId: process.env.WHATSAPP_PHONE_ID || '',
     destino: process.env.WHATSAPP_DESTINO || '',
+    // Seção 9: modelo aprovado pela Meta. Sem ele, só texto livre (janela de 24 h).
+    modelo: process.env.WHATSAPP_MODELO || '',
+    modeloIdioma: process.env.WHATSAPP_MODELO_IDIOMA || 'pt_BR',
+    // Só muda para apontar a um espelho/simulador em teste; o padrão é a Meta.
+    apiUrl: semBarraFinal(process.env.WHATSAPP_API_URL || 'https://graph.facebook.com'),
+  },
+  // Push do navegador (Web Push, Seção 9). Sem as chaves VAPID fica desligado.
+  // Gere uma vez com: npx web-push generate-vapid-keys
+  push: {
+    chavePublica: process.env.VAPID_CHAVE_PUBLICA || '',
+    chavePrivada: process.env.VAPID_CHAVE_PRIVADA || '',
+    assunto: process.env.VAPID_ASSUNTO || '',
   },
 };

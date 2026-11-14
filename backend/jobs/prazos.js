@@ -5,7 +5,7 @@
 const pool = require('../config/db');
 const fila = require('../servicos/fila');
 const alertas = require('../servicos/alertas');
-const notificar = require('../servicos/notificar');
+const { diaNoFuso } = require('../regras/gestao');
 const escopo = require('../servicos/escopo');
 
 // Marcos em horas, na ordem em que são avisados.
@@ -43,8 +43,7 @@ async function verificarPrazos() {
     ETAPAS_VIGIADAS
   );
 
-  const resumo = { vigiadas: linhas.length, criados: 0, email: null, whatsapp: null };
-  const novosPorOrganizacao = new Map();
+  const resumo = { vigiadas: linhas.length, criados: 0 };
 
   for (const licitacao of linhas) {
     const horas = emHoras(licitacao.fim_propostas, agora);
@@ -62,23 +61,13 @@ async function verificarPrazos() {
           `Faltam menos de ${marco.rotulo} para o fim das propostas: ` +
           `${resumir(licitacao.objeto)} — ${licitacao.orgao_nome || 'órgão não informado'}${onde}`,
       });
-      if (criado) {
-        resumo.criados += 1;
-        if (!novosPorOrganizacao.has(licitacao.organizacao_id)) novosPorOrganizacao.set(licitacao.organizacao_id, []);
-        novosPorOrganizacao.get(licitacao.organizacao_id).push({ mensagem: `Faltam menos de ${marco.rotulo}: ${resumir(licitacao.objeto, 140)}`, quando: licitacao.fim_propostas });
-      }
+      if (criado) resumo.criados += 1;
     }
   }
 
-  // O aviso externo sai uma vez, com tudo o que nasceu nesta rodada, por
-  // e-mail e por WhatsApp (seção 14) — os dois opcionais. Um envio por
-  // organização, para o destino dela (Seção 1b).
-  for (const [organizacaoId, novos] of novosPorOrganizacao) {
-    const enviados = await notificar.avisar(organizacaoId, novos);
-    resumo.email = enviados.email;
-    resumo.whatsapp = enviados.whatsapp;
-  }
-
+  // O aviso externo (e-mail, WhatsApp, push) não sai daqui: o despacho do
+  // worker (servicos/notificar.js) leva cada alerta novo a quem quer recebê-lo
+  // por aquele canal (Seção 9).
   return resumo;
 }
 
@@ -146,9 +135,39 @@ async function avisarPrioridadeAlta({ minimo = 80, limite = 20 } = {}) {
   return { criados };
 }
 
+/**
+ * Tarefa aberta com prazo antes de hoje (dia de Brasília) vira aviso ao
+ * responsável (Seção 9; pendência da 8b). Um por tarefa e por prazo: se o prazo
+ * for adiado e vencer de novo, avisa de novo.
+ */
+async function avisarTarefasAtrasadas({ hoje = diaNoFuso() } = {}) {
+  const [tarefas] = await pool.query(
+    `SELECT t.id, t.organizacao_id, t.responsavel_id, t.titulo, t.licitacao_id,
+            DATE_FORMAT(t.prazo, '%Y-%m-%d') AS prazo
+       FROM org_tarefas t
+      WHERE t.status = 'aberta' AND t.responsavel_id IS NOT NULL AND t.prazo < ?`,
+    [hoje]
+  );
+  let criados = 0;
+  for (const t of tarefas) {
+    const [a, m, d] = t.prazo.split('-');
+    const criado = await alertas.criar({
+      organizacaoId: t.organizacao_id,
+      usuarioId: t.responsavel_id,
+      tipo: 'tarefa_atrasada',
+      chave: `tarefa_atrasada:${t.id}:${t.prazo}`,
+      licitacaoId: t.licitacao_id,
+      mensagem: `Tarefa atrasada (prazo ${d}/${m}/${a}): ${resumir(t.titulo, 160)}`,
+    });
+    if (criado) criados += 1;
+  }
+  return { atrasadas: tarefas.length, criados };
+}
+
 function registrarNaFila() {
   fila.registrar('verificar_prazos', () => verificarPrazos());
   fila.registrar('avisar_prioridade_alta', (payload) => avisarPrioridadeAlta(payload || {}));
+  fila.registrar('avisar_tarefas_atrasadas', (payload) => avisarTarefasAtrasadas(payload || {}));
 }
 
-module.exports = { verificarPrazos, alertarAoDecidir, avisarPrioridadeAlta, registrarNaFila, MARCOS };
+module.exports = { verificarPrazos, alertarAoDecidir, avisarPrioridadeAlta, avisarTarefasAtrasadas, registrarNaFila, MARCOS };

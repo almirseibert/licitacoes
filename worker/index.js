@@ -32,6 +32,7 @@ const contratos = require('../backend/jobs/contratos');
 const limpar = require('../backend/jobs/limpar');
 const sancoesMensais = require('../backend/jobs/sancoes-mensais');
 const boletim = require('../backend/jobs/boletim');
+const notificar = require('../backend/servicos/notificar');
 
 const sinal = { parar: false };
 
@@ -124,11 +125,7 @@ async function rodarFrequente() {
   try {
     // Prazos do que decidi disputar: o aviso de 48 h e 2 h (seção 10).
     const prazo = await prazos.verificarPrazos();
-    if (prazo.criados) {
-      const porEmail = prazo.email && prazo.email.enviado ? ' e enviados por e-mail' : '';
-      const porWhats = prazo.whatsapp && prazo.whatsapp.enviado ? ' e por WhatsApp' : '';
-      console.log(`${prazo.criados} alerta(s) de prazo criados${porEmail}${porWhats}.`);
-    }
+    if (prazo.criados) console.log(`${prazo.criados} alerta(s) de prazo criados.`);
     await prazos.avisarPrioridadeAlta({});
 
     // Monitor (seção 21.2): a cadência de cada licitação está gravada em
@@ -154,6 +151,24 @@ async function rodarFrequente() {
     }
   } catch (erro) {
     console.error('Falha na rodada de 30 minutos:', erro.message);
+  }
+
+  // Seção 9: tarefa atrasada vira aviso ao responsável, e todo alerta novo
+  // (deste relógio, do horário e das rotas) sai por e-mail/WhatsApp/push para
+  // quem quer aquele tipo naquele canal. Try próprio para cada um: falha de um
+  // job não segura os avisos que já nasceram.
+  try {
+    await prazos.avisarTarefasAtrasadas({});
+  } catch (erro) {
+    console.error('Falha nos avisos de tarefa atrasada:', erro.message);
+  }
+  try {
+    const despacho = await notificar.despachar({});
+    if (despacho.envios) {
+      console.log(`Avisos: ${despacho.alertas} alerta(s) em ${despacho.envios} envio(s), ${despacho.enviados} entregues.`);
+    }
+  } catch (erro) {
+    console.error('Falha no despacho de avisos:', erro.message);
   }
 }
 

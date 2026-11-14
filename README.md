@@ -238,6 +238,27 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
   - **Aceite medido**: ver o plano (Seção 8) — duas pessoas da organização 1 veem a mesma
     tarefa; a organização 16 não a vê e recebe 404 ao editar/apagar pelo id. Testes em
     `testes/gestao.test.js`.
+- **Seção 9 — Avisos por tipo e por canal, entregue em 14/11/2026.** Migração
+  `024_notificacoes.sql`: `notificacoes_config` (pessoa ou caixa da organização × canal
+  e-mail/WhatsApp/navegador × tipo), `notificacoes_destinos` (e-mail e WhatsApp de cada pessoa
+  em cada organização; e-mail vazio = o de login), `notificacoes_push` (inscrição Web Push) e,
+  em `alertas`, `usuario_id` (aviso pessoal), `autor_id` (quem fez não é avisado) e
+  `notificado_em`. Regras puras em `backend/regras/notificacoes.js`; despacho em
+  `backend/servicos/notificar.js`; push em `backend/servicos/push.js` + `frontend/public/sw.js`;
+  rotas `/api/notificacoes/*`; tela em Configurações → "Avisos por tipo e canal".
+  - Tipos: prazo, esclarecimento, aviso, impugnação, recurso, status, resultado, documento
+    vencendo, tarefa atrasada, nova oportunidade. Linha ausente = padrão (ligado, menos
+    nova oportunidade por e-mail/WhatsApp e aviso/documento por WhatsApp).
+  - O sino continua sendo a fonte da verdade; o worker, a cada 30 min (ou `npm run notificar`),
+    cria o aviso de **tarefa atrasada** ao responsável e leva todo alerta novo para fora, um
+    envio por destino. Endereço de alguém da equipe obedece às escolhas dessa pessoa, mesmo que
+    seja também o da caixa da organização. Andamento registrado vira aviso do tipo dele.
+  - WhatsApp com **modelo aprovado** pela Meta (`WHATSAPP_MODELO`): sem ele, texto livre, só
+    dentro da janela de 24 h. Textos a submeter em `docs/whatsapp-modelos.md`.
+  - Push: só endpoint https de serviço de push conhecido (FCM, Mozilla, Apple, WNS); 404/410
+    apaga a inscrição.
+  - **Aceite medido**: ver o plano (Seção 9) — SMTP real local e simulador da Meta; o aceite
+    com WhatsApp real da Meta ficou na 9b. Testes em `testes/notificacoes.test.js`.
 - `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
   ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
 

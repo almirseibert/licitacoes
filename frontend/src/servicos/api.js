@@ -615,6 +615,17 @@ export const api = {
   andamentos: (licitacaoId) => requisitar(`/gestao/andamentos?licitacao_id=${licitacaoId}`),
   registrarAndamento: (campos) => requisitar('/gestao/andamentos', { method: 'POST', body: JSON.stringify(campos) }),
   apagarAndamento: (id) => requisitar(`/gestao/andamentos/${id}`, { method: 'DELETE' }),
+
+  // ------------------------------------------ avisos por tipo e canal (Seção 9)
+  notificacoes: () => requisitar('/notificacoes'),
+  salvarPreferenciasAviso: (escopo, preferencias) =>
+    requisitar('/notificacoes/preferencias', { method: 'PUT', body: JSON.stringify({ escopo, preferencias }) }),
+  salvarDestinosAviso: (campos) =>
+    requisitar('/notificacoes/destinos', { method: 'PATCH', body: JSON.stringify(campos) }),
+  inscreverPush: (inscricao) => requisitar('/notificacoes/push', { method: 'POST', body: JSON.stringify(inscricao) }),
+  desinscreverPush: (endpoint) =>
+    requisitar('/notificacoes/push', { method: 'DELETE', body: JSON.stringify({ endpoint }) }),
+  testarAviso: (canal) => requisitar('/notificacoes/teste', { method: 'POST', body: JSON.stringify({ canal }) }),
   anexosDa: (licitacaoId) => requisitar(`/gestao/anexos?licitacao_id=${licitacaoId}`),
   agenda: (de, ate, por) => requisitar(`/gestao/agenda?de=${de}&ate=${ate}${por === 'mim' ? '&por=mim' : ''}`),
   dashboard: () => requisitar('/gestao/dashboard'),
