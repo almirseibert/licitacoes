@@ -1,6 +1,8 @@
 # Roteiro de implantação — o que falta nos dois planos, na ordem
 
-Gerado em 14/11/2026 a partir da leitura dos dois planos e do código. Não substitui nenhum
+Gerado em 14/11/2026 a partir da leitura dos dois planos e do código; a tabela do plano SaaS
+foi atualizada depois da Seção 13. A ordem da seção 2 abaixo continua valendo; as linhas 1 a 13
+já foram feitas. Não substitui nenhum
 deles: a spec (`PAINEL_LICITACOES_INSTRUCOES.md`) e o plano SaaS (`PLANO_SAAS_CONLICITACAO.md`)
 continuam sendo a fonte da verdade; este arquivo só ordena o que ainda está aberto.
 
@@ -16,17 +18,33 @@ Sobram 3 itens abertos, nenhum é código novo de funcionalidade:
 | Tela funciona em 390 px de largura | spec seção 32 | código | junto da Seção 2 |
 | Contraste do texto ≥ 4,5:1 sobre `#0A0E1A` | spec seção 32 | código | junto da Seção 2 (o aceite dela é contraste) |
 
-### Plano SaaS — Seções 0 a 18
-| Seção | Estado |
-|---|---|
-| 0 Levantamento | ✅ |
-| 1a Base multiempresa | ✅ (12/11) |
-| 1b Isolamento de verdade | ❌ 6 itens abertos |
-| 2 a 15, 17, 18 | ❌ nada feito |
-| 16 Consultor jurídico | 🚫 bloqueada (advogado revisor indefinido) |
+### Plano SaaS — Seções 0 a 18 (estado em 14/11/2026, depois da Seção 13)
+| Seção | Estado | Pendências (`- [ ]` no plano) |
+|---|---|---|
+| 0 Levantamento | ✅ 13/11 | 1 (resposta do Pergunte ao Edital ainda não observada no ConLicitação) |
+| 1a Base multiempresa | ✅ 12/11 | — |
+| 1b Isolamento | ✅ 13/11 | — |
+| **1c** Achados da revisão da 1b | ❌ aberta | 5 |
+| 2 Tema claro/escuro | ✅ 13/11 | 3 (2b) |
+| 3 Planos e cobrança | ✅ 13/11 | 6 (3b) — gateway real não escolhido |
+| 4 Boletim diário | ✅ 13/11 | 5 (4b) |
+| 5 Pergunte ao Edital | ✅ 14/11 | 5 (5b) — **aceite com Gemini real pendente** |
+| 6 Monitor de chat | ❌ não iniciada | 5 |
+| 7 Radar 2.0 | ✅ 13/11 | 6 (7b) — CAPAG, chat (depende da 6) |
+| 8 Gestão e dashboard | ✅ 13/11 | 3 (8b) |
+| 9 Avisos por tipo e canal | ✅ 14/11 | 7 (9b) — **aceite com SMTP/WhatsApp reais pendente** |
+| 10 Documentos e portais | ✅ 14/11 | 3 (10b) |
+| 11 Resumo do Edital 2.0 | ⚠️ código 14/11 | 4 (11b) — **aceite da spec (10 editais, Gemini real) pendente** |
+| 12 Mercado: contratos e atas | ✅ 14/11 | 3 (12b) — carga histórica além de ~16 dias |
+| 13 Concorrentes e mercado | ✅ 14/11 | 3 (13b) |
+| 14 API, token e webhook | ❌ não iniciada | 4 |
+| 15 Meu desempenho | ❌ não iniciada | 1 |
+| 16 Consultor jurídico | 🚫 bloqueada (advogado revisor) | 3 |
+| 17 Onboarding, ajuda, LGPD, auditoria | ❌ não iniciada | 5 |
+| 18 Ecossistema | ❌ não iniciada | 3 (um deles é a lista do que fica fora) |
 
-Itens abertos por seção: 1b=6 · 2=3 · 3=7 · 4=6 · 5=8 · 6=5 · 7=7 · 8=6 · 9=4 · 10=6 · 11=5 ·
-12=4 · 13=5 · 14=4 · 15=1 · 16=3 · 17=5 · 18=3.
+Seções novas ainda por fazer: **14 → 15 → 17 → 6 → 18** (16 bloqueada). O detalhe de cada
+pendência está no próprio plano, na seção e na sua "Nb".
 
 ## 2. Ordem de implantação
 
