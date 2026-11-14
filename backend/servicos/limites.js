@@ -24,6 +24,8 @@ const NOMES_LIMITE = {
   monitoramentos: 'licitações acompanhadas',
   monitores_chat: 'monitores de chat',
   tokens_api: 'tokens de API',
+  webhooks: 'webhooks',
+  api_chamadas_mes: 'chamadas à API neste mês',
 };
 
 const NOMES_RECURSO = {
@@ -46,7 +48,7 @@ const NOMES_RECURSO = {
 };
 
 // Limites mensais vêm de `uso_mensal`; os outros são estoque, contados na hora.
-const MENSAIS = ['ia_resumos_mes', 'ia_perguntas_mes', 'exportacoes_mes'];
+const MENSAIS = ['ia_resumos_mes', 'ia_perguntas_mes', 'exportacoes_mes', 'api_chamadas_mes'];
 
 // ------------------------------------------------------------------- puro
 
@@ -268,14 +270,16 @@ async function uso(organizacaoId, agora = new Date()) {
        (SELECT COUNT(*) FROM monitoramentos WHERE organizacao_id = ? AND ativo = 1) AS monitoramentos,
        COALESCE((SELECT SUM(tamanho_bytes) FROM empresa_documentos WHERE organizacao_id = ?), 0)
        + COALESCE((SELECT SUM(tamanho_bytes) FROM licitacao_anexos WHERE organizacao_id = ?), 0)
-       + COALESCE((SELECT SUM(tamanho_bytes) FROM pacotes WHERE organizacao_id = ?), 0) AS cofre_gb`,
-    [id, id, id, id, id, id, id, id, id]
+       + COALESCE((SELECT SUM(tamanho_bytes) FROM pacotes WHERE organizacao_id = ?), 0) AS cofre_gb,
+       (SELECT COUNT(*) FROM tokens_api WHERE organizacao_id = ? AND revogado_em IS NULL) AS tokens_api,
+       (SELECT COUNT(*) FROM webhooks WHERE organizacao_id = ?) AS webhooks`,
+    [id, id, id, id, id, id, id, id, id, id, id]
   );
   const [mensais] = await db().query(
     'SELECT recurso, quantidade FROM uso_mensal WHERE organizacao_id = ? AND mes = ?',
     [id, mesDe(agora)]
   );
-  const resultado = { monitores_chat: 0, tokens_api: 0 };
+  const resultado = { monitores_chat: 0 };
   for (const [chave, valor] of Object.entries(estoque)) resultado[chave] = Number(valor || 0);
   for (const chave of MENSAIS) resultado[chave] = 0;
   for (const m of mensais) resultado[m.recurso] = Number(m.quantidade);

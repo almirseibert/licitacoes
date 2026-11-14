@@ -47,6 +47,15 @@ module.exports = {
     provedor: process.env.COBRANCA_PROVEDOR || 'manual',
     segredoWebhook: process.env.COBRANCA_WEBHOOK_SEGREDO || '',
   },
+  // Seção 14: quantos proxies reversos (EasyPanel/Traefik, Cloudflare...) ficam
+  // entre a internet e a API. É o que diz de onde vem o IP do cliente: com 0, o
+  // IP é o do último salto e a lista de IPs liberados de um token compararia o
+  // IP do proxy; com o número certo, o Express lê o X-Forwarded-For desse tanto
+  // de saltos. Nunca "true" (aceitaria um cabeçalho forjado pelo cliente).
+  confiarProxy: Math.max(0, Number(process.env.CONFIAR_PROXY || 0)) || 0,
+  // Seção 14: só para testar o webhook contra um servidor local (http e rede
+  // interna). Em produção fica vazio — webhook é https e só para a internet.
+  webhookPermitirLocal: (process.env.WEBHOOK_PERMITIR_LOCAL || '').toLowerCase() === 'true',
   jwt: {
     get segredo() { return obrigatorio('JWT_SECRET'); },
     expira: process.env.JWT_EXPIRA || '8h',

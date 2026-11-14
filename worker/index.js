@@ -32,6 +32,7 @@ const contratos = require('../backend/jobs/contratos');
 const limpar = require('../backend/jobs/limpar');
 const sancoesMensais = require('../backend/jobs/sancoes-mensais');
 const boletim = require('../backend/jobs/boletim');
+const webhooks = require('../backend/jobs/webhooks');
 const mercado = require('../backend/jobs/mercado');
 const notificar = require('../backend/servicos/notificar');
 
@@ -281,6 +282,18 @@ async function rodarDeHoraEmHora() {
       for (const e of boletins.erros.slice(0, 3)) console.log(`Boletim com erro: ${e}`);
     } catch (erro) {
       console.error('Falha no boletim:', erro.message);
+    }
+
+    // Webhook de novas oportunidades (Seção 14): entrega o que é novo para cada
+    // filtro com webhook, logo depois da coleta. Try próprio, como o boletim.
+    try {
+      const entregues = await webhooks.rodar({});
+      for (const e of entregues.entregas.filter((x) => x.novos)) {
+        console.log(`Webhook ${e.webhook_id} (org ${e.organizacao_id}): ${e.entregues}/${e.novos} oportunidade(s)${e.erro ? ` — falhou: ${e.erro}` : ''}.`);
+      }
+      for (const e of entregues.erros.slice(0, 3)) console.log(`Webhook com erro: ${e}`);
+    } catch (erro) {
+      console.error('Falha nos webhooks:', erro.message);
     }
 
     // Recorrências (seção 24): detecção semanal no domingo, aviso diário às 08h.

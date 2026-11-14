@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock, Newspaper, LayoutDashboard, ListTodo, ScrollText, BookMarked, BellRing, PieChart } from 'lucide-react';
+import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock, Newspaper, LayoutDashboard, ListTodo, ScrollText, BookMarked, BellRing, PieChart, Plug } from 'lucide-react';
 import { api, obterToken, obterUsuario, obterOrganizacao, guardarSessao, encerrarSessao } from './servicos/api';
 import Login from './paginas/Login';
 import Convite from './paginas/Convite';
 import RedefinirSenha from './paginas/RedefinirSenha';
 import RadarPublico from './paginas/RadarPublico';
 import Equipe from './paginas/Equipe';
+import Integracoes from './paginas/Integracoes';
 import Radar from './paginas/Radar';
 import Fontes from './paginas/Fontes';
 import Palavras from './paginas/Palavras';
@@ -55,6 +56,8 @@ const TELAS = [
   { chave: 'cofre', rotulo: 'Documentos', icone: FolderLock },
   { chave: 'modelos', rotulo: 'Declarações', icone: FileSignature },
   { chave: 'equipe', rotulo: 'Equipe', icone: Users },
+  // Seção 14: token de API e webhook de novas oportunidades.
+  { chave: 'integracoes', rotulo: 'Integrações', icone: Plug, recurso: 'api' },
   { chave: 'configuracoes', rotulo: 'Configurações', icone: SlidersHorizontal },
   { chave: 'assinatura', rotulo: 'Assinatura', icone: CreditCard },
   { chave: 'uso', rotulo: 'Uso do plano', icone: Gauge },
@@ -272,6 +275,7 @@ export default function App() {
         )}
         {tela === 'relatorio' && <Relatorio />}
         {tela === 'equipe' && <Equipe />}
+        {tela === 'integracoes' && <Integracoes />}
         {tela === 'configuracoes' && <Configuracoes />}
         {tela === 'assinatura' && <Assinatura aba="assinatura" key="assinatura" />}
         {tela === 'uso' && <Assinatura aba="uso" key="uso" />}

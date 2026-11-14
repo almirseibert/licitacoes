@@ -359,6 +359,14 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
     disponível"** — o PNCP só publica o vencedor do item (conferido em 14/11/2026).
   Serviço em `backend/servicos/analise-mercado.js`; testes em `testes/analise-mercado.test.js`.
   **Aceite medido**: ver o plano (Seção 13).
+
+- **Seção 14 — API, token e webhook, entregue em 14/11/2026.** Migração `031_api.sql`. Tela
+  **Integrações** (admin/dono, plano com `api`): tokens `lic_…` (só o hash no banco, aparece uma vez,
+  lista de IPs, revogação imediata) e webhooks por filtro salvo, assinados com HMAC. `/api/v1/eu`,
+  `/licitacoes` e `/licitacoes/:id` (só leitura, cota mensal e 60/min). Serviços:
+  `backend/servicos/api.js`, `webhook.js`; regras puras em `regras/api.js`; job `jobs/webhooks.js`
+  (`npm run webhooks`, no worker de hora em hora). Variáveis: `CONFIAR_PROXY`, `WEBHOOK_PERMITIR_LOCAL`.
+  Documentação: [docs/API.md](docs/API.md). **Aceite medido**: ver o plano (Seção 14).
 - `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
   ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
 

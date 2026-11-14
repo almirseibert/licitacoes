@@ -9,9 +9,12 @@ const cors = require('cors');
 const { autenticar, confirmarVinculo, leitorSoLe } = require('./middlewares/autenticar');
 const { responderErro } = require('./middlewares/responder-erro');
 const { assinaturaValida, exigirRecurso } = require('./servicos/limites');
-const { ambiente, urlPublica } = require('./config/ambiente');
+const { pilhaApi } = require('./servicos/api');
+const { ambiente, urlPublica, confiarProxy } = require('./config/ambiente');
 
 const app = express();
+// Seção 14: o IP do cliente (lista de IPs liberados do token) depende disto.
+if (confiarProxy > 0) app.set('trust proxy', confiarProxy);
 
 // Em produção, só a origem do próprio painel (URL_PUBLICA) pode chamar a API do
 // navegador — o token vai no cabeçalho Authorization, não em cookie, então não
@@ -70,6 +73,11 @@ app.use('/api/gestao', ...modulo('gestao'), require('./rotas/gestao'));
 // Seção 12: catálogo público do mercado (contratos e atas) e acompanhamentos.
 app.use('/api/mercado', ...modulo('mercado'), require('./rotas/mercado').mercado);
 app.use('/api/acompanhamentos', ...modulo('acompanhamentos'), require('./rotas/mercado').acompanhamentos);
+
+// Seção 14: tokens e webhooks (tela de Integrações, com o login do painel) e a
+// API pública por token. `/api/v1` não passa por `autenticar`: o token é dela.
+app.use('/api/integracoes', ...modulo('api'), require('./rotas/integracoes'));
+app.use('/api/v1', ...pilhaApi, require('./rotas/api-v1'));
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ erro: 'Rota não encontrada.' });

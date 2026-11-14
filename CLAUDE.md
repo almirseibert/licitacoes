@@ -71,7 +71,7 @@ npm install && npm run migrar && npm run semear
 `-- --contrato=<id>` mostra o checklist de um), `npm run limpar` (`.tmp` velho e
 arquivos de licitação descartada há mais de 180 dias — a ficha fica, porque é dela
 que o diagnóstico vive), `npm run sancoes` (CEIS/CNEP do próprio CNPJ e dos
-concorrentes recorrentes).
+concorrentes recorrentes), `npm run webhooks` (entrega de novas oportunidades; `-- --simular`).
 
 Antes de fechar qualquer fase: `npm run lint && npm test`. São 30 testes em `testes/`,
 sem banco e sem rede, no que erra calado — a conduta da coleta (5.4), a validação da

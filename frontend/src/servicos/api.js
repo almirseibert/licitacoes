@@ -210,6 +210,22 @@ export const api = {
   marcarBoletinsLidos: (filtro) =>
     requisitar('/boletins/marcar-lidos', { method: 'POST', body: JSON.stringify(filtro) }),
 
+  // ------------------------------------------ integrações (Seção 14)
+  tokensApi: () => requisitar('/integracoes/tokens'),
+  criarTokenApi: (nome, ips) =>
+    requisitar('/integracoes/tokens', { method: 'POST', body: JSON.stringify({ nome, ips_liberados: ips }) }),
+  salvarIpsTokenApi: (id, ips) =>
+    requisitar(`/integracoes/tokens/${id}`, { method: 'PATCH', body: JSON.stringify({ ips_liberados: ips }) }),
+  revogarTokenApi: (id) => requisitar(`/integracoes/tokens/${id}`, { method: 'DELETE' }),
+  filtrosDeWebhook: () => requisitar('/integracoes/filtros'),
+  webhooks: () => requisitar('/integracoes/webhooks'),
+  criarWebhook: (campos) => requisitar('/integracoes/webhooks', { method: 'POST', body: JSON.stringify(campos) }),
+  alterarWebhook: (id, campos) =>
+    requisitar(`/integracoes/webhooks/${id}`, { method: 'PATCH', body: JSON.stringify(campos) }),
+  apagarWebhook: (id) => requisitar(`/integracoes/webhooks/${id}`, { method: 'DELETE' }),
+  girarSegredoWebhook: (id) => requisitar(`/integracoes/webhooks/${id}/segredo`, { method: 'POST' }),
+  testarWebhook: (id) => requisitar(`/integracoes/webhooks/${id}/testar`, { method: 'POST' }),
+
   resumo: () => requisitar('/painel/resumo'),
 
   filtros: () => requisitar('/licitacoes/filtros'),

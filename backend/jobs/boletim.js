@@ -81,15 +81,25 @@ async function textosDoEdital(ids) {
  * O que é novo para o filtro e casa com ele. Não grava nada.
  * @returns {Promise<Array<object>>} licitações com `palavra` e `onde`
  */
-async function selecionar(perfil, { dias = DIAS_JANELA } = {}) {
+async function selecionar(perfil, { dias = DIAS_JANELA, webhookId = null, desde = null } = {}) {
   const org = escopo.idOrganizacao(perfil.organizacao_id);
+  // O webhook (Seção 14) reaproveita o casamento do filtro, mas o "já enviado"
+  // dele é a tabela `webhook_itens`, não a do boletim — e só vale o que chegou
+  // ao catálogo depois de ele ser criado (`desde`).
+  const jaEnviado = webhookId
+    ? 'NOT EXISTS (SELECT 1 FROM webhook_itens wi WHERE wi.webhook_id = ? AND wi.licitacao_id = l.id)'
+    : 'NOT EXISTS (SELECT 1 FROM boletim_itens bi WHERE bi.perfil_id = ? AND bi.licitacao_id = l.id)';
   const condicoes = [
     'l.descartada = 0',
     'l.criado_em >= NOW() - INTERVAL ? DAY',
     '(l.fim_propostas IS NULL OR l.fim_propostas > NOW())',
-    'NOT EXISTS (SELECT 1 FROM boletim_itens bi WHERE bi.perfil_id = ? AND bi.licitacao_id = l.id)',
+    jaEnviado,
   ];
-  const valores = [Number(dias), perfil.id];
+  const valores = [Number(dias), webhookId || perfil.id];
+  if (desde) {
+    condicoes.push('l.criado_em >= ?');
+    valores.push(desde);
+  }
   // UF é o corte mais barato e mais seletivo: vai para o SQL. O resto é JS puro.
   if (perfil.ufs.length) {
     condicoes.push('l.uf IN (?)');

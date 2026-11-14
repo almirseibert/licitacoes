@@ -789,15 +789,46 @@ passada feita à mão (função só de teste removida, internos desexportados). 
 
 ---
 
-## Seção 14 — API, token e webhook (Fase C)
-- [ ] `tokens_api` (organizacao_id, hash do token, ips_liberados, ultimo_uso). O token aparece **uma
-      vez**, na criação; no banco só o hash. Rota `/api/v1/*` autenticada por token, com limite por plano.
-- [ ] Lista de IPs liberados (vazia = qualquer); recusa fora da lista.
-- [ ] **Webhook de novas oportunidades** por filtro salvo (assinatura HMAC no cabeçalho).
-- [ ] Documentação da API em `docs/API.md`.
+## Seção 14 — API, token e webhook (Fase C) — ✅ feito em 14/11/2026
+- [x] `tokens_api` (organizacao_id, hash SHA-256, `ips_liberados`, `ultimo_uso`, `revogado_em`) —
+      migração `031_api.sql`. O token (`lic_` + 256 bits) aparece **uma vez**, na criação; o banco
+      guarda só o hash. `/api/v1/*` (`/eu`, `/licitacoes`, `/licitacoes/:id`, só leitura) por token, com
+      cota mensal por plano (`api_chamadas_mes`: Profissional 10.000, Avançado 100.000) e 60/min por
+      token. Limites novos `webhooks` e `tokens_api` (2 / 5) conferidos dentro de transação.
+- [x] Lista de IPs liberados (IPv4/IPv6, CIDR; vazia = qualquer); recusa fora da lista com 403.
+      `CONFIAR_PROXY` define de onde sai o IP do cliente.
+- [x] Webhook de novas oportunidades por filtro salvo (boletim ou pesquisa do Radar), HMAC-SHA256 em
+      `X-Painel-Assinatura` (`t=…,v1=…`, com tempo). Segredo derivado do `JWT_SECRET` + sal (o banco só
+      tem o sal), mostrado uma vez, com girar e testar. https só, sem rede interna (conferida na criação
+      e a cada conexão), sem redirecionamento, 10 s; 10 falhas seguidas pausam. `npm run webhooks`.
+- [x] Tela **Integrações** (admin/dono) e `docs/API.md`.
 
-**Aceite:** chamada com token válido de IP liberado responde; de IP fora da lista, 403; token
-revogado, 401; nenhum token em texto puro no banco.
+**Aceite (medido):** roteiro de **81 conferências** pela API real contra MariaDB 10.11, banco zerado
+(migração 031 incluída), três organizações. Token válido de IP liberado 200; IP fora da lista 403;
+token revogado 401 (e sem token, inventado e JWT do painel também 401); plano Essencial 402. Dump
+inteiro do banco e logs sem o token em texto puro (só o hash de 64 hex) e sem o segredo do webhook.
+Isolamento: a org B não vê nota/favorito/etapa da A na mesma licitação e recebeu 404 ao revogar,
+editar, apagar ou testar token/webhook da A. Limite: 3º token 402; 6 criações simultâneas com 1 vaga →
+exatamente 1. Cota estourada 429 com `Retry-After`; rajada de 70 → 15 com 429. Webhook: simulação não
+envia; entrega 1 pedido com os 2 itens certos (exclusão, UF, antigo e fora do filtro ficaram de fora),
+assinatura confere no receptor, segunda rodada 0 repetido; destino 500 → item pendente e entregue na
+rodada seguinte; 10 falhas → pausado (o roteiro pegou um bug: o UPDATE desligava na 9ª, corrigido);
+segredo girado invalida o antigo; worker sem a flag local recusa 127.0.0.1; 6 URLs de SSRF recusadas.
+Lint limpo, 169/169 testes (11 novos em `testes/api.test.js`). Tela conferida com Playwright
+(1366 px e 390 px, sem rolagem lateral e sem erro no console).
+**Não verificado:** catálogo **sintético** (8 licitações inseridas por SQL — o PNCP não responde neste
+ambiente), webhook para um destino https real na internet, `CONFIAR_PROXY` atrás do Traefik de
+verdade e MySQL 8 (o teste é MariaDB). A `security-review` não roda aqui (sem `origin/HEAD`); a
+revisão de segurança foi à mão (SSRF, hash, HMAC, isolamento). A skill `simplify` não foi rodada.
+
+**Seção 14b — pendente:**
+- [ ] Entrega **pelo menos uma vez** (falha entre o 2xx e o registro reenvia o lote); a cota mensal é
+      lida e incrementada em dois passos (pode passar do teto sob concorrência) e cobra mesmo se a
+      rota falhar.
+- [ ] Entrega de webhooks em série no worker (destinos lentos seguram a rodada); paralelizar com teto.
+- [ ] Limite de 30 tokens inválidos/min por IP vira 429 para todos quando `CONFIAR_PROXY=0`.
+- [ ] `webhook_itens` sem `organizacao_id`; helpers de parse JSON duplicados (api, integracoes, webhooks).
+- [ ] Mais endpoints no `/api/v1` (contratos, mercado, funil) e teste versionado do job e da cota.
 
 ---
 
