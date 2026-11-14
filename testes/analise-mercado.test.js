@@ -118,10 +118,3 @@ test('lista de coluna JSON aceita texto (MariaDB), array (MySQL) e lixo', () => 
   assert.deepEqual(regras.listaJson('não é json'), []);
   assert.deepEqual(regras.listaJson(null), []);
 });
-
-test('diferença relativa do aceite', () => {
-  assert.equal(regras.diferencaRelativa(55, 55), 0);
-  assert.equal(regras.diferencaRelativa(24, 20), 0.2);
-  assert.equal(regras.diferencaRelativa(0, 0), 0);
-  assert.equal(regras.diferencaRelativa(3, 0), 1);
-});

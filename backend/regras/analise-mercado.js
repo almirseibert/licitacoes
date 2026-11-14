@@ -216,29 +216,17 @@ function resumirPerdas(perdas) {
   return { motivos, principal };
 }
 
-/** Diferença relativa entre o que o painel calculou e a contagem à mão. */
-function diferencaRelativa(calculado, conferido) {
-  const a = Number(calculado);
-  const b = Number(conferido);
-  if (!b) return a ? 1 : 0;
-  return Math.round((Math.abs(a - b) / b) * 10000) / 10000;
-}
-
 module.exports = {
   DESCLASSIFICACAO,
   DIAS_PADRAO,
   DIAS_RECORRENTES,
   JANELAS_RECORRENTES,
   TERMOS_MAX,
-  POR_POUCO,
-  RECOMENDACOES,
   condicaoDeTermos,
   padraoDePalavra,
   listaJson,
   periodoDoMes,
   periodoPedido,
-  diasAntes,
   motivoDaPerda,
   resumirPerdas,
-  diferencaRelativa,
 };

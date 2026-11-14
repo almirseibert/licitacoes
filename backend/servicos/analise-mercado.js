@@ -499,4 +499,4 @@ async function relatorioEmPdf(organizacaoId, q = {}) {
   return { buffer: Buffer.from(await doc.save()), analise: r };
 }
 
-module.exports = { analisar, recorrentes, perfilNoMercado, historicoDePerdas, relatorioEmPdf, opcoes, resolverSegmento };
+module.exports = { analisar, recorrentes, perfilNoMercado, historicoDePerdas, relatorioEmPdf, opcoes };

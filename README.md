@@ -343,6 +343,22 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
     contratado e estimado (do edital, quando está no catálogo), empresa, CNPJ do fornecedor, tipo,
     poder, esfera, modalidade, data de assinatura. **Aceite medido**: ver o plano (Seção 12).
     Testes em `testes/mercado.test.js`.
+- **Seção 13 — Concorrentes, histórico e mercado, entregue em 14/11/2026.** Tela **Análise de
+  mercado** (`frontend/src/paginas/AnaliseMercado.jsx`, recurso `mercado`), três abas:
+  - **Análise de mercado**: compras por mês, região (município), modalidade, órgão, fornecedor e
+    produto, por segmento (grupo de palavras-chave ou "Meus filtros") e período; **relatório
+    mensal em PDF** (`GET /api/mercado/analise/pdf?mes=AAAA-MM`). O termo casa por **palavra
+    inteira** com plural e sem acento (`regras/analise-mercado.js`, `padraoDePalavra`) — por
+    trecho, "monitor" trazia 14 contratos de vigilância para o segmento de informática.
+  - **Concorrentes recorrentes**: quem mais assinou contrato nos meus segmentos (30/90/180/365
+    dias), sem o próprio CNPJ e sem CPF mascarado.
+  - **Meu histórico**: motivo de cada perda (preço, perdeu por pouco até 5%, não foi preço, falta
+    de dado), recomendação, quem mais me venceu e os 3 bloqueios do diagnóstico de descarte.
+  - **Perfil por CNPJ** (`GET /api/mercado/fornecedores/:cnpj`, também na ficha do concorrente):
+    contratos, valor ganho, por UF, modalidade e órgão. **Desclassificação/inabilitação: "não
+    disponível"** — o PNCP só publica o vencedor do item (conferido em 14/11/2026).
+  Serviço em `backend/servicos/analise-mercado.js`; testes em `testes/analise-mercado.test.js`.
+  **Aceite medido**: ver o plano (Seção 13).
 - `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
   ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
 
@@ -1269,6 +1285,12 @@ DELETE /api/feriados/:id                       so os cadastrados a mao
 GET    /api/mercado/contratos                  contratos do mercado (PNCP), com filtros e paginação
 GET    /api/mercado/atas                       atas de registro de preços, com filtros
 GET    /api/mercado/resumo                     contagem por mês/UF, estado da coleta, listas dos filtros
+GET    /api/mercado/analise                    ?segmento=|filtro=&mes=|de=&ate=&uf=&modalidade=&municipio=
+GET    /api/mercado/analise/pdf                relatório mensal por segmento em PDF (mesmos filtros)
+GET    /api/mercado/analise/opcoes             segmentos (grupos de palavra-chave) e "Meus filtros"
+GET    /api/mercado/recorrentes                ?segmento=|filtro=&dias=30|90|180|365&minimo=
+GET    /api/mercado/fornecedores/:cnpj         perfil por CNPJ no mercado (PNCP)
+GET    /api/diagnostico/perdas                 ?meses=3|6|12|24 — motivos de perda e recomendação
 GET    /api/acompanhamentos                    publicações posteriores ao edital (filtros; ?favoritas=1)
 GET    /api/contratos                          lista, faturado em 12m e faixa
 GET    /api/gestao/tarefas                     ?visao=atrasadas|hoje|futuras|concluidas&por=mim&licitacao_id=

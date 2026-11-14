@@ -28,7 +28,7 @@ cofre de senha de portal e a assinatura digital (ver a tabela de divergências n
 |---|---|---|---|
 | **A — Fundação SaaS** | 0 ✅, 1 (1a ✅, 1b ✅, 1c), 2 ✅, 3 ✅ | Conta própria, equipe, dados isolados, tema claro/escuro, plano e cobrança | Dá para cobrar e isolar clientes |
 | **B — Paridade de captação** | 4 ✅, 7 ✅, 8 ✅, 9 ✅, 10 ✅ | Boletim diário, banco de licitações completo, gestão com tarefas, avisos por tipo, documentos | Substitui o uso diário do ConLicitação na captação |
-| **C — IA e inteligência** | 5 ✅, 11 (11b), 12 ✅ (12b), 13, 14, 15, 17 | Pergunte ao Edital, resumo com checklist, acompanhamentos, contratos e atas, concorrentes e mercado, API, onboarding | **Versão 1 vendável** — fim da Fase C |
+| **C — IA e inteligência** | 5 ✅, 11 (11b), 12 ✅ (12b), 13 ✅ (13b), 14, 15, 17 | Pergunte ao Edital, resumo com checklist, acompanhamentos, contratos e atas, concorrentes e mercado, API, onboarding | **Versão 1 vendável** — fim da Fase C |
 | **D — Estratégia e automação** | 6, 16 | Monitor de chat, alerta de deserta por segmento, consultor jurídico | Planos mais caros |
 | **E — Ecossistema** | 18 | Seguro garantia, assessoria cadastral, cursos por parceria | Receita complementar |
 
@@ -732,21 +732,60 @@ favorita, 0 com palavra alheia, alerta só para quem favoritou), telas sem erro 
 
 ---
 
-## Seção 13 — Concorrentes, histórico e mercado (Fase C)
+## Seção 13 — Concorrentes, histórico e mercado (Fase C) — ✅ feito em 14/11/2026
 Dossiê do concorrente (seção 26), sanções CEIS/CNEP e o histórico já existem. Completar com o que
 a referência mostra por CNPJ.
-- [ ] Perfil por CNPJ: total de disputas e vencidas, valor ganho, contratos por UF e por
-      modalidade, itens vencidos e não vencidos — a partir de `mercado_contratos` (Seção 12).
-- [ ] **Motivos de desclassificação e inabilitação** (percentual e principais motivos). Depende de o
-      PNCP expor o motivo — **verificar antes de prometer**; sem o dado, a tela diz "não disponível"
-      em vez de inventar.
-- [ ] **Concorrentes recorrentes nos meus segmentos**: lista pela palavra-chave da organização.
-- [ ] **Análise de mercado**: compras por região, modalidade, órgão, concorrentes e produtos, por
-      período e filtro salvo; **relatório mensal por segmento** em PDF (já existe `Relatorio.jsx`).
-- [ ] Meu histórico com **motivos de perda e recomendação** (diagnóstico da seção 20 já calcula).
+- [x] Perfil por CNPJ (`GET /api/mercado/fornecedores/:cnpj`, `PerfilFornecedor.jsx`, também na
+      ficha do concorrente): contratos e licitações vencidas, valor ganho, por UF, modalidade e
+      órgão, itens vencidos dos editais lidos. **Disputas e itens não vencidos: "não disponível"**
+      — o PNCP só publica o vencedor; a lista de propostas é do portal de disputa (CAPTCHA).
+- [x] **Motivos de desclassificação e inabilitação**: verificado no PNCP em 14/11/2026
+      (`/api/pncp/v1/orgaos/{cnpj}/compras/{ano}/{seq}/itens/{n}/resultados`): publica só o
+      fornecedor homologado e `motivoCancelamento`. **Não disponível** — a tela diz isso, e o campo
+      "Desclassificada" do dossiê passou a mostrar "não disponível" quando não há lista de propostas.
+- [x] **Concorrentes recorrentes nos meus segmentos** (`GET /api/mercado/recorrentes`): pelas
+      palavras-chave da organização (todas, um grupo ou um filtro salvo), sem o próprio CNPJ e sem
+      CPF mascarado (a máscara junta pessoas diferentes).
+- [x] **Análise de mercado** (`GET /api/mercado/analise`): compras por mês, região, modalidade,
+      órgão, fornecedor e produto (termo do segmento; itens do edital quando sem segmento), por
+      período e filtro salvo; **relatório mensal por segmento em PDF** (`/analise/pdf`, pdf-lib).
+- [x] Meu histórico (`GET /api/diagnostico/perdas`): motivo de cada perda — preço, perdeu por pouco
+      (≤ 5%, a faixa do empate ficto da LC 123), não foi preço, sem proposta, sem resultado — com
+      recomendação, quem mais me venceu e os 3 bloqueios do diagnóstico da seção 20.
 
 **Aceite:** relatório de mercado de um segmento conferido contra amostra manual, com a diferença
 medida no commit.
+
+**Aceite medido (14/11/2026, PNCP real, RS, 29/10 a 14/11):** segmento "Informática e itens" (14
+termos). Leitura manual dos 24 contratos que o casamento **por trecho** trazia: só **10** eram do
+segmento — os 14 restantes eram "monitor" casando com "monitoramento" (vigilância armada, CFTV),
+R$ 3.321.868 dos R$ 3.400.062. **Diferença medida antes da correção: +140% na contagem, +4.248% no
+valor.** Com o casamento por palavra inteira (plural, acento e caixa): painel **10 contratos /
+R$ 78.194,05 = amostra manual 10 / R$ 78.194,05 — diferença 0**. Outros dois segmentos lidos à mão:
+"Frota e rastreamento" 7 = 7, "Serviços digitais" 10 = 10 por termo (7 deles são o mesmo registro
+de preços de CFTV "com inteligência artificial embarcada" — casamento literal correto); em todos,
+nenhum contrato que só o casamento por trecho achava era do segmento. Filtro salvo (limpeza +
+higiene, pregão, exclui "veículo"): 55 = 55 contra SQL escrito à parte; com valor mínimo, contratos
+32 e atas preservadas (46). Isolamento com duas organizações: segmento, filtro salvo e recorrentes
+de A pedidos por B devolvem 0; histórico de perdas de A (6 disputadas, 5 perdidas, 5 motivos) não
+aparece para B; sem token 401. Telas em 1366 e 390: sem rolagem lateral, 0 erro no console. Lint
+limpo, 158/158 testes (12 novos em `testes/analise-mercado.test.js`).
+
+`code-review` (10 achados, todos corrigidos: faixa de valor do filtro zerando as atas, item somado
+uma vez por contrato, bloco do mercado no dossiê para plano sem o recurso, "não disponível" no lugar
+de um zero medido, `[` no termo quebrando o REGEXP do MySQL 8, `_termos` vindo da query, nome do
+PDF partido no acento, aba de histórico sem os botões depois de um erro, JOIN de itens rodando à
+toa, janela dos recorrentes em UTC). `simplify`: os revisores em paralelo caíram por limite de uso;
+passada feita à mão (função só de teste removida, internos desexportados). Ficou de fora:
+`PorUf` do Dashboard virar o `Barras.jsx` novo (fora do diff).
+
+**Seção 13b — pendente:**
+- [ ] Desclassificação/inabilitação e itens não vencidos: só com a lista de propostas do portal de
+      disputa (Compras.gov.br atrás de CAPTCHA — não se força, seção 5.4). Reavaliar se o PNCP
+      passar a publicar os participantes.
+- [ ] Relatório mensal **completo** depende da carga histórica da 12b (a busca alcança ~16 dias).
+- [ ] O Radar e o boletim ainda casam por trecho (`regras/texto.js`); avaliar o casamento por
+      palavra inteira lá também (muda o que entra no Radar — decisão de produto).
 
 ---
 
