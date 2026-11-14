@@ -297,6 +297,29 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
     chamou o modelo (cache e "não encontrei" não contam).
   - `IA_URL_BASE` (opcional, `.env.example`) só serve para testar com um servidor que imita o
     Gemini. **Aceite medido**: ver o plano (Seção 5). Testes em `testes/perguntas-edital.test.js`.
+- **Seção 11 — Resumo do Edital 2.0, entregue em 14/11/2026 (aceite com o Gemini real pendente:
+  créditos do projeto esgotados).** Migração `028_resumo_edital.sql` (`licitacoes.ia_ficha` +
+  `resumo_consideracoes` por organização); aba **Resumo do edital** no detalhe
+  (`frontend/src/paginas/ResumoEdital.jsx`); rotas `/api/licitacoes/:id/resumo-edital` (GET, POST
+  `{forcar}`, PUT `/consideracoes`, GET `/docx`, POST `/email`), atrás do recurso `ia` e do limite
+  `ia_resumos_mes`.
+  - Ficha em 10 grupos e 34 campos (cabeçalho, identificação, sessão com **intervalo mínimo entre
+    lances**, órgão, detalhes, **garantias**, prazos, proposta, pagamento, análise crítica) + listas
+    (itens, habilitação, legislação, **penalidades e multas**) + **possíveis questionamentos**
+    (`backend/regras/resumo-edital.js`). O edital vai em blocos rotulados escolhidos por grupo
+    (mesma busca do Pergunte ao Edital), dentro de `IA_MAX_CARACTERES`.
+  - **Toda afirmação cita o trecho**: valor + bloco + frase conferida letra a letra; sem citação
+    literal o campo é descartado e aparece "Não informado". Arquivo e página vêm do nosso texto.
+    Data de geração e "a IA pode errar" sempre no topo. Gera uma vez; refazer é a pedido.
+  - Possível questionamento → botão abre o pedido de esclarecimento ou impugnação na aba
+    Questionar com o trecho citado (arquivo e página) no lugar da primeira lacuna; a lei é
+    sugestão da IA e a tela diz para conferir.
+  - Saídas: `.docx`, e-mail (para quem pediu, com o `.docx` anexo) e impressão — as três da mesma
+    fonte (`linhasDoChecklist`). Considerações do licitante salvas por organização.
+  - Novas variáveis: `IA_MAX_TOKENS_RESUMO`, `IA_TIMEOUT_RESUMO_MS` e `IA_PROTOCOLO`
+    (`openai` = endpoint compatível do Gemini com `Authorization: Bearer`, o que um cofre de
+    credenciais que só injeta Bearer consegue entregar). **Aceite medido**: ver o plano
+    (Seção 11). Testes em `testes/resumo-edital.test.js`.
 - `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
   ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
 
@@ -1196,6 +1219,11 @@ POST   /api/oportunidades/:id/acompanhar       acompanhar este orgao
 GET    /api/licitacoes/:id/ia                  leitura assistida da licitacao
 POST   /api/licitacoes/:id/ia                  le agora ({ forcar } ignora o cache)
 PATCH  /api/licitacoes/:id/ia                  { situacao: confirmado | recusado }
+GET    /api/licitacoes/:id/resumo-edital       Resumo do Edital 2.0 (ficha com citacao por campo)
+POST   /api/licitacoes/:id/resumo-edital       gera ({ forcar } refaz; sem ele devolve a guardada)
+PUT    /api/licitacoes/:id/resumo-edital/consideracoes   { texto } da organizacao
+GET    /api/licitacoes/:id/resumo-edital/docx  checklist em Word
+POST   /api/licitacoes/:id/resumo-edital/email checklist para o e-mail de quem pediu
 GET    /api/ia                                 estado e livro-caixa da IA
 GET    /api/ia/palavras-sugeridas              POST para pedir uma rodada
 PATCH  /api/ia/palavras-sugeridas/:id          { situacao: aceita | recusada }

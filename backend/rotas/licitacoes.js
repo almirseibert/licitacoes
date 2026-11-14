@@ -792,6 +792,8 @@ rotas.post('/:id/monitorar', async (req, res) => {
 
 // Pergunte ao Edital (Seção 5 do plano SaaS).
 rotas.use('/:id/perguntas', limites.exigirRecurso('ia'), require('./perguntas'));
+// Seção 11: Resumo do Edital 2.0 (ficha com citação por campo).
+rotas.use('/:id/resumo-edital', limites.exigirRecurso('ia'), require('./resumo-edital'));
 
 // GET /api/licitacoes/:id/ia — a sugestão da leitura assistida (seção 23).
 rotas.get('/:id/ia', limites.exigirRecurso('ia'), async (req, res) => {
@@ -894,6 +896,9 @@ rotas.post('/:id/questionamentos/montar', async (req, res) => {
       organizacaoId: req.organizacaoId,
       licitacaoId: Number(req.params.id),
       codigo: (req.body && req.body.codigo) || '',
+      // Seção 11: o possível questionamento do Resumo do Edital (índice na ficha).
+      questionamento: req.body && req.body.questionamento,
+      ponto: req.body && req.body.ponto,
     });
     res.json(r);
   } catch (erro) {

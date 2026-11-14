@@ -509,6 +509,19 @@ export const api = {
   decidirLeituraIa: (id, situacao) =>
     requisitar(`/licitacoes/${id}/ia`, { method: 'PATCH', body: JSON.stringify({ situacao }) }),
 
+  // Resumo do Edital 2.0 (Seção 11 do plano SaaS)
+  resumoEdital: (id) => requisitar(`/licitacoes/${id}/resumo-edital`),
+
+  gerarResumoEdital: (id, forcar = false) =>
+    requisitar(`/licitacoes/${id}/resumo-edital`, { method: 'POST', body: JSON.stringify({ forcar }) }),
+
+  salvarConsideracoes: (id, texto) =>
+    requisitar(`/licitacoes/${id}/resumo-edital/consideracoes`, { method: 'PUT', body: JSON.stringify({ texto }) }),
+
+  baixarResumoDocx: (id) => salvarComo(`/licitacoes/${id}/resumo-edital/docx`, `resumo_edital_${id}.docx`),
+
+  enviarResumoEmail: (id) => requisitar(`/licitacoes/${id}/resumo-edital/email`, { method: 'POST' }),
+
   // Pergunte ao Edital (Seção 5 do plano SaaS)
   perguntasEdital: (id) => requisitar(`/licitacoes/${id}/perguntas`),
   perguntarEdital: (id, corpo) =>
@@ -535,10 +548,10 @@ export const api = {
   // ------------- prazos, questionamentos e dossiês (seções 25 a 27)
   questionamentos: (id) => requisitar(`/licitacoes/${id}/questionamentos`),
 
-  montarQuestionamento: (id, codigo) =>
+  montarQuestionamento: (id, codigo, questionamento, ponto) =>
     requisitar(`/licitacoes/${id}/questionamentos/montar`, {
       method: 'POST',
-      body: JSON.stringify({ codigo }),
+      body: JSON.stringify({ codigo, questionamento, ponto }),
     }),
 
   criarQuestionamento: (id, campos) =>

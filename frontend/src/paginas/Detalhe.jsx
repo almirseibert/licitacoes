@@ -11,6 +11,7 @@ import LinhaDoTempo from './LinhaDoTempo';
 import LeituraIA from './LeituraIA';
 import PerguntarEdital from './PerguntarEdital';
 import Questionamentos from './Questionamentos';
+import ResumoEdital from './ResumoEdital';
 import Preco from './Preco';
 import Proposta from './Proposta';
 import Concorrentes from './Concorrentes';
@@ -33,6 +34,8 @@ export default function Detalhe({ id, onFechar }) {
   const [licitacao, setLicitacao] = useState(null);
   const [erro, setErro] = useState(null);
   const [aba, setAba] = useState('resumo');
+  // Seção 11: o possível questionamento do Resumo do Edital que abre a aba Questionar.
+  const [questionar, setQuestionar] = useState(null);
   const [salvando, setSalvando] = useState(false);
   const [equipe, setEquipe] = useState(null);
   const membros = equipe ? equipe.membros : [];
@@ -181,6 +184,7 @@ export default function Detalhe({ id, onFechar }) {
                 {[
                   // Gestão primeiro (Seção 8): o trabalho da equipe na licitação.
                   ['resumo', 'Resumo'],
+                  ['resumo-edital', 'Resumo do edital'],
                   ['perguntar', 'Pergunte ao edital'],
                   ['tarefas', 'Tarefas'],
                   ['historico', 'Anotações'],
@@ -231,7 +235,18 @@ export default function Detalhe({ id, onFechar }) {
               {aba === 'concorrentes' && <Concorrentes id={id} />}
               {aba === 'proposta' && <Proposta id={id} />}
               {aba === 'envio' && <Envio id={id} />}
-              {aba === 'questionar' && <Questionamentos id={id} />}
+              {aba === 'resumo-edital' && (
+                <ResumoEdital
+                  id={id}
+                  aoQuestionar={(pedido) => {
+                    setQuestionar(pedido);
+                    setAba('questionar');
+                  }}
+                />
+              )}
+              {aba === 'questionar' && (
+                <Questionamentos id={id} inicial={questionar} aoUsarInicial={() => setQuestionar(null)} />
+              )}
               {aba === 'linha' && <LinhaDoTempo id={id} />}
               {aba === 'historico' && <Historico id={id} />}
             </div>

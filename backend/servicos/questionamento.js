@@ -11,6 +11,8 @@ const feriados = require('./feriados');
 const perfilEmpresa = require('./perfil');
 const { daOrganizacao } = require('./escopo');
 const declaracao = require('./declaracao');
+const resumoEdital = require('../regras/resumo-edital');
+const { lerJson } = require('./limites');
 
 /**
  * Os três modelos da seção 25.2. Usam o mesmo motor de variáveis das
@@ -165,7 +167,7 @@ async function calcular(organizacaoId, licitacaoId, { gravar = true } = {}) {
 }
 
 /** O texto do modelo, já com as variáveis da licitação trocadas. */
-async function montarTexto({ organizacaoId, licitacaoId, codigo }) {
+async function montarTexto({ organizacaoId, licitacaoId, codigo, questionamento, ponto: pontoPedido }) {
   const modelo = POR_CODIGO.get(codigo);
   if (!modelo) throw new Error(`Modelo desconhecido: ${codigo}.`);
 
@@ -173,9 +175,26 @@ async function montarTexto({ organizacaoId, licitacaoId, codigo }) {
   if (!licitacao) throw new Error('Licitação não encontrada.');
 
   const perfil = await perfilEmpresa.padrao(organizacaoId);
-  const { texto, faltando } = declaracao.preencher(modelo.corpo, declaracao.variaveis({ licitacao, perfil }));
+  const preenchido = declaracao.preencher(modelo.corpo, declaracao.variaveis({ licitacao, perfil }));
+  let { texto } = preenchido;
 
-  return { modelo, texto, faltando, titulo: modelo.titulo, tipo: modelo.tipo };
+  // Seção 11: vindo de um "possível questionamento" do Resumo do Edital, a
+  // primeira lacuna vira o trecho citado. O ponto sai da ficha guardada (não
+  // do pedido), e o resto das lacunas fica para quem assina.
+  let origem = null;
+  if (Number.isInteger(questionamento) && questionamento >= 0) {
+    const ficha = lerJson(licitacao.ia_ficha, null);
+    const ponto = ficha && Array.isArray(ficha.questionamentos) ? ficha.questionamentos[questionamento] : null;
+    // A ficha é do edital e pode ter sido gerada de novo depois que a tela abriu:
+    // o texto do ponto confirma que o índice ainda é o mesmo item.
+    if (!ponto || (typeof pontoPedido === 'string' && pontoPedido !== ponto.ponto)) {
+      throw new Error('O resumo do edital mudou desde que a tela abriu. Recarregue a aba e escolha o ponto de novo.');
+    }
+    texto = resumoEdital.preencherQuestionamento(texto, ponto);
+    origem = { ponto: ponto.ponto, lei: ponto.lei, citacao: ponto.citacao };
+  }
+
+  return { modelo, texto, faltando: preenchido.faltando, titulo: modelo.titulo, tipo: modelo.tipo, origem };
 }
 
 async function listar(organizacaoId, licitacaoId) {

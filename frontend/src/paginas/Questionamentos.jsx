@@ -14,7 +14,7 @@ import { dataHora, data as formatarData } from '../servicos/formato';
  * A conta do prazo fica aberta — os dias úteis contados e o que foi pulado,
  * com o motivo. Prazo é coisa que se confere, não que se acredita.
  */
-export default function Questionamentos({ id }) {
+export default function Questionamentos({ id, inicial = null, aoUsarInicial }) {
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState(null);
   const [aviso, setAviso] = useState(null);
@@ -35,11 +35,20 @@ export default function Questionamentos({ id }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const montar = async (codigo) => {
+  // Seção 11: vindo de um "possível questionamento" do Resumo do Edital, o
+  // rascunho já abre com o trecho citado no lugar da primeira lacuna.
+  useEffect(() => {
+    if (!inicial) return;
+    montar(inicial.codigo, inicial.questionamento, inicial.ponto);
+    if (aoUsarInicial) aoUsarInicial();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inicial]);
+
+  const montar = async (codigo, questionamento, ponto) => {
     setOcupado(codigo);
     setErro(null);
     try {
-      setRascunho(await api.montarQuestionamento(id, codigo));
+      setRascunho(await api.montarQuestionamento(id, codigo, questionamento, ponto));
     } catch (e) {
       setErro(e.message);
     } finally {
@@ -186,6 +195,12 @@ export default function Questionamentos({ id }) {
           <p className="px-3 py-2 text-[11px] text-texto-suave border-t border-borda">
             As lacunas <span className="font-mono">____________</span> são suas: o painel não inventa o que o
             edital diz. Preencha o item, o que ele exige e por que a exigência não cabe.
+            {rascunho.origem && (
+              <span className="block mt-1 text-atencao">
+                Trecho e ponto vieram do Resumo do Edital (IA): confira no edital antes de enviar. Ponto: {rascunho.origem.ponto}.
+                {rascunho.origem.lei && <> Fundamento sugerido pela IA, a conferir: {rascunho.origem.lei}.</>}
+              </span>
+            )}
           </p>
         </section>
       )}

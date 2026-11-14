@@ -72,6 +72,15 @@ module.exports = {
     // dois saem do mesmo orçamento no Gemini 2.5 — ver o comentário em
     // servicos/ia.js.
     maxTokensSaida: Number(process.env.IA_MAX_TOKENS_SAIDA || 4096),
+    // Seção 11: a ficha completa do edital, com uma citação por campo, não
+    // cabe nos 4096 da leitura curta.
+    maxTokensResumo: Number(process.env.IA_MAX_TOKENS_RESUMO || 16000),
+    // ...e leva mais que os 90 s da leitura curta para ser escrita.
+    timeoutResumoMs: Number(process.env.IA_TIMEOUT_RESUMO_MS || 240000),
+    // 'gemini' (API nativa, chave em x-goog-api-key) ou 'openai' (endpoint
+    // compatível do próprio Gemini, chave em Authorization: Bearer — é o que
+    // um cofre de credenciais que só injeta Bearer consegue entregar).
+    protocolo: (process.env.IA_PROTOCOLO || 'gemini').toLowerCase() === 'openai' ? 'openai' : 'gemini',
     orcamentoRaciocinio: Number(process.env.IA_ORCAMENTO_RACIOCINIO || 512),
     // Pontuação a partir da qual vale gastar token (seção 23.3).
     pontuacaoMinima: Number(process.env.IA_PONTUACAO_MINIMA || 55),
