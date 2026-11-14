@@ -111,7 +111,7 @@ export default function Diagnostico({ aoAbrir }) {
               {dados.bloqueios.map((b) => (
                 <li key={b.chave}>
                   <button
-                    className="w-full text-left flex items-baseline gap-2 py-1 hover:bg-white/[0.03] px-1 -mx-1 rounded"
+                    className="w-full text-left flex items-baseline gap-2 py-1 hover:bg-realce/[0.03] px-1 -mx-1 rounded"
                     onClick={() => setAberto(aberto === b.chave ? null : b.chave)}
                   >
                     <span className="text-sm shrink-0">{b.rotulo}</span>

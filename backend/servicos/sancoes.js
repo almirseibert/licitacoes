@@ -188,9 +188,9 @@ async function consultar(cnpj, { forcar = false } = {}) {
 }
 
 /** O próprio CNPJ, uma vez por mês (seção 26.3, uso 1). */
-async function checarPropriaEmpresa() {
+async function checarPropriaEmpresa(organizacaoId) {
   const perfil = require('./perfil');
-  const cnpj = await perfil.cnpjDaEmpresa();
+  const cnpj = await perfil.cnpjDaEmpresa(organizacaoId);
   if (!cnpj) return { ok: false, motivo: 'O perfil da empresa ainda não tem CNPJ.' };
   return { ok: true, ...(await consultar(cnpj)) };
 }

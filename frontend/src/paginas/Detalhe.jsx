@@ -9,10 +9,14 @@ import Envio from './Envio';
 import Historico from './Historico';
 import LinhaDoTempo from './LinhaDoTempo';
 import LeituraIA from './LeituraIA';
+import PerguntarEdital from './PerguntarEdital';
 import Questionamentos from './Questionamentos';
+import ResumoEdital from './ResumoEdital';
 import Preco from './Preco';
 import Proposta from './Proposta';
 import Concorrentes from './Concorrentes';
+import Tarefas from './Tarefas';
+import Anexos from './Anexos';
 
 // As oito etapas da seção 10 — as mesmas de regras/funil.js no backend.
 // 'Documentação' e 'Resultado' eram de um rascunho anterior e o backend recusa:
@@ -30,7 +34,28 @@ export default function Detalhe({ id, onFechar }) {
   const [licitacao, setLicitacao] = useState(null);
   const [erro, setErro] = useState(null);
   const [aba, setAba] = useState('resumo');
+  // Seção 11: o possível questionamento do Resumo do Edital que abre a aba Questionar.
+  const [questionar, setQuestionar] = useState(null);
   const [salvando, setSalvando] = useState(false);
+  const [equipe, setEquipe] = useState(null);
+  const membros = equipe ? equipe.membros : [];
+
+  useEffect(() => {
+    api.membros().then((r) => setEquipe({ membros: r.dados, eu: r.eu })).catch(() => {});
+  }, []);
+
+  const mudarResponsavel = async (valor) => {
+    setSalvando(true);
+    try {
+      const responsavel = valor ? Number(valor) : null;
+      await api.atualizarLicitacao(id, { responsavel_id: responsavel ?? '' });
+      setLicitacao((l) => ({ ...l, responsavel_id: responsavel }));
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setSalvando(false);
+    }
+  };
 
   const carregar = () => {
     api.licitacao(id).then(setLicitacao).catch((e) => setErro(e.message));
@@ -120,6 +145,19 @@ export default function Detalhe({ id, onFechar }) {
                   ))}
                 </select>
 
+                <select
+                  value={licitacao.responsavel_id || ''}
+                  disabled={salvando}
+                  onChange={(e) => mudarResponsavel(e.target.value)}
+                  aria-label="Responsável pela licitação"
+                  className="bg-superficie border border-borda rounded px-2 py-1 text-xs text-texto"
+                >
+                  <option value="">sem responsável</option>
+                  {membros.map((m) => (
+                    <option key={m.id} value={m.id}>{m.nome}</option>
+                  ))}
+                </select>
+
                 {licitacao.link_portal && (
                   <a
                     href={licitacao.link_portal}
@@ -144,18 +182,24 @@ export default function Detalhe({ id, onFechar }) {
 
               <nav className="mt-3 flex gap-4 text-xs overflow-x-auto">
                 {[
+                  // Gestão primeiro (Seção 8): o trabalho da equipe na licitação.
                   ['resumo', 'Resumo'],
+                  ['resumo-edital', 'Resumo do edital'],
+                  ['perguntar', 'Pergunte ao edital'],
+                  ['tarefas', 'Tarefas'],
+                  ['historico', 'Anotações'],
+                  ['anexos', 'Anexos'],
+                  ['concorrentes', 'Resultados'],
+                  // Exigência do edital × documento do cofre: o diferencial.
+                  ['exigencias', 'Habilitação'],
+                  ['linha', 'Linha do tempo'],
                   ['itens', `Itens${licitacao.itens ? ` (${licitacao.itens.length})` : ''}`],
                   ['pontuacao', 'Pontuação'],
                   ['arquivos', 'Arquivos'],
-                  ['exigencias', 'Exigências'],
                   ['preco', 'Preço'],
-                  ['concorrentes', 'Concorrentes'],
                   ['proposta', 'Proposta'],
                   ['envio', 'Montar envio'],
                   ['questionar', 'Questionar'],
-                  ['linha', 'Linha do tempo'],
-                  ['historico', 'Histórico'],
                 ].map(([chave, rotulo]) => (
                   <button
                     key={chave}
@@ -180,15 +224,29 @@ export default function Detalhe({ id, onFechar }) {
 
             <div className="flex-1 overflow-auto p-4 text-sm">
               {aba === 'resumo' && <Resumo licitacao={licitacao} id={id} />}
+              {aba === 'perguntar' && <PerguntarEdital id={id} />}
               {aba === 'itens' && <Itens itens={licitacao.itens || []} />}
               {aba === 'pontuacao' && <Pontuacao detalhe={licitacao.pontuacao_detalhe} />}
               {aba === 'arquivos' && <Arquivos id={id} />}
               {aba === 'exigencias' && <Exigencias id={id} />}
+              {aba === 'tarefas' && <Tarefas licitacaoId={id} equipe={equipe} />}
+              {aba === 'anexos' && <Anexos id={id} />}
               {aba === 'preco' && <Preco id={id} />}
               {aba === 'concorrentes' && <Concorrentes id={id} />}
               {aba === 'proposta' && <Proposta id={id} />}
               {aba === 'envio' && <Envio id={id} />}
-              {aba === 'questionar' && <Questionamentos id={id} />}
+              {aba === 'resumo-edital' && (
+                <ResumoEdital
+                  id={id}
+                  aoQuestionar={(pedido) => {
+                    setQuestionar(pedido);
+                    setAba('questionar');
+                  }}
+                />
+              )}
+              {aba === 'questionar' && (
+                <Questionamentos id={id} inicial={questionar} aoUsarInicial={() => setQuestionar(null)} />
+              )}
               {aba === 'linha' && <LinhaDoTempo id={id} />}
               {aba === 'historico' && <Historico id={id} />}
             </div>

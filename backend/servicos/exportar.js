@@ -6,7 +6,10 @@
 // aqui sai com os tipos certos, a primeira linha congelada e as larguras
 // pensadas para ser lida sem ajustar coluna nenhuma.
 const pool = require('../config/db');
+const { daOrganizacao } = require('./escopo');
 const planilha = require('./planilha');
+const docx = require('./docx');
+const { LACUNA } = require('../regras/boletim');
 
 /** Data e hora como o Excel entende, pelo texto: dia de calendário em pt-BR. */
 function comoDataHora(valor) {
@@ -23,10 +26,10 @@ function comoDataHora(valor) {
 }
 
 /** Nome de arquivo sem acento nem caractere que o navegador recuse. */
-function nomeDeArquivo(base) {
+function nomeDeArquivo(base, extensao = 'xlsx') {
   const agora = new Date();
   const dia = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
-  return `${base}-${dia}.xlsx`;
+  return `${base}-${dia}.${extensao}`;
 }
 
 // As colunas do Radar exportado, na ordem em que se lê a tela: o que decide
@@ -53,25 +56,30 @@ const COLUNAS_RADAR = [
 ];
 
 /**
- * O Radar em Excel, com os mesmos filtros da tela.
+ * As linhas do Radar (xlsx, docx e link público), com os mesmos filtros da tela.
  *
  * `onde` e `valores` vêm montados pela rota, da mesma função que a listagem
  * usa: exportar coisa diferente do que está na tela seria a pior armadilha
  * possível aqui.
  */
-async function radarEmExcel({ onde = '', valores = [], ordem, limite = 5000 } = {}) {
+async function linhasDoRadar({ organizacaoId, onde = '', valores = [], ordem, limite = 5000 }) {
   const [linhas] = await pool.query(
     `SELECT l.id, l.orgao_nome, l.uf, l.municipio, l.modalidade, l.objeto, l.valor_estimado,
             l.abertura_propostas, l.fim_propostas, l.plataforma_disputa, l.link_portal,
             l.grupo, l.palavra_casada, l.pontuacao, l.pode_participar, l.objeto_social,
-            l.beneficio_me, l.etapa, l.prazo_questionamento
-       FROM licitacoes l
+            l.beneficio_me, l.etapa, l.prazo_questionamento, l.numero_compra, l.processo
+       FROM ${daOrganizacao(organizacaoId)} l
        JOIN fontes f ON f.id = l.fonte_id
        ${onde}
        ORDER BY ${ordem || 'l.pontuacao DESC, l.fim_propostas IS NULL, l.fim_propostas ASC'}
        LIMIT ?`,
     [...valores, limite]
   );
+  return linhas;
+}
+
+async function radarEmExcel(opcoes = {}) {
+  const linhas = await linhasDoRadar(opcoes);
 
   const cabecalho = COLUNAS_RADAR.map((c) => ({ texto: c.titulo, estilo: 'cabecalho' }));
   const corpo = linhas.map((l) => COLUNAS_RADAR.map((c) => c.ler(l)));
@@ -98,7 +106,7 @@ async function radarEmExcel({ onde = '', valores = [], ordem, limite = 5000 } = 
  * conta a disputa mas não entra na média: dividir por um estimado ausente
  * produziria desconto de 100%.
  */
-async function relatorioMensal({ meses = 12 } = {}) {
+async function relatorioMensal({ organizacaoId, meses = 12 } = {}) {
   const [linhas] = await pool.query(
     `SELECT DATE_FORMAT(COALESCE(l.proposta_em, l.etapa_em, l.fim_propostas), '%Y-%m') AS mes,
             COUNT(*) AS disputei,
@@ -126,7 +134,7 @@ async function relatorioMensal({ meses = 12 } = {}) {
                   WHEN l.valor_estimado > 0 AND COALESCE(l.valor_proposto, l.valor_final) > l.valor_estimado
                   THEN 1 ELSE 0
                 END) AS acima_do_estimado
-       FROM licitacoes l
+       FROM ${daOrganizacao(organizacaoId)} l
       WHERE l.etapa IN ('Proposta enviada','Em disputa','Ganhamos','Perdemos')
         AND COALESCE(l.proposta_em, l.etapa_em, l.fim_propostas) IS NOT NULL
         AND COALESCE(l.proposta_em, l.etapa_em, l.fim_propostas) >= DATE_SUB(CURDATE(), INTERVAL ? MONTH)
@@ -203,8 +211,8 @@ const COLUNAS_RELATORIO = [
 ];
 
 /** O mesmo relatório em Excel. */
-async function relatorioEmExcel({ meses = 12 } = {}) {
-  const r = await relatorioMensal({ meses });
+async function relatorioEmExcel({ organizacaoId, meses = 12 } = {}) {
+  const r = await relatorioMensal({ organizacaoId, meses });
 
   const cabecalho = COLUNAS_RELATORIO.map((c) => ({ texto: c.titulo, estilo: 'cabecalho' }));
   const corpo = r.meses.map((m) => COLUNAS_RELATORIO.map((c) => c.ler(m)));
@@ -233,4 +241,31 @@ async function relatorioEmExcel({ meses = 12 } = {}) {
   };
 }
 
-module.exports = { radarEmExcel, relatorioMensal, relatorioEmExcel, nomeDeArquivo, COLUNAS_RADAR };
+// Word é para ler e encaminhar, não para recalcular: menos colunas, as que
+// decidem. Larguras em décimos de polegada (A4 deitado).
+const COLUNAS_DOCX = [
+  { titulo: 'Fecha em', largura: 11, ler: (l) => comoDataHora(l.fim_propostas) || LACUNA },
+  { titulo: 'Valor estimado', largura: 12, ler: (l) => (l.valor_estimado === null ? LACUNA : Number(l.valor_estimado).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })) },
+  { titulo: 'Objeto', largura: 38, ler: (l) => l.objeto || LACUNA },
+  { titulo: 'Órgão', largura: 20, ler: (l) => l.orgao_nome || LACUNA },
+  { titulo: 'Cidade/UF', largura: 11, ler: (l) => [l.municipio, l.uf].filter(Boolean).join('/') || LACUNA },
+  { titulo: 'Modalidade', largura: 10, ler: (l) => l.modalidade || LACUNA },
+  { titulo: 'Nº', largura: 5, ler: (l) => l.numero_compra || LACUNA },
+];
+
+/** O Radar em Word: o mesmo conjunto da tela, para ler e encaminhar. */
+async function radarEmDocx({ titulo = 'Radar de licitações', ...opcoes } = {}) {
+  const linhas = await linhasDoRadar(opcoes);
+  return {
+    arquivo: nomeDeArquivo('radar-licitacoes', 'docx'),
+    linhas: linhas.length,
+    buffer: docx.gerar({
+      titulo,
+      subtitulo: `${linhas.length} licitaç${linhas.length === 1 ? 'ão' : 'ões'} · gerado em ${comoDataHora(new Date())}`,
+      colunas: COLUNAS_DOCX,
+      linhas: linhas.map((l) => COLUNAS_DOCX.map((c) => c.ler(l))),
+    }),
+  };
+}
+
+module.exports = { radarEmExcel, radarEmDocx, linhasDoRadar, relatorioMensal, relatorioEmExcel, nomeDeArquivo, COLUNAS_RADAR };

@@ -11,8 +11,8 @@ const rotas = express.Router();
 rotas.get('/', async (req, res) => {
   try {
     const [dados, receita] = await Promise.all([
-      servico.listar({ situacao: req.query.situacao || null }),
-      servico.receita12m(),
+      servico.listar({ organizacaoId: req.organizacaoId, situacao: req.query.situacao || null }),
+      servico.receita12m(req.organizacaoId),
     ]);
     res.json({
       dados,
@@ -29,7 +29,7 @@ rotas.get('/', async (req, res) => {
 // GET /api/contratos/:id — um contrato com os marcos.
 rotas.get('/:id', async (req, res) => {
   try {
-    const r = await servico.ver(Number(req.params.id));
+    const r = await servico.ver(req.organizacaoId, Number(req.params.id));
     if (!r) return res.status(404).json({ erro: 'Contrato não encontrado.' });
     res.json(r);
   } catch (erro) {
@@ -45,7 +45,7 @@ rotas.post('/', async (req, res) => {
   if (!licitacaoId) return res.status(400).json({ erro: 'Informe a licitação do contrato.' });
 
   try {
-    const r = await servico.abrir(licitacaoId, { convocadoEm: (req.body || {}).convocado_em || null });
+    const r = await servico.abrir(req.organizacaoId, licitacaoId, { convocadoEm: (req.body || {}).convocado_em || null });
 
     // Os campos que vieram no mesmo corpo entram agora, para a tela não precisar
     // de duas requisições para registrar um contrato já assinado.
@@ -53,7 +53,9 @@ rotas.post('/', async (req, res) => {
     delete corpo.licitacao_id;
     delete corpo.convocado_em;
 
-    const completo = Object.keys(corpo).length ? await servico.salvar(r.contrato.id, corpo) : await servico.ver(r.contrato.id);
+    const completo = Object.keys(corpo).length
+      ? await servico.salvar(req.organizacaoId, r.contrato.id, corpo)
+      : await servico.ver(req.organizacaoId, r.contrato.id);
 
     res.status(r.criado ? 201 : 200).json({
       ...completo,
@@ -71,7 +73,7 @@ rotas.post('/', async (req, res) => {
 // PATCH /api/contratos/:id
 rotas.patch('/:id', async (req, res) => {
   try {
-    const r = await servico.salvar(Number(req.params.id), req.body || {});
+    const r = await servico.salvar(req.organizacaoId, Number(req.params.id), req.body || {});
     if (!r) return res.status(404).json({ erro: 'Contrato não encontrado.' });
     res.json({ ...r, mensagem: 'Contrato salvo.' });
   } catch (erro) {
@@ -82,7 +84,8 @@ rotas.patch('/:id', async (req, res) => {
 // POST /api/contratos/:id/marcos — marco à mão (medição mensal, por exemplo).
 rotas.post('/:id/marcos', async (req, res) => {
   try {
-    const marco = await servico.criarMarco(Number(req.params.id), req.body || {});
+    const marco = await servico.criarMarco(req.organizacaoId, Number(req.params.id), req.body || {});
+    if (!marco) return res.status(404).json({ erro: 'Contrato não encontrado.' });
     res.status(201).json({ marco, mensagem: 'Marco acrescentado.' });
   } catch (erro) {
     res.status(400).json({ erro: erro.message });
@@ -92,7 +95,8 @@ rotas.post('/:id/marcos', async (req, res) => {
 // PATCH /api/contratos/:id/marcos/:marcoId — data prevista e conclusão.
 rotas.patch('/:id/marcos/:marcoId', async (req, res) => {
   try {
-    const marco = await servico.salvarMarco(Number(req.params.marcoId), req.body || {});
+    const marco = await servico.salvarMarco(req.organizacaoId, Number(req.params.marcoId), req.body || {});
+    if (!marco) return res.status(404).json({ erro: 'Marco não encontrado.' });
     res.json({ marco, mensagem: marco.concluido_em ? 'Marco concluído.' : 'Marco salvo.' });
   } catch (erro) {
     res.status(400).json({ erro: erro.message });
@@ -102,7 +106,8 @@ rotas.patch('/:id/marcos/:marcoId', async (req, res) => {
 // DELETE /api/contratos/:id/marcos/:marcoId — só os acrescentados à mão.
 rotas.delete('/:id/marcos/:marcoId', async (req, res) => {
   try {
-    const removeu = await servico.removerMarco(Number(req.params.marcoId));
+    const removeu = await servico.removerMarco(req.organizacaoId, Number(req.params.marcoId));
+    if (removeu === null) return res.status(404).json({ erro: 'Marco não encontrado.' });
     if (!removeu) {
       return res.status(400).json({
         erro: 'Marco do checklist automático não se apaga — ele volta no próximo recálculo. Para tirá-lo da frente, conclua-o.',
@@ -115,9 +120,9 @@ rotas.delete('/:id/marcos/:marcoId', async (req, res) => {
 });
 
 // POST /api/contratos/avisos — roda os alertas de marco agora (diário no worker).
-rotas.post('/avisos/rodar', async (_req, res) => {
+rotas.post('/avisos/rodar', async (req, res) => {
   try {
-    const r = await job.rodar({});
+    const r = await job.rodar({ organizacaoId: req.organizacaoId });
     res.json({
       ...r,
       mensagem:

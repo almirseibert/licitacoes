@@ -7,7 +7,9 @@ import { moeda, dataHora, resumir, faixaPontuacao } from '../servicos/formato';
 import Anel from '../componentes/Anel';
 import Contagem from '../componentes/Contagem';
 import Filtros from '../componentes/Filtros';
+import { Etiquetas, ExpansaoDoCartao, linkDoPortal, PesquisasSalvas, SaidasDoRadar } from '../componentes/RadarExtras';
 import Detalhe from './Detalhe';
+import PorMim from '../componentes/PorMim';
 
 const CHAVE_FILTROS = 'licitacoes.filtros';
 
@@ -22,15 +24,21 @@ const FILTROS_PADRAO = {
   exclusivo_me: '',
   novas_24h: '',
   favorito: '',
+  // Seção 8: "por mim / por todos" e as listas do trabalho.
+  por: 'todos',
+  lista: '',
   em_aberto: '1',
   ordem: 'relevancia',
   pagina: 1,
-  por_pagina: 50,
+  por_pagina: 20,
+  // Versão 2 = Seção 7 (20 por página). Filtro salvo antes disso volta a 20 uma vez.
+  versao: 2,
 };
 
 function lerFiltrosSalvos() {
   try {
     const salvo = JSON.parse(localStorage.getItem(CHAVE_FILTROS) || 'null');
+    if (salvo && salvo.versao !== 2) Object.assign(salvo, { por_pagina: 20, versao: 2 });
     return salvo ? { ...FILTROS_PADRAO, ...salvo, pagina: 1 } : FILTROS_PADRAO;
   } catch {
     return FILTROS_PADRAO;
@@ -55,6 +63,7 @@ export default function Radar({ abrir = null, aoAbrir = null }) {
   const [coletando, setColetando] = useState(false);
   const [exportando, setExportando] = useState(false);
   const [aviso, setAviso] = useState(null);
+  const [avisosFiltro, setAvisosFiltro] = useState([]);
 
   useEffect(() => {
     localStorage.setItem(CHAVE_FILTROS, JSON.stringify(filtros));
@@ -71,6 +80,7 @@ export default function Radar({ abrir = null, aoAbrir = null }) {
       const [lista, resumoNovo] = await Promise.all([api.licitacoes(filtros), api.resumo()]);
       setDados(lista.dados);
       setTotal(lista.total);
+      setAvisosFiltro(lista.avisos || []);
       setResumo(resumoNovo);
     } catch (e) {
       setErro(e.message);
@@ -88,7 +98,7 @@ export default function Radar({ abrir = null, aoAbrir = null }) {
     api.filtros().then(setOpcoes).catch(() => {});
   }, []);
 
-  const paginas = Math.max(1, Math.ceil(total / (filtros.por_pagina || 50)));
+  const paginas = Math.max(1, Math.ceil(total / (filtros.por_pagina || 20)));
 
   const alternarFavorito = async (licitacao) => {
     const novo = licitacao.favorito ? 0 : 1;
@@ -145,6 +155,30 @@ export default function Radar({ abrir = null, aoAbrir = null }) {
           </div>
         )}
 
+        <div className="flex items-center gap-2">
+          <PorMim valor={filtros.por} aoMudar={(por) => setFiltros({ ...filtros, por, pagina: 1 })} />
+          <select
+            className="campo-caixa text-xs"
+            aria-label="Lista"
+            value={filtros.lista}
+            // Favoritas, gerenciadas e finalizadas são escolha da equipe: a
+            // nota mínima e o "em aberto" esconderiam justamente o que se pediu.
+            onChange={(e) =>
+              setFiltros({
+                ...filtros,
+                lista: e.target.value,
+                ...(e.target.value ? { pontuacao_min: 0, em_aberto: '' } : {}),
+                pagina: 1,
+              })
+            }
+          >
+            <option value="">todas as listas</option>
+            <option value="favoritas">favoritas</option>
+            <option value="gerenciadas">gerenciadas</option>
+            <option value="finalizadas">finalizadas</option>
+          </select>
+        </div>
+
         <div className="ml-auto flex items-center gap-2">
           <button
             onClick={() => setVisao(visao === 'tabela' ? 'cards' : 'tabela')}
@@ -160,6 +194,11 @@ export default function Radar({ abrir = null, aoAbrir = null }) {
           >
             <RefreshCw size={14} className={carregando ? 'animate-spin' : ''} />
           </button>
+          <PesquisasSalvas
+            filtros={filtros}
+            onAplicar={(salvos) => setFiltros({ ...FILTROS_PADRAO, ...salvos, pagina: 1, por_pagina: filtros.por_pagina })}
+            onAviso={setAviso}
+          />
           <button
             onClick={exportar}
             disabled={exportando}
@@ -168,6 +207,7 @@ export default function Radar({ abrir = null, aoAbrir = null }) {
           >
             {exportando ? <Loader2 size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />}
           </button>
+          <SaidasDoRadar filtros={filtros} onAviso={setAviso} />
           <button
             onClick={coletarAgora}
             disabled={coletando}
@@ -179,7 +219,7 @@ export default function Radar({ abrir = null, aoAbrir = null }) {
         </div>
       </div>
     ),
-    [resumo, visao, carregando, coletando, carregar, exportar, exportando]
+    [resumo, visao, carregando, coletando, carregar, exportar, exportando, filtros]
   );
 
   return (
@@ -191,6 +231,10 @@ export default function Radar({ abrir = null, aoAbrir = null }) {
         onMudar={setFiltros}
         onLimpar={() => setFiltros(FILTROS_PADRAO)}
       />
+
+      {avisosFiltro.map((a) => (
+        <div key={a} className="mx-4 mt-3 px-3 py-2 text-xs border border-atencao/40 bg-superficie rounded text-atencao">{a}</div>
+      ))}
 
       {aviso && (
         <div className="mx-4 mt-3 px-3 py-2 text-xs border border-borda bg-superficie rounded text-texto-suave">
@@ -228,11 +272,19 @@ export default function Radar({ abrir = null, aoAbrir = null }) {
         )}
       </div>
 
-      <div className="border-t border-borda px-4 py-2 flex items-center justify-between text-xs text-texto-suave">
+      <div className="border-t border-borda px-4 py-2 flex flex-wrap items-center justify-between gap-2 text-xs text-texto-suave imprimir-oculto">
         <span className="font-mono">
           {total} licitaç{total === 1 ? 'ão' : 'ões'} · página {filtros.pagina} de {paginas}
         </span>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <select
+            aria-label="Resultados por página"
+            value={filtros.por_pagina || 20}
+            onChange={(e) => setFiltros({ ...filtros, por_pagina: Number(e.target.value), pagina: 1 })}
+            className="bg-superficie border border-borda rounded px-1 py-1"
+          >
+            {[20, 50, 100].map((n) => <option key={n} value={n}>{n} por página</option>)}
+          </select>
           <button
             disabled={filtros.pagina <= 1}
             onClick={() => setFiltros({ ...filtros, pagina: filtros.pagina - 1 })}
@@ -240,6 +292,23 @@ export default function Radar({ abrir = null, aoAbrir = null }) {
           >
             anterior
           </button>
+          <label className="flex items-center gap-1">
+            ir para
+            <input
+              type="number"
+              min={1}
+              max={paginas}
+              aria-label="Página"
+              key={filtros.pagina}
+              defaultValue={filtros.pagina}
+              onKeyDown={(e) => {
+                if (e.key !== 'Enter') return;
+                const n = Math.min(Math.max(Number(e.target.value) || 1, 1), paginas);
+                setFiltros({ ...filtros, pagina: n });
+              }}
+              className="w-14 bg-superficie border border-borda rounded px-1 py-1 font-mono"
+            />
+          </label>
           <button
             disabled={filtros.pagina >= paginas}
             onClick={() => setFiltros({ ...filtros, pagina: filtros.pagina + 1 })}
@@ -300,7 +369,6 @@ function Tabela({ dados, onAbrir, onFavorito }) {
       </thead>
       <tbody>
         {dados.map((l) => {
-          const novo = Date.now() - new Date(l.criado_em).getTime() < 86400000;
           return (
             <tr key={l.id} className="cursor-pointer" onClick={() => onAbrir(l.id)}>
               <td><Anel pontuacao={l.pontuacao} tamanho={34} /></td>
@@ -308,8 +376,8 @@ function Tabela({ dados, onAbrir, onFavorito }) {
                 <div className="flex items-start gap-2">
                   <span className="text-texto leading-snug">{resumir(l.objeto, 150)}</span>
                 </div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  {novo && <span className="text-[10px] uppercase text-texto-suave border border-borda px-1 rounded">novo</span>}
+                <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                  <Etiquetas licitacao={l} />
                   {l.grupo && <span className="text-[10px] text-texto-suave">{l.grupo}</span>}
                   <SeloBeneficio valor={l.beneficio_me} />
                   {l.orcamento_sigiloso === 1 && (
@@ -335,7 +403,7 @@ function Tabela({ dados, onAbrir, onFavorito }) {
                     <Star size={14} fill={l.favorito ? 'currentColor' : 'none'} />
                   </button>
                   <a
-                    href={l.link_disputa || l.link_portal}
+                    href={linkDoPortal(l) || undefined}
                     target="_blank"
                     rel="noreferrer"
                     title="Abrir no portal"
@@ -396,12 +464,14 @@ function Card({ licitacao: l, onAbrir, onFavorito }) {
         <span className="text-right"><Contagem fim={l.fim_propostas} /></span>
       </div>
 
+      <div className="mt-2"><Etiquetas licitacao={l} /></div>
+
       <div className="mt-2 flex items-center gap-2">
         <span className="text-[10px] uppercase tracking-wide" style={{ color: faixa.cor }}>{faixa.rotulo}</span>
         <SeloBeneficio valor={l.beneficio_me} />
         <SeloDocumentos status={l.arquivos_status} />
         <a
-          href={l.link_disputa || l.link_portal}
+          href={linkDoPortal(l) || undefined}
           target="_blank"
           rel="noreferrer"
           onClick={(e) => e.stopPropagation()}
@@ -410,6 +480,8 @@ function Card({ licitacao: l, onAbrir, onFavorito }) {
           abrir no portal <ExternalLink size={11} />
         </a>
       </div>
+
+      <ExpansaoDoCartao licitacao={l} />
     </div>
   );
 }

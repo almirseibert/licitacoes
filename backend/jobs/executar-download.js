@@ -3,6 +3,7 @@
 //   npm run baixar -- --licitacao=123    -> só essa
 //   npm run baixar -- --limite=5 --pontuacao=30
 const pool = require('../config/db');
+const escopo = require('../servicos/escopo');
 const { baixarEdital } = require('./baixar');
 
 function argumento(nome) {
@@ -22,7 +23,7 @@ async function principal() {
     alvos = [{ id: Number(umaSo) }];
   } else {
     const [linhas] = await pool.query(
-      `SELECT id, pontuacao, objeto FROM licitacoes
+      `SELECT id, pontuacao, objeto FROM ${escopo.agregadoDasOrganizacoes()} l
         WHERE arquivos_status IN ('nao_baixado','na_fila','parcial')
           AND descartada = 0 AND pontuacao >= ?
           AND (fim_propostas IS NULL OR fim_propostas > NOW())

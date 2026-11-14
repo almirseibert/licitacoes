@@ -5,6 +5,7 @@
 // as próximas: o aviso sai com antecedência e volta a sair quando o marco
 // atrasa, porque marco atrasado é o único que já custa dinheiro.
 const pool = require('../config/db');
+const escopo = require('../servicos/escopo');
 const fila = require('../servicos/fila');
 const alertas = require('../servicos/alertas');
 const servico = require('../servicos/contrato');
@@ -44,17 +45,21 @@ function resumir(texto, tamanho = 80) {
  * A chave inclui o dia previsto: marco cuja data você corrigir volta a avisar,
  * em vez de ficar calado porque já avisou uma vez na data antiga.
  */
-async function avisarMarcos({ agora = new Date() } = {}) {
+async function avisarMarcos({ agora = new Date(), organizacaoId = null } = {}) {
+  // Com organização (botão da tela), só os contratos dela; sem (worker), todos —
+  // e cada alerta nasce para a organização dona do contrato.
   const [linhas] = await pool.query(
     `SELECT m.id, m.contrato_id, m.tipo, m.titulo, m.previsto_para, m.valor,
-            c.licitacao_id, c.numero, c.situacao,
+            c.organizacao_id, c.licitacao_id, c.numero, c.situacao,
             l.objeto, l.orgao_nome
        FROM contrato_marcos m
        JOIN contratos c ON c.id = m.contrato_id
        JOIN licitacoes l ON l.id = c.licitacao_id
       WHERE m.concluido_em IS NULL
         AND m.previsto_para IS NOT NULL
-        AND c.situacao NOT IN ('encerrado','rescindido')`
+        AND c.situacao NOT IN ('encerrado','rescindido')
+        ${organizacaoId ? 'AND c.organizacao_id = ?' : ''}`,
+    organizacaoId ? [organizacaoId] : []
   );
 
   const hoje = regras.diaDe(agora);
@@ -76,6 +81,7 @@ async function avisarMarcos({ agora = new Date() } = {}) {
     const identificacao = m.numero ? `contrato ${m.numero}` : `contrato da licitação ${m.licitacao_id}`;
 
     const criado = await alertas.criar({
+      organizacaoId: m.organizacao_id,
       tipo: 'marco_contrato',
       // Atrasado é vermelho qualquer que seja o tipo: aí já custa dinheiro.
       nivel: atrasado || VERMELHOS.has(m.tipo) ? 'vermelho' : 'atencao',
@@ -104,8 +110,19 @@ async function avisarMarcos({ agora = new Date() } = {}) {
  * estiver perto do teto, em vez de aparecer uma única vez e nunca mais — o
  * enquadramento declarado precisa acompanhar a realidade.
  */
-async function avisarFaixa({ agora = new Date() } = {}) {
-  const r = await servico.receita12m().catch(() => null);
+async function avisarFaixa({ agora = new Date(), organizacaoId = null } = {}) {
+  // A faixa da LC 123 é de cada empresa: uma conta por organização ativa.
+  const ids = organizacaoId ? [organizacaoId] : await escopo.organizacoesAtivas(pool);
+  const resultados = [];
+  for (const id of ids) resultados.push(await avisarFaixaDe(id, agora));
+  const criados = resultados.reduce((t, r) => t + (r.criados || 0), 0);
+  // A linha de comando e a tela mostram uma faixa: a da organização pedida,
+  // ou a da primeira quando o worker roda para todas.
+  return { ...(resultados[0] || { avisou: false }), avisou: criados > 0, criados, organizacoes: ids.length };
+}
+
+async function avisarFaixaDe(organizacaoId, agora) {
+  const r = await servico.receita12m(organizacaoId).catch(() => null);
   if (!r) return { avisou: false, motivo: 'sem perfil de empresa cadastrado' };
 
   const mes = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}`;
@@ -113,6 +130,7 @@ async function avisarFaixa({ agora = new Date() } = {}) {
 
   if (r.perto_do_teto) {
     const criado = await alertas.criar({
+      organizacaoId,
       tipo: 'faixa_receita',
       nivel: 'atencao',
       chave: `faixa_receita:${r.faixa}:${mes}`,
@@ -130,6 +148,7 @@ async function avisarFaixa({ agora = new Date() } = {}) {
   // falsa. Vermelho, porque não é coisa de deixar para depois.
   if (r.declaracao_desatualizada) {
     const criado = await alertas.criar({
+      organizacaoId,
       tipo: 'faixa_receita',
       nivel: 'vermelho',
       chave: `enquadramento:${r.faixa}:${mes}`,

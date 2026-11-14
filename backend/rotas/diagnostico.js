@@ -5,6 +5,7 @@ const servico = require('../servicos/diagnostico');
 const descarte = require('../regras/descarte');
 const exigencias = require('../regras/exigencias');
 const descartarVencidas = require('../jobs/descartar-vencidas');
+const analise = require('../servicos/analise-mercado');
 
 const rotas = express.Router();
 
@@ -15,7 +16,7 @@ rotas.get('/', async (req, res) => {
   const dias = servico.PERIODOS.some((p) => p.dias === pedido) ? pedido : 90;
 
   try {
-    const diagnostico = await servico.diagnosticar({ dias });
+    const diagnostico = await servico.diagnosticar({ organizacaoId: req.organizacaoId, dias });
     res.json({
       ...diagnostico,
       // O catálogo vai junto: é o que preenche o seletor de "qual exigência
@@ -29,11 +30,21 @@ rotas.get('/', async (req, res) => {
   }
 });
 
+// GET /api/diagnostico/perdas — meu histórico: motivos de perda e recomendação (Seção 13).
+rotas.get('/perdas', async (req, res) => {
+  const meses = [3, 6, 12, 24].includes(Number(req.query.meses)) ? Number(req.query.meses) : 12;
+  try {
+    res.json(await analise.historicoDePerdas(req.organizacaoId, { meses }));
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível montar o histórico de perdas.', erro);
+  }
+});
+
 // POST /api/diagnostico/descartar-vencidas — o job da seção 20.4 na mão, para
 // quem não quiser esperar a rodada do worker.
-rotas.post('/descartar-vencidas', async (_req, res) => {
+rotas.post('/descartar-vencidas', async (req, res) => {
   try {
-    const resultado = await descartarVencidas.descartarVencidas();
+    const resultado = await descartarVencidas.descartarVencidas({ organizacaoId: req.organizacaoId });
     res.json({
       ...resultado,
       mensagem: resultado.descartadas

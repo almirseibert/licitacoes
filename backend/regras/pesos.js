@@ -8,8 +8,8 @@ const pool = require('../config/db');
 const { PESOS } = require('./aderencia');
 
 const VALIDADE_MS = 30000;
-let cache = null;
-let cacheEm = 0;
+// Um cache por organização (Seção 1b): cada cliente tem os seus pesos.
+const cache = new Map(); // organizacaoId -> { pesos, em }
 
 // Rótulo e grupo de cada peso, para a tela de Configurações (seção 11.13).
 // Chave que não estiver aqui continua funcionando, mas não aparece na tela —
@@ -48,8 +48,10 @@ const CATALOGO = {
 };
 
 /** Lista para a tela: valor atual, padrão de fábrica e de onde veio. */
-async function listar() {
-  const [linhas] = await pool.query('SELECT chave, valor FROM regras_pontuacao');
+async function listar(organizacaoId) {
+  const [linhas] = await pool.query('SELECT chave, valor FROM regras_pontuacao WHERE organizacao_id = ?', [
+    organizacaoId,
+  ]);
   const salvos = new Map(linhas.map((l) => [l.chave, typeof l.valor === 'string' ? JSON.parse(l.valor) : l.valor]));
 
   return Object.entries(CATALOGO).map(([chave, meta]) => ({
@@ -64,10 +66,13 @@ async function listar() {
 }
 
 /** Pesos efetivos: os de fábrica com o que o usuário mudou por cima. */
-async function carregar({ semCache = false } = {}) {
-  if (!semCache && cache && Date.now() - cacheEm < VALIDADE_MS) return cache;
+async function carregar(organizacaoId, { semCache = false } = {}) {
+  const guardado = cache.get(organizacaoId);
+  if (!semCache && guardado && Date.now() - guardado.em < VALIDADE_MS) return guardado.pesos;
 
-  const [linhas] = await pool.query('SELECT chave, valor FROM regras_pontuacao');
+  const [linhas] = await pool.query('SELECT chave, valor FROM regras_pontuacao WHERE organizacao_id = ?', [
+    organizacaoId,
+  ]);
   const pesos = { ...PESOS };
   for (const linha of linhas) {
     const valor = typeof linha.valor === 'string' ? JSON.parse(linha.valor) : linha.valor;
@@ -81,24 +86,21 @@ async function carregar({ semCache = false } = {}) {
   }
 
   // Duas leituras simultâneas podem preencher o cache duas vezes, com o mesmo
-  // conteúdo: é desperdício de uma consulta, não corrupção de dado. Trancar
-  // isso custaria mais do que a consulta que se evita.
-  // eslint-disable-next-line require-atomic-updates
-  cache = pesos;
-  // eslint-disable-next-line require-atomic-updates
-  cacheEm = Date.now();
+  // conteúdo: é desperdício de uma consulta, não corrupção de dado.
+  cache.set(organizacaoId, { pesos, em: Date.now() });
   return pesos;
 }
 
-function limparCache() {
-  cache = null;
+function limparCache(organizacaoId) {
+  if (organizacaoId === undefined) cache.clear();
+  else cache.delete(organizacaoId);
 }
 
 /**
  * Grava os pesos que a tela mandou. Só aceita chaves do catálogo e números
  * dentro de -100 a 100 — peso digitado errado não pode quebrar a pontuação.
  */
-async function salvar(alteracoes) {
+async function salvar(organizacaoId, alteracoes) {
   const entradas = Object.entries(alteracoes || {});
   if (!entradas.length) throw new Error('Nenhum peso para salvar.');
 
@@ -110,14 +112,14 @@ async function salvar(alteracoes) {
   for (const [chave, valor] of entradas) {
     const meta = CATALOGO[chave];
     await pool.query(
-      `INSERT INTO regras_pontuacao (chave, valor, rotulo, grupo, descricao)
-       VALUES (?, CAST(? AS JSON), ?, ?, ?)
+      `INSERT INTO regras_pontuacao (organizacao_id, chave, valor, rotulo, grupo, descricao)
+       VALUES (?, ?, CAST(? AS JSON), ?, ?, ?)
        ON DUPLICATE KEY UPDATE valor = VALUES(valor)`,
-      [chave, JSON.stringify(valor), meta.rotulo, meta.grupo, meta.descricao || null]
+      [organizacaoId, chave, JSON.stringify(valor), meta.rotulo, meta.grupo, meta.descricao || null]
     );
   }
 
-  limparCache();
+  limparCache(organizacaoId);
   return entradas.length;
 }
 
@@ -141,10 +143,10 @@ function validar(chave, valor) {
 }
 
 /** Volta um peso ao padrão de fábrica. */
-async function restaurar(chave) {
+async function restaurar(organizacaoId, chave) {
   if (!CATALOGO[chave]) throw new Error(`Peso desconhecido: "${chave}".`);
-  await pool.query('DELETE FROM regras_pontuacao WHERE chave = ?', [chave]);
-  limparCache();
+  await pool.query('DELETE FROM regras_pontuacao WHERE organizacao_id = ? AND chave = ?', [organizacaoId, chave]);
+  limparCache(organizacaoId);
 }
 
 module.exports = { listar, carregar, salvar, restaurar, limparCache, CATALOGO };

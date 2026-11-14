@@ -17,12 +17,13 @@ let avisouDesligado = false;
  * Para quem o aviso vai. A tela manda (seção 11.13); vazia lá, vale o
  * ALERTA_PARA do ambiente.
  */
-async function destinatario() {
-  return configuracoes.texto('alerta_email_para', smtp.para);
+async function destinatario(organizacaoId) {
+  // Seção 1b: o destino é da organização; o do ambiente só vale para a operadora.
+  return configuracoes.textoDaOrganizacao(organizacaoId, 'alerta_email_para', smtp.para);
 }
 
-async function configurado() {
-  return Boolean(smtp.host && smtp.de && (await destinatario()));
+async function configurado(organizacaoId) {
+  return Boolean(servicoLigado() && (await destinatario(organizacaoId)));
 }
 
 function obterTransporte() {
@@ -40,7 +41,7 @@ function obterTransporte() {
 function montarCorpo(avisos) {
   const linhas = avisos.map((a) => {
     const quando = a.quando ? new Date(a.quando).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : null;
-    return `• ${a.mensagem}${quando ? `\n  Fim das propostas: ${quando}` : ''}`;
+    return `• ${a.mensagem}${quando ? `\n  ${a.rotulo_quando || 'Fim das propostas'}: ${quando}` : ''}`;
   });
 
   return [
@@ -57,18 +58,23 @@ function montarCorpo(avisos) {
 
 function montarAssunto(avisos) {
   if (avisos.length === 1) return `[Licitações] ${String(avisos[0].mensagem).slice(0, 120)}`;
-  return `[Licitações] ${avisos.length} avisos de prazo`;
+  return `[Licitações] ${avisos.length} avisos`;
+}
+
+/** O servidor tem SMTP? (Sem ele, nenhum e-mail sai, para ninguém.) */
+function servicoLigado() {
+  return Boolean(smtp.host && smtp.de);
 }
 
 /**
- * Envia os avisos em um único e-mail.
+ * Envia os avisos em um único e-mail para `para` (Seção 9: o destino é de cada
+ * pessoa ou da caixa da organização; quem escolhe é o despacho).
  * @returns {{enviado:boolean, motivo?:string, assunto?:string}}
  */
-async function enviarAvisos(avisos) {
+async function enviarAvisos(para, avisos) {
   if (!avisos || !avisos.length) return { enviado: false, motivo: 'nada a enviar' };
 
-  const para = await destinatario();
-  if (!smtp.host || !smtp.de || !para) {
+  if (!servicoLigado() || !para) {
     if (!avisouDesligado) {
       console.log(
         'E-mail de alerta desligado: defina SMTP_HOST e SMTP_DE no .env, e o destinatário em Configurações (ou ALERTA_PARA).'
@@ -90,7 +96,7 @@ async function enviarAvisos(avisos) {
   } catch (erro) {
     // Falha de e-mail nunca derruba o job: o alerta já está no painel.
     console.error('Não foi possível enviar o e-mail de alerta:', erro.message);
-    return { enviado: false, motivo: erro.message };
+    return { enviado: false, motivo: erro.message, externo: true };
   }
 }
 
@@ -101,12 +107,20 @@ async function enviarAvisos(avisos) {
  * do convite na resposta da API, para o admin copiar e mandar à mão).
  * @returns {{enviado:boolean, motivo?:string}}
  */
-async function enviarTransacional({ para, assunto, texto }) {
-  if (!smtp.host || !smtp.de) {
+async function enviarTransacional({ para, assunto, texto, anexos, responderPara }) {
+  if (!servicoLigado()) {
     return { enviado: false, motivo: 'smtp não configurado' };
   }
   try {
-    await obterTransporte().sendMail({ from: smtp.de, to: para, subject: assunto, text: texto });
+    await obterTransporte().sendMail({
+      from: smtp.de,
+      to: para,
+      subject: assunto,
+      text: texto,
+      // Seção 10: o lote de documentos sai do SMTP do painel, mas a resposta vai a quem mandou.
+      ...(responderPara ? { replyTo: responderPara } : {}),
+      ...(anexos && anexos.length ? { attachments: anexos } : {}),
+    });
     return { enviado: true };
   } catch (erro) {
     console.error('Não foi possível enviar o e-mail transacional:', erro.message);
@@ -116,6 +130,7 @@ async function enviarTransacional({ para, assunto, texto }) {
 
 module.exports = {
   enviarAvisos,
+  servicoLigado,
   enviarTransacional,
   configurado,
   destinatario,

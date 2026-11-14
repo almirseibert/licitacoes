@@ -23,7 +23,7 @@ roda na máquina de quem desenvolve. O passo a passo original está em
 O painel vira produto vendável com login: cada cliente é uma **organização**, com usuários e
 senha próprios (não mais lidos do banco do CRM) e dados isolados. O plano completo está em
 [PLANO_SAAS_CONLICITACAO.md](PLANO_SAAS_CONLICITACAO.md); esta é a Seção 1 (base multiempresa),
-**parcialmente entregue em 12/11/2026**:
+entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
 
 - **Pronto e verificado contra MariAB 10.11 real** (migrações, não mock): login, cadastro de
   organização, convite por e-mail/link, aceite de convite e troca entre organizações sem digitar
@@ -40,16 +40,325 @@ senha próprios (não mais lidos do banco do CRM) e dados isolados. O plano comp
   aceito uma vez, recusado na segunda tentativa (409) e vencido após 72 h (410). Troca de
   organização recusada para quem não é membro (403). Papel insuficiente bloqueado antes de chegar
   ao banco (403 em `/api/auth/convites` para quem não é admin/dono).
-- **O que ainda não mudou** (Seção 1b, deliberadamente adiada): o motor de pontuação, o funil, o
-  diagnóstico e as licitações estratégicas continuam lendo/escrevendo as colunas de `licitacoes`
-  (pontuação, etapa, favorito, descartada) em vez da nova `org_licitacoes` — mover isso exige
-  decidir, rota a rota, com banco real, sem arriscar o comportamento de quem já usa o painel hoje.
-  As demais ~19 rotas que passam a ler tabelas com `organizacao_id` (fontes compartilhadas à
-  parte) ainda não filtram por organização — só `/api/palavras` foi atualizada, como referência
-  do padrão (`WHERE organizacao_id = ?` em toda consulta, `req.organizacaoId` no `WHERE` de todo
-  `UPDATE`/`DELETE`, nunca no corpo do `SET`). Tela de cadastro, convite e troca de organização no
-  frontend também ficam para a continuação — o login atual funciona sem mudança nenhuma porque o
-  formato da resposta não mudou.
+- **Seção 1b — entregue em 13/11/2026** (verificada contra MariaDB 10.11 real e 450 licitações
+  reais do PNCP, RS/SC, propostas abertas):
+  - **Decisão por organização.** A migração `018_org_licitacoes.sql` move para `org_licitacoes`
+    tudo o que depende de quem olha — pontuação, grupo, palavra que casou, objeto social, pode
+    participar, etapa, favorito, descarte, proposta, custo, o resultado digitado e a
+    confirmação da leitura da IA — copia o que existia para a organização 1 (hash idêntico das 450
+    linhas antes e depois) e **apaga essas colunas de `licitacoes`**, para que consulta esquecida
+    falhe alto em vez de mostrar a decisão de outra organização. Toda rota lê pela visão
+    `escopo.daOrganizacao(id)` (`backend/servicos/escopo.js`); os jobs que servem a todos usam
+    `porOrganizacao()` (aviso nasce para a organização certa) ou `agregadoDasOrganizacoes()`
+    (baixar e ler edital: maior nota entre as ativas).
+  - **Coleta por organização.** A busca usa a união das palavras das organizações ativas; cada
+    licitação é pontuada com as palavras, os pesos e os CNAEs de cada uma. Organização nova
+    recebe uma repontuação na fila ao se cadastrar.
+  - **Rotas escopadas**: Radar, Funil, filtros, painel, exportação e relatório, Configurações
+    (pesos e perfis), Cofre, Kits, Modelos (os do sistema continuam de todos), Envio, Declarações,
+    Propostas, Preço, Concorrentes e dossiês ("encontrou você" calculado na hora, por
+    organização), Alertas, Contratos e marcos, Questionamentos, Monitor, Oportunidades (descarte
+    e observação em `org_oportunidades`), Diagnóstico, IA (sugestões de palavra por organização;
+    o gasto do serviço só a operadora vê). Fontes são catálogo: só a organização operadora (1,
+    admin/dono) cria, muda, apaga e dispara coleta.
+  - **`configuracoes`, decidido**: janela da coleta e teto de download são **operação** (globais,
+    só a operadora muda); destino do e-mail e do WhatsApp de alerta é **preferência** e mora em
+    `org_configuracoes`. O destino do `.env` (`ALERTA_PARA`, `WHATSAPP_DESTINO`) só vale para a
+    operadora — senão o alerta de um cliente iria para a caixa da Studio Mythos.
+  - **Cofre em disco por organização**: arquivo novo vai para `org/<id>/empresa/<perfil>/`,
+    pacotes para `org/<id>/pacotes/`, declarações, anexos e propostas idem. Os arquivos já
+    guardados continuam onde estão — o caminho está no banco.
+  - **Papéis valem na hora**: `confirmarVinculo` relê o papel em `organizacao_membros` (cache de
+    15 s, limpo quando a Equipe muda alguém); o papel `leitor` só lê (`leitorSoLe`, 403 em
+    qualquer escrita).
+  - **Telas**: entrar / criar conta / esqueci minha senha (`Login.jsx`), aceite de convite
+    (`/convite/<token>`), senha nova (`/redefinir-senha/<token>`), **Equipe** (papéis, remover,
+    convidar, cancelar convite; sem e-mail configurado mostra o link para mandar à mão) e o
+    seletor de organização na barra lateral.
+  - **Recuperação de senha**: link de uso único, 1 hora, só por e-mail (o banco guarda o
+    sha256 do token), resposta igual exista ou não a conta, no máximo 3 pedidos por hora.
+  - **Correção de segurança** da 1a: aceitar convite para um e-mail que já tem conta agora
+    exige a senha dessa conta. Antes, quem tinha o link (o próprio admin, quando o e-mail não
+    está configurado) entrava como aquela pessoa e, com `trocar-organizacao`, abria as outras
+    organizações dela.
+  - **Aceite medido** (roteiro com duas organizações pela API real, 53/53): org 1 e org 2 com
+    Radar próprio sobre o mesmo catálogo (topo "nobreak" 70 pts × "reforma" 88 pts; 272 × 450
+    pontuadas); a org 2 vê em Triagem a licitação que a org 1 pôs em "Vou disputar", e o
+    descarte da org 2 não muda a org 1 nem entra no diagnóstico dela; valor final digitado pela
+    org 2 não muda o da org 1 (990); 404 ao tentar ler, editar ou apagar pelo id perfil,
+    documento do cofre, kit, modelo, proposta, questionamento, contrato, marco e alerta da outra;
+    403 para fonte e ajuste de operação fora da operadora; convite para conta existente sem
+    senha ou com senha errada 401, com a senha 200; leitor 200 no GET e 403 no PATCH; rebaixado
+    a leitor 403 e removido 401 **na hora**; redefinir senha 200, reuso 410, senha velha 401,
+    nova 200. Os 20 jobs do worker rodaram sem erro contra o banco migrado, com os alertas
+    nascendo por organização (`limpar` tinha um bug antigo, `a.tamanho` → `tamanho_bytes`,
+    corrigido aqui). `npm run lint` limpo e 50/50 testes (6 novos em `testes/escopo.test.js`).
+  - **Não verificado aqui**: a busca textual do PNCP (`/api/search`) não respondeu deste
+    ambiente, então a coleta pelo adaptador não rodou de ponta a ponta — as 450 licitações
+    vieram da API de consulta do PNCP e a pontuação foi feita pelo `repontuar` novo. E-mail
+    (convite e senha) não foi enviado: não há SMTP no ambiente de teste.
+  - Pendente (Seção 1c no plano): monitor que checa a mesma licitação uma vez por organização,
+    correção manual de exigência ainda compartilhada, visão de alertas mais leve, ficha de órgão
+    e concorrente que mostra o grupo da operadora.
+- **Seção 2 — tema claro/escuro, entregue em 13/11/2026.** As cores do Voltage Obsidian viraram
+  variáveis CSS (`frontend/src/estilo.css`, trios RGB em `:root`/`[data-tema='escuro']` e
+  `[data-tema='claro']`) que o `tailwind.config.js` lê como `rgb(var(--cor-x) / alfa)`: nenhum
+  componente sabe do tema, e `bg-voltagem/10` continua valendo. Dois tokens novos: `realce`
+  (película de hover/selecionado, que era `bg-white/…` e sumia no claro) e `apagado` (faixa
+  "Baixa" da pontuação, que estava em 2,5:1 no escuro). Alternador no rodapé da navegação e na
+  tela de login (`componentes/AlternarTema.jsx`, `servicos/tema.js`); o `index.html` aplica o tema
+  antes do primeiro pintar. Preferência em `usuarios.tema_preferido` (migração
+  `019_tema_preferido.sql`, `PATCH /api/auth/tema`, devolvida no login e no `/eu`), com
+  `localStorage` de reserva e `prefers-color-scheme` no primeiro acesso; sair apaga a escolha
+  local para o próximo do navegador não herdá-la.
+  - **Aceite medido** (MariaDB 10.11 zerado, 150 licitações reais do PNCP de RS/SC, Playwright):
+    primeiro acesso com o sistema em claro abriu claro; o login trouxe o escuro salvo no banco; o
+    clique trocou para claro **sem recarregar** (marcador na `window` sobreviveu) e o banco passou
+    a `claro`; recarregar manteve; outro navegador com o sistema em escuro abriu escuro e virou
+    claro no login. Contraste medido em todo texto visível (cor contra o fundo composto):
+    Radar 518 textos, Funil 380, Documentos 22 — **0 abaixo de 4,5:1 nos dois temas**, mínimo
+    6,43 / 5,04 / 6,96 no escuro e 4,64 / 4,79 / 5,98 no claro. API: `PATCH /api/auth/tema` 200
+    para `claro`/`escuro`/`null`, 400 para `"azul"` e corpo vazio, 401 sem token; só a linha do
+    próprio usuário muda. `testes/tema.test.js` refaz a conta de contraste dos tokens a cada
+    `npm test` (58/58).
+- **Seção 3 — planos e cobrança, entregue em 13/11/2026.** Migração `020_planos.sql`: `planos`
+  (catálogo; recursos e limites em JSON — `null` = sem teto, chave ausente = 0), `assinaturas`
+  (uma por organização: plano, ciclo, `pago_ate`, provedor, pedido em aberto),
+  `assinatura_eventos` (livro de tudo, idempotência do webhook) e `uso_mensal` (IA e exportações).
+  Essencial R$ 149/mês · Profissional R$ 299 · Avançado R$ 499 (anual = 10 meses); organização
+  nova nasce em **teste de 15 dias no Avançado**. `backend/servicos/limites.js`: situação da
+  assinatura (teste / teste vencido e assinatura vencida = só leitura / suspensa = 402 em tudo;
+  5 dias de carência após o `pago_ate`), `assinaturaValida`, `exigirRecurso('<módulo>')` e
+  `exigirLimite('<limite>')` — 402 com `{ erro, upgrade: { plano_sugerido } }` dizendo o plano mais
+  barato que resolve. A operadora não tem teto. `backend/servicos/cobranca.js`: provedor `manual`
+  (o cliente pede pela tela, o administrador ativa) e `POST /api/cobranca/webhook/:provedor`
+  fechado até `COBRANCA_PROVEDOR` ≠ manual e `COBRANCA_WEBHOOK_SEGREDO` definido (HMAC-SHA256 do
+  corpo cru em `X-Assinatura`). Telas **Assinatura**, **Uso do plano** e **Organizações** (só para
+  admin da operadora — o backend diz `superadmin`); cadeado no menu para o módulo fora do plano e
+  aviso no topo para teste/assinatura vencidos.
+  - **Aceite medido** (MariaDB 10.11, 150 licitações reais, duas organizações novas pela API,
+    roteiro de 44 conferências, **44/44**): Essencial recebe 402 em IA, oportunidades, contratos,
+    concorrentes, diagnóstico, preço de referência, relatório, leitura de edital e monitor, com o
+    plano sugerido certo; Radar 200. Limites estourados no ponto exato: 3º usuário, 2º perfil,
+    31ª palavra-chave, 21ª exportação do mês (a 1ª contou 1), upload que passa de 1 GB. Pedido de
+    Profissional anual apareceu no superadmin; ativar somou 12 meses ao já pago (2026-12-13 →
+    2027-12-13) e liberou IA e o 3º usuário. Suspensa: Radar e convite 402, Assinatura 200;
+    teste vencido: GET 200, POST 402; +7 dias reabriu. Cliente no `/api/admin` 403. Webhook:
+    404 no manual, 401 com assinatura errada, 200 com a certa (ativou no banco), repetido
+    idempotente. O painel do superadmin listou o uso real (org A: 3 usuários, 30 palavras,
+    20 exportações, 1 GB). Monitor automático: organização no Essencial com favorita não ganhou
+    monitor, a do Avançado ganhou. Lint limpo, 67/67 testes (`testes/limites.test.js`).
+  - Pendente (Seção 3b no plano): trava contra corrida no limite, cache do plano por processo,
+    gateway real, e-mail ao administrador no pedido.
+- **Seção 4 — boletim diário por e-mail, entregue em 13/11/2026.** Migração `021_boletins.sql`:
+  `perfis_busca` ("Meus filtros": palavras, exclusões, UFs, municípios, modalidades, faixa de
+  valor, nota mínima, horários), `boletins`, `boletim_itens` (UNIQUE filtro × licitação — a
+  mesma licitação nunca vai duas vezes no mesmo filtro), `boletim_leituras` e
+  `boletim_descadastros`; limite `perfis_busca` por plano (1 / 5 / 20).
+  - O filtro roda no nosso banco (`backend/regras/boletim.js`), sobre o objeto **e** o texto
+    extraído do edital — nunca no `palavraChave` do PNCP. Palavra casa no começo da palavra
+    ("monitor" pega "monitores", "ti" não casa dentro de "gestião"); exclusão só no objeto;
+    sem valor informado a licitação entra com a lacuna; filtro sem palavra não gera boletim.
+  - `backend/jobs/boletim.js` roda de hora em hora no worker e solta o boletim no último horário
+    vencido do filtro (padrão 7h, 12h, 18h, fuso de São Paulo), uma vez por filtro × dia ×
+    horário; e-mail por pessoa da equipe com link de descadastro assinado (HMAC com
+    `JWT_SECRET`; o GET só confirma, o POST descadastra). Toda organização ganha um "Filtro
+    principal" com as palavras-chave e exclusões que já tinha.
+  - Tela **Boletins** (`frontend/src/paginas/Boletins.jsx`): calendário do mês com boletins
+    numerados por dia, legenda não lido / lido / lido por outro membro, filtro por filtro,
+    status e UF, "marcar boletins do filtro como lidos"; aba "Meus filtros"; receber ou não o
+    e-mail vale por pessoa.
+  - `npm run boletim -- --org=<id> --simular` mostra o que sairia agora sem gravar;
+    sem `--simular` gera e envia já; `-- --dias=N` muda a janela (padrão 3 dias).
+  - **Aceite medido** (MariaDB 10.11, 150 licitações reais do PNCP, SMTP local de teste):
+    simulação do filtro principal da organização 1 deu **11 de 150**, exatamente a conferência
+    independente por SQL `LIKE` (12) menos 1 em que o termo só aparece no meio da palavra
+    ("videomonitoramento"). Roteiro pela API com duas organizações novas: **41/41** — filtro com
+    "monitor, periféricos", exclusão "glicose", UF RS trouxe os 7 esperados; filtro SC 0; boletim
+    nº 1 com 7 itens e 1 e-mail; segunda rodada na mesma hora "já gerado"; nova simulação e slot
+    da hora seguinte com **0 itens** (nada repetido); palavra nova trouxe só o item novo (nº 2).
+    Isolamento: a outra organização recebeu 404 ao editar, apagar, ler ou marcar o que era da
+    primeira, e "marcar todos" dela marcou 0. Essencial: 2º filtro → 402 com Profissional
+    sugerido. Leitura por outro membro, descadastro pelo link (token forjado 404) e recadastro
+    conferidos. Lint limpo, 76/76 testes (`testes/boletim.test.js`).
+  - Não verificado: casamento no texto do edital com edital baixado de verdade (o PNCP não
+    respondeu neste ambiente; o caminho foi conferido com um texto inserido numa licitação real)
+    e envio por SMTP de produção.
+- **Seção 7 — Radar 2.0, entregue em 13/11/2026.** Migração `022_radar.sql`: `municipios`
+  (catálogo, 5.570 municípios do IBGE com coordenadas — `backend/config/dados/municipios.csv`,
+  carregado pelo `npm run semear`), `perfis_busca.origem`/`filtros` (a pesquisa salva do Radar
+  mora na mesma tabela dos filtros do boletim, com `origem = 'radar'`, sem gerar boletim nem
+  contar no limite dele), `links_publicos` (só o SHA-256 do token) e, no catálogo, `srp`,
+  `informacao_complementar` (a observação do PNCP), `abertura_original` e
+  `fim_propostas_original` (primeira data vista — é dela que sai "prorrogada"/"adiada").
+  - Filtros (`backend/regras/filtros-radar.js`, função pura usada pela lista, pelas exportações
+    e pelo link): palavras soltas = todas, em qualquer ordem; **"entre aspas" = frase exata** no
+    objeto; região; **raio em km** (haversine sobre `municipios`, a partir da cidade escolhida ou
+    da `radar_cidade_base` da organização; sem cidade, aviso em vez de filtro mudo); esfera,
+    situação, órgão (nome ou CNPJ), nº do edital, nº do processo, texto nos itens, texto na
+    observação, inclusão e prazo de/até com atalhos hoje/ontem/amanhã, SRP, com edital baixado,
+    monitorada. `%` e `_` digitados são texto, não curinga.
+  - Etiquetas calculadas na leitura (`backend/regras/etiquetas.js`): nova, vence hoje, urgente,
+    recebendo propostas, SRP, prorrogada, adiada, suspensa, revogada, homologada; e "exige
+    garantia" quando o edital lido pede garantia contratual.
+  - Saídas: Excel e **Word** (`backend/servicos/docx.js`, A4 deitado, lacuna visível),
+    **imprimir** (folha de estilo de impressão em `estilo.css`) e **compartilhar** por link de
+    leitura de 1 a 30 dias (`/publico/radar/<token>`), revogável. O link tira os filtros de
+    decisão (nota, favorito, etapa, descarte, grupo, monitorada) e mostra só o fato público.
+  - Cartão: "ver itens" e "mais informações" (processo, observação, telefone e site — o PNCP não
+    dá telefone: lacuna) abrem no próprio cartão; anotação com **ditado por voz** (Web Speech API
+    do navegador; nenhum áudio vai ao painel). 20 por página, com "ir para" e 20/50/100.
+  - O detalhe do PNCP passou a gravar SRP, observação e esfera (`adaptadores/pncp.js`).
+  - **Aceite medido**: ver o plano (Seção 7) — contagem de cada filtro pela API igual à
+    conferência por SQL independente no banco real; isolamento entre duas organizações; link
+    público. Testes em `testes/radar.test.js`.
+  - Não verificado: comparação com o ConLicitação no mesmo filtro (sem acesso a ele daqui).
+    Pendente (Seção 7b no plano): CAPAG, monitor de chat, município por código IBGE.
+- **Seção 8 — Gestão por licitação e dashboard, entregue em 13/11/2026.** Migração
+  `023_gestao.sql`: `org_tarefas` (tarefa da equipe — não confundir com `tarefas`, a fila do
+  worker), `org_andamentos` (o que aconteceu no processo, com os tipos da Seção 9) e
+  `org_licitacoes.responsavel_id`. Regras puras em `backend/regras/gestao.js`; rotas em
+  `backend/rotas/gestao.js` (`/api/gestao/*`, módulo `gestao` do plano).
+  - **Tarefas** (tela nova e aba no detalhe): visões atrasadas / hoje / futuras / concluídas,
+    "por mim / por todos", responsável só da própria equipe (membro ativo). "Hoje" é o dia de
+    Brasília, não o `CURDATE()` do banco em UTC.
+  - **Andamentos** na Linha do tempo ("adicionar andamento", com tipo e quando aconteceu),
+    junto dos eventos do monitor; só quem registrou ou um admin apaga.
+  - **Por mim / por todos** no Radar, no Funil e na Agenda (responsável pela licitação ou com
+    tarefa nela) e as listas **favoritas / gerenciadas / finalizadas** no Radar. Nenhum dos dois
+    passa para o link público.
+  - **Detalhe** com Tarefas, Anotações, Anexos, Resultados e **Habilitação** (exigência ×
+    cofre) à frente, e o seletor de responsável no cabeçalho.
+  - **Calendário**: agenda do mês (prazo e abertura das licitações acompanhadas, tarefas,
+    andamentos) com a agenda do dia; as recorrências viraram a segunda aba.
+  - **Dashboard** (tela inicial): boletins não lidos, documentos vencendo, tarefas atrasadas,
+    novos andamentos, oportunidades do dia e vigentes, vigentes por UF (gráfico + tabela) e
+    **valor total em disputa**.
+  - Tirar alguém da equipe deixa as licitações e tarefas abertas dela sem responsável.
+  - **Aceite medido**: ver o plano (Seção 8) — duas pessoas da organização 1 veem a mesma
+    tarefa; a organização 16 não a vê e recebe 404 ao editar/apagar pelo id. Testes em
+    `testes/gestao.test.js`.
+- **Seção 9 — Avisos por tipo e por canal, entregue em 14/11/2026.** Migração
+  `024_notificacoes.sql`: `notificacoes_config` (pessoa ou caixa da organização × canal
+  e-mail/WhatsApp/navegador × tipo), `notificacoes_destinos` (e-mail e WhatsApp de cada pessoa
+  em cada organização; e-mail vazio = o de login), `notificacoes_push` (inscrição Web Push) e,
+  em `alertas`, `usuario_id` (aviso pessoal), `autor_id` (quem fez não é avisado) e
+  `notificado_em`. Regras puras em `backend/regras/notificacoes.js`; despacho em
+  `backend/servicos/notificar.js`; push em `backend/servicos/push.js` + `frontend/public/sw.js`;
+  rotas `/api/notificacoes/*`; tela em Configurações → "Avisos por tipo e canal".
+  - Tipos: prazo, esclarecimento, aviso, impugnação, recurso, status, resultado, documento
+    vencendo, tarefa atrasada, nova oportunidade. Linha ausente = padrão (ligado, menos
+    nova oportunidade por e-mail/WhatsApp e aviso/documento por WhatsApp).
+  - O sino continua sendo a fonte da verdade; o worker, a cada 30 min (ou `npm run notificar`),
+    cria o aviso de **tarefa atrasada** ao responsável e leva todo alerta novo para fora, um
+    envio por destino. Endereço de alguém da equipe obedece às escolhas dessa pessoa, mesmo que
+    seja também o da caixa da organização. Andamento registrado vira aviso do tipo dele.
+  - WhatsApp com **modelo aprovado** pela Meta (`WHATSAPP_MODELO`): sem ele, texto livre, só
+    dentro da janela de 24 h. Textos a submeter em `docs/whatsapp-modelos.md`.
+  - Push: só endpoint https de serviço de push conhecido (FCM, Mozilla, Apple, WNS); 404/410
+    apaga a inscrição.
+  - **Aceite medido**: ver o plano (Seção 9) — SMTP real local e simulador da Meta; o aceite
+    com WhatsApp real da Meta ficou na 9b. Testes em `testes/notificacoes.test.js`.
+- **Seção 10 — Documentos, declarações e agenda de portais, entregue em 14/11/2026.** Migração
+  `025_documentos_portais.sql`: `empresa_documentos.revisado_em` e a tabela `org_portais` (nome,
+  URL, tipo, vencimento do cadastro, observação — **sem login e sem senha**). Regras puras em
+  `backend/regras/documentos.js` (grupo pelo catálogo de exigências, situação disponível /
+  vencendo / pendente, revisão de 90 dias) e `backend/regras/portais.js`; rotas
+  `/api/empresa/documentos?grupo=&situacao=`, `.../lote/baixar?ids=` (ZIP, leitor também baixa),
+  `.../lote/email` (até 5 destinatários, 15 MB, 20 envios/hora por organização, resposta para
+  quem mandou), `.../:id/revisado` e `/api/portais`; telas em Documentos (abas "Documentos" e
+  "Agenda de portais") e aviso de portal no Dashboard.
+  - Documento sem validade formal volta para revisão aos 90 dias (alerta, não bloqueio);
+    portal perto de vencer avisa em 30/15/3 dias, pelo marco já cruzado. Ambos no job diário de
+    validades (`npm run validades`) e com tipo "documento vencendo" nos avisos da Seção 9.
+  - Certidão não é emitida pelo painel (CAPTCHA/gov.br): o botão "emitir" abre a página oficial.
+  - Declarações: 13 modelos (+ renúncia de vistoria e carta de credenciamento). O seed não
+    duplica mais os modelos do sistema (a 025 apaga as cópias que ele fazia desde a 017).
+  - **Aceite medido**: ver o plano (Seção 10). Testes em `testes/documentos.test.js`.
+- **Seção 5 — Pergunte ao Edital, entregue em 14/11/2026 (aceite com o Gemini real pendente).**
+  Migração `027_ia_perguntas.sql`; aba **Pergunte ao edital** no detalhe da licitação
+  (`frontend/src/paginas/PerguntarEdital.jsx`); rotas `/api/licitacoes/:id/perguntas` (GET
+  histórico + biblioteca, POST → **202 com o id**, GET `/:pid` para a tela consultar, PATCH
+  `{salva}`), atrás do recurso `ia` do plano e do limite `ia_perguntas_mes`.
+  - Busca por trecho sem banco vetorial (`backend/regras/busca-edital.js`): palavra da pergunta
+    pesada pela raridade no próprio edital; o job de leitura agora grava as páginas separadas
+    por `\f`, e a **página vem do nosso texto, nunca do modelo** (.docx/.txt: "página não
+    identificada"). Sem trecho que trate do assunto, responde que o edital não fala disso e
+    não gasta modelo.
+  - Schema da resposta (`validarResposta` em `regras/ia-schema.js`): citação só de trecho
+    enviado, frase conferida letra a letra no trecho (mínimo de 20 caracteres), "encontrado"
+    só com citação literal, confiança fora de 0–1 descartada, campo extra descartado. Trecho
+    do edital com texto dirigido à IA ("ignore as instruções…") é sinalizado na tela.
+  - Biblioteca própria de **52 perguntas** em seis categorias
+    (`backend/config/dados/perguntas-edital.js`), escrita sobre a Lei 14.133 e o catálogo de
+    exigências, com dicas de busca por pergunta.
+  - Assíncrona: no máximo 3 em andamento por organização (429); erro do modelo vira mensagem
+    na pergunta; pendente além do timeout aparece como interrompida. Conta no limite só o que
+    chamou o modelo (cache e "não encontrei" não contam).
+  - `IA_URL_BASE` (opcional, `.env.example`) só serve para testar com um servidor que imita o
+    Gemini. **Aceite medido**: ver o plano (Seção 5). Testes em `testes/perguntas-edital.test.js`.
+- **Seção 11 — Resumo do Edital 2.0, entregue em 14/11/2026 (aceite com o Gemini real pendente:
+  créditos do projeto esgotados).** Migração `028_resumo_edital.sql` (`licitacoes.ia_ficha` +
+  `resumo_consideracoes` por organização); aba **Resumo do edital** no detalhe
+  (`frontend/src/paginas/ResumoEdital.jsx`); rotas `/api/licitacoes/:id/resumo-edital` (GET, POST
+  `{forcar}`, PUT `/consideracoes`, GET `/docx`, POST `/email`), atrás do recurso `ia` e do limite
+  `ia_resumos_mes`.
+  - Ficha em 10 grupos e 34 campos (cabeçalho, identificação, sessão com **intervalo mínimo entre
+    lances**, órgão, detalhes, **garantias**, prazos, proposta, pagamento, análise crítica) + listas
+    (itens, habilitação, legislação, **penalidades e multas**) + **possíveis questionamentos**
+    (`backend/regras/resumo-edital.js`). O edital vai em blocos rotulados escolhidos por grupo
+    (mesma busca do Pergunte ao Edital), dentro de `IA_MAX_CARACTERES`.
+  - **Toda afirmação cita o trecho**: valor + bloco + frase conferida letra a letra; sem citação
+    literal o campo é descartado e aparece "Não informado". Arquivo e página vêm do nosso texto.
+    Data de geração e "a IA pode errar" sempre no topo. Gera uma vez; refazer é a pedido.
+  - Possível questionamento → botão abre o pedido de esclarecimento ou impugnação na aba
+    Questionar com o trecho citado (arquivo e página) no lugar da primeira lacuna; a lei é
+    sugestão da IA e a tela diz para conferir.
+  - Saídas: `.docx`, e-mail (para quem pediu, com o `.docx` anexo) e impressão — as três da mesma
+    fonte (`linhasDoChecklist`). Considerações do licitante salvas por organização.
+  - Novas variáveis: `IA_MAX_TOKENS_RESUMO`, `IA_TIMEOUT_RESUMO_MS` e `IA_PROTOCOLO`
+    (`openai` = endpoint compatível do Gemini com `Authorization: Bearer`, o que um cofre de
+    credenciais que só injeta Bearer consegue entregar). **Aceite medido**: ver o plano
+    (Seção 11). Testes em `testes/resumo-edital.test.js`.
+- **Seção 12 — Contratos, atas e acompanhamentos do mercado, entregue em 14/11/2026.** Migração
+  `029_mercado.sql` (catálogo público, sem `organizacao_id`: `mercado_contratos`, `mercado_atas`,
+  `mercado_publicacoes`, `mercado_coletas`); job `backend/jobs/mercado.js` (`npm run mercado`,
+  worker às 02h pela fila, UFs em `MERCADO_UFS`, padrão RS); regras puras em
+  `backend/regras/mercado.js`; rotas `/api/mercado/{contratos,atas,resumo}` (recurso `mercado`) e
+  `/api/acompanhamentos` (recurso `acompanhamentos`); tela única `frontend/src/paginas/Mercado.jsx`
+  em três menus — **Contratos do mercado**, **Atas**, **Acompanhamentos** — e "Contratos" virou
+  **Meus contratos**.
+  - Contratos e atas vêm da busca do PNCP (`tipos_documento=contrato|ata`, filtro `ufs`), do mais
+    novo para trás até o cursor da rodada anterior. A consulta `/v1/contratos` ignora `uf` (devolve
+    o Brasil inteiro, 9.581 num dia) e por isso não serve; a busca só alcança 10.000 resultados
+    (~16 dias de contratos de RS) — passou disso, o cursor avança e o buraco fica anotado.
+  - A **ata do PNCP não publica fornecedor nem valor** (nem na busca, nem no detalhe): as colunas
+    ficam NULL e a tela mostra a lacuna, nunca R$ 0. Ata que vence em até 60 dias aparece marcada.
+  - **Acompanhamentos**: contrato e ata publicados + homologação, revogação, anulação e suspensão
+    (`/v1/contratacoes/atualizacao` por UF e modalidade), de qualquer contratação, com filtros de
+    objeto, UF, cidade, órgão, esfera, edital, modalidade, data e atividade (palavra-chave da
+    organização). Favorita com publicação nova vira alerta `acompanhamento` (tipo "Resultado" nos
+    avisos), só para a organização que favoritou.
+  - Filtros de contrato/ata: vigência (vigentes, vencem em 60/90 dias, encerradas), valor
+    contratado e estimado (do edital, quando está no catálogo), empresa, CNPJ do fornecedor, tipo,
+    poder, esfera, modalidade, data de assinatura. **Aceite medido**: ver o plano (Seção 12).
+    Testes em `testes/mercado.test.js`.
+- **Seção 13 — Concorrentes, histórico e mercado, entregue em 14/11/2026.** Tela **Análise de
+  mercado** (`frontend/src/paginas/AnaliseMercado.jsx`, recurso `mercado`), três abas:
+  - **Análise de mercado**: compras por mês, região (município), modalidade, órgão, fornecedor e
+    produto, por segmento (grupo de palavras-chave ou "Meus filtros") e período; **relatório
+    mensal em PDF** (`GET /api/mercado/analise/pdf?mes=AAAA-MM`). O termo casa por **palavra
+    inteira** com plural e sem acento (`regras/analise-mercado.js`, `padraoDePalavra`) — por
+    trecho, "monitor" trazia 14 contratos de vigilância para o segmento de informática.
+  - **Concorrentes recorrentes**: quem mais assinou contrato nos meus segmentos (30/90/180/365
+    dias), sem o próprio CNPJ e sem CPF mascarado.
+  - **Meu histórico**: motivo de cada perda (preço, perdeu por pouco até 5%, não foi preço, falta
+    de dado), recomendação, quem mais me venceu e os 3 bloqueios do diagnóstico de descarte.
+  - **Perfil por CNPJ** (`GET /api/mercado/fornecedores/:cnpj`, também na ficha do concorrente):
+    contratos, valor ganho, por UF, modalidade e órgão. **Desclassificação/inabilitação: "não
+    disponível"** — o PNCP só publica o vencedor do item (conferido em 14/11/2026).
+  Serviço em `backend/servicos/analise-mercado.js`; testes em `testes/analise-mercado.test.js`.
+  **Aceite medido**: ver o plano (Seção 13).
 - `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
   ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
 
@@ -331,6 +640,7 @@ O que existe hoje:
 Tudo em português: código, comentários, tabelas, interface.
 
 ---
+
 
 ## Como rodar
 
@@ -808,6 +1118,9 @@ linha de comando serve para rodar um agora e ver o número:
 | `npm run contratos` | marcos do contrato e a faixa da LC 123 |
 | `npm run limpar` | `.tmp` com mais de 24 h e arquivos de descartada com mais de 180 dias |
 | `npm run sancoes` | CEIS/CNEP do próprio CNPJ e dos concorrentes recorrentes |
+| `npm run boletim` | boletim diário; `-- --org=<id> --simular` mostra sem gravar, sem `--simular` envia já |
+
+O `npm run mercado` aceita `-- --uf=RS,SC --tipo=contrato,ata,acompanhamento --dias=7 --paginas=20`.
 
 O `npm run limpar` aceita `-- --dias=365` e `-- --horas=48`; o `npm run sancoes` aceita
 `-- --quantos=25`. A limpeza apaga os **arquivos** da licitação descartada, não a ficha:
@@ -864,6 +1177,24 @@ alertas e limpeza são todos dele. A API funciona sem o worker — só não anda
 
 ```
 POST   /api/auth/login              GET /api/auth/eu
+PATCH  /api/auth/tema               { tema: 'claro' | 'escuro' | null } — preferência do usuário
+GET    /api/assinatura              plano, situação, recursos, catálogo   GET /api/assinatura/uso
+POST   /api/assinatura/pedido       { plano, ciclo } — só o dono; o administrador ativa
+GET    /api/boletins?mes=&perfil_id=&status=&uf=   calendário do mês (status por pessoa)
+GET    /api/boletins/:id            itens do boletim       POST /api/boletins/:id/lido  { lido }
+POST   /api/boletins/marcar-lidos   mesmo filtro da lista
+GET    /api/boletins/perfis         "Meus filtros"         POST/PUT/DELETE /api/boletins/perfis/:id
+PUT    /api/boletins/perfis/:id/email  { receber } — só para quem está logado
+GET    /api/boletins/descadastro/:token  página de confirmação; POST descadastra (sem login)
+GET    /api/licitacoes?…&pagina=&por_pagina=   Radar (20 por página) com `etiquetas` e `avisos`
+GET    /api/licitacoes/municipios?busca=      cidade de partida do raio
+GET    /api/licitacoes/pesquisas              pesquisas salvas   POST { nome, filtros }   DELETE /:id
+POST   /api/licitacoes/compartilhar           { filtros, dias ≤ 30, nome } → caminho do link (uma vez)
+GET    /api/licitacoes/compartilhados         links válidos      DELETE /:id revoga
+GET    /api/publico/radar/:token?pagina=      lista compartilhada, sem login, só o fato público
+GET    /api/admin/organizacoes      superadmin: todas, com uso          GET .../:id/eventos
+POST   /api/admin/organizacoes/:id/acao  { acao: ativar|suspender|reativar|estender_teste }
+POST   /api/cobranca/webhook/:provedor   pública, HMAC em X-Assinatura; fechada no provedor manual
 GET    /api/licitacoes              ?busca&grupo&uf&modalidade&valor_min&valor_max
                                     &pontuacao_min&prazo_dias&exclusivo_me&etapa&ordem&pagina
 GET    /api/licitacoes/filtros      opções dos seletores do Radar
@@ -929,6 +1260,11 @@ POST   /api/oportunidades/:id/acompanhar       acompanhar este orgao
 GET    /api/licitacoes/:id/ia                  leitura assistida da licitacao
 POST   /api/licitacoes/:id/ia                  le agora ({ forcar } ignora o cache)
 PATCH  /api/licitacoes/:id/ia                  { situacao: confirmado | recusado }
+GET    /api/licitacoes/:id/resumo-edital       Resumo do Edital 2.0 (ficha com citacao por campo)
+POST   /api/licitacoes/:id/resumo-edital       gera ({ forcar } refaz; sem ele devolve a guardada)
+PUT    /api/licitacoes/:id/resumo-edital/consideracoes   { texto } da organizacao
+GET    /api/licitacoes/:id/resumo-edital/docx  checklist em Word
+POST   /api/licitacoes/:id/resumo-edital/email checklist para o e-mail de quem pediu
 GET    /api/ia                                 estado e livro-caixa da IA
 GET    /api/ia/palavras-sugeridas              POST para pedir uma rodada
 PATCH  /api/ia/palavras-sugeridas/:id          { situacao: aceita | recusada }
@@ -946,7 +1282,27 @@ POST   /api/dossies/agregar                    recalcula as fichas
 GET    /api/feriados?ano=2026                  POST /api/feriados  (estadual/municipal)
 POST   /api/feriados/importar                  baixa os nacionais da BrasilAPI
 DELETE /api/feriados/:id                       so os cadastrados a mao
+GET    /api/mercado/contratos                  contratos do mercado (PNCP), com filtros e paginação
+GET    /api/mercado/atas                       atas de registro de preços, com filtros
+GET    /api/mercado/resumo                     contagem por mês/UF, estado da coleta, listas dos filtros
+GET    /api/mercado/analise                    ?segmento=|filtro=&mes=|de=&ate=&uf=&modalidade=&municipio=
+GET    /api/mercado/analise/pdf                relatório mensal por segmento em PDF (mesmos filtros)
+GET    /api/mercado/analise/opcoes             segmentos (grupos de palavra-chave) e "Meus filtros"
+GET    /api/mercado/recorrentes                ?segmento=|filtro=&dias=30|90|180|365&minimo=
+GET    /api/mercado/fornecedores/:cnpj         perfil por CNPJ no mercado (PNCP)
+GET    /api/diagnostico/perdas                 ?meses=3|6|12|24 — motivos de perda e recomendação
+GET    /api/acompanhamentos                    publicações posteriores ao edital (filtros; ?favoritas=1)
 GET    /api/contratos                          lista, faturado em 12m e faixa
+GET    /api/gestao/tarefas                     ?visao=atrasadas|hoje|futuras|concluidas&por=mim&licitacao_id=
+POST   /api/gestao/tarefas                     cria (responsavel_id da equipe; padrao: quem cria)
+PATCH  /api/gestao/tarefas/:id                 titulo, prazo, responsavel, status
+DELETE /api/gestao/tarefas/:id
+GET    /api/gestao/andamentos?licitacao_id=    andamentos da licitacao, com os tipos
+POST   /api/gestao/andamentos                  { licitacao_id, tipo, texto, ocorrido_em ISO com fuso }
+GET    /api/gestao/agenda?de=&ate=&por=mim     licitacao, tarefa e andamento por dia (ate 62 dias)
+GET    /api/gestao/dashboard                   cartoes, oportunidades, por UF, valor em disputa
+GET    /api/gestao/membros                     quem pode ser responsavel
+GET    /api/gestao/anexos?licitacao_id=        anexos da licitacao
 GET    /api/contratos/:id                      contrato com o checklist
 POST   /api/contratos                          abre o contrato de uma licitacao ganha
 PATCH  /api/contratos/:id                      datas, valores, gestor e situacao
@@ -954,7 +1310,7 @@ POST   /api/contratos/:id/marcos               marco a mao (medicao, por exemplo
 PATCH  /api/contratos/:id/marcos/:marcoId      data prevista e conclusao
 DELETE /api/contratos/:id/marcos/:marcoId      so os acrescentados a mao
 POST   /api/contratos/avisos/rodar             roda os alertas de marco agora
-GET    /api/licitacoes/exportar                o Radar em Excel, com os filtros da tela
+GET    /api/licitacoes/exportar                o Radar em Excel (`?formato=docx` em Word), com os filtros da tela
 GET    /api/licitacoes/relatorio?meses=12      relatorio mensal (&formato=xlsx baixa)
 GET    /api/painel/resumo          GET /api/saude
 ```

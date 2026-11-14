@@ -31,6 +31,9 @@ const dossies = require('../backend/jobs/dossies');
 const contratos = require('../backend/jobs/contratos');
 const limpar = require('../backend/jobs/limpar');
 const sancoesMensais = require('../backend/jobs/sancoes-mensais');
+const boletim = require('../backend/jobs/boletim');
+const mercado = require('../backend/jobs/mercado');
+const notificar = require('../backend/servicos/notificar');
 
 const sinal = { parar: false };
 
@@ -38,6 +41,7 @@ const MEIA_HORA = 30 * 60 * 1000;
 const UMA_HORA = 60 * 60 * 1000;
 
 // Horários da seção 14.
+const HORA_DO_MERCADO = 2; // contratos, atas e acompanhamentos (Seção 12)
 const HORA_DAS_ENCERRADAS = 3; // varredura larga, de madrugada (seção 5.4)
 const HORA_DA_LIMPEZA = 4; // depois das encerradas, antes das estratégicas
 const HORA_DAS_ESTRATEGICAS = 5; // lê o que a coleta das 03h trouxe
@@ -47,6 +51,7 @@ const HORA_DOS_AVISOS = 8; // recorrência e prazo de questionamento
 
 const ultimaVez = {
   coleta: 0, // carimbo de tempo: a coleta é de hora em hora, sem horário fixo
+  mercado: null,
   encerradas: null,
   limpeza: null,
   estrategicas: null,
@@ -113,6 +118,7 @@ function registrarTodos() {
   contratos.registrarNaFila();
   limpar.registrarNaFila();
   sancoesMensais.registrarNaFila();
+  mercado.registrarNaFila();
 }
 
 // ---------------------------------------------------------------------------
@@ -123,11 +129,7 @@ async function rodarFrequente() {
   try {
     // Prazos do que decidi disputar: o aviso de 48 h e 2 h (seção 10).
     const prazo = await prazos.verificarPrazos();
-    if (prazo.criados) {
-      const porEmail = prazo.email && prazo.email.enviado ? ' e enviados por e-mail' : '';
-      const porWhats = prazo.whatsapp && prazo.whatsapp.enviado ? ' e por WhatsApp' : '';
-      console.log(`${prazo.criados} alerta(s) de prazo criados${porEmail}${porWhats}.`);
-    }
+    if (prazo.criados) console.log(`${prazo.criados} alerta(s) de prazo criados.`);
     await prazos.avisarPrioridadeAlta({});
 
     // Monitor (seção 21.2): a cadência de cada licitação está gravada em
@@ -154,6 +156,14 @@ async function rodarFrequente() {
   } catch (erro) {
     console.error('Falha na rodada de 30 minutos:', erro.message);
   }
+
+  // Seção 9: tarefa atrasada vira aviso ao responsável, e todo alerta novo
+  // (deste relógio, do horário e das rotas) sai por e-mail/WhatsApp/push para
+  // quem quer aquele tipo naquele canal. `rodadaDeAvisos` não lança: cada passo
+  // tem seu try lá dentro.
+  const avisos = await notificar.rodadaDeAvisos();
+  if (avisos.despacho && avisos.despacho.envios) console.log(notificar.descrever(avisos));
+  for (const e of avisos.erros) console.error('Falha nos avisos:', e);
 }
 
 // ---------------------------------------------------------------------------
@@ -197,6 +207,12 @@ async function rodarDeHoraEmHora() {
     const lidas = await iaResumos.enfileirarResumos({ limite: 10 });
     if (lidas.enfileiradas) {
       console.log(`Leitura assistida enfileirada para ${lidas.enfileiradas} licitações.`);
+    }
+
+    // Contratos, atas e acompanhamentos do PNCP (Seção 12), uma vez por dia.
+    if (naHoraDiaria('mercado', HORA_DO_MERCADO)) {
+      await fila.enfileirar('coletar_mercado', {}, { prioridade: 20, chaveUnica: `mercado:${hojeLocal()}` });
+      console.log('Coleta do mercado enfileirada para hoje.');
     }
 
     // Amostra de preço: contratações encerradas, uma vez por dia (seção 12).
@@ -252,6 +268,19 @@ async function rodarDeHoraEmHora() {
             `, ${marcos.viraram_vigentes} vigente(s), ${marcos.encerrados} encerrado(s).`
         );
       }
+    }
+
+    // Boletim diário (Seção 4 do plano SaaS): cada filtro tem os seus horários
+    // (padrão 7h, 12h e 18h); aqui só se pergunta qual venceu e não saiu.
+    // Try próprio: falha do boletim não pula os jobs diários abaixo.
+    try {
+      const boletins = await boletim.rodar({});
+      for (const b of boletins.boletins.filter((x) => x.total_itens)) {
+        console.log(`Boletim: org ${b.organizacao_id}, "${b.perfil}" ${b.horario}h — ${b.total_itens} licitação(ões), e-mail ${b.email}.`);
+      }
+      for (const e of boletins.erros.slice(0, 3)) console.log(`Boletim com erro: ${e}`);
+    } catch (erro) {
+      console.error('Falha no boletim:', erro.message);
     }
 
     // Recorrências (seção 24): detecção semanal no domingo, aviso diário às 08h.

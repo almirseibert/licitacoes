@@ -3,6 +3,8 @@
 const pool = require('../config/db');
 const regras = require('../regras/monitor');
 const alertas = require('./alertas');
+const escopo = require('./escopo');
+const limites = require('./limites');
 
 /**
  * Registra um evento na linha do tempo (seção 21.4).
@@ -32,11 +34,8 @@ async function registrarEvento({ licitacaoId, tipo, descricao, dados = null, oco
  * Religar não zera o contador nem os hashes: a história do que já foi visto é
  * justamente o que permite detectar que mudou.
  */
-async function ligar({ licitacaoId, motivo = 'interesse', agora: _agora = new Date() }) {
-  const [[licitacao]] = await pool.query(
-    'SELECT id, etapa, fim_propostas FROM licitacoes WHERE id = ?',
-    [licitacaoId]
-  );
+async function ligar({ organizacaoId, licitacaoId, motivo = 'interesse', agora: _agora = new Date() }) {
+  const [[licitacao]] = await pool.query('SELECT id, fim_propostas FROM licitacoes WHERE id = ?', [licitacaoId]);
   if (!licitacao) return null;
 
   // Monitoramento novo vence agora, não daqui a uma cadência: é a primeira
@@ -47,24 +46,27 @@ async function ligar({ licitacaoId, motivo = 'interesse', agora: _agora = new Da
   // Religar não mexe no relógio de quem já está sendo vigiado — para isso a
   // tela tem "checar agora".
   await pool.query(
-    `INSERT INTO monitoramentos (licitacao_id, motivo, ativo, proxima_checagem)
-     VALUES (?, ?, 1, NOW())
+    `INSERT INTO monitoramentos (organizacao_id, licitacao_id, motivo, ativo, proxima_checagem)
+     VALUES (?, ?, ?, 1, NOW())
      ON DUPLICATE KEY UPDATE
        ativo = 1,
        motivo = VALUES(motivo),
        encerrado_em = NULL,
        proxima_checagem = COALESCE(proxima_checagem, NOW())`,
-    [licitacaoId, motivo]
+    [organizacaoId, licitacaoId, motivo]
   );
 
-  const [[monitoramento]] = await pool.query('SELECT * FROM monitoramentos WHERE licitacao_id = ?', [licitacaoId]);
+  const [[monitoramento]] = await pool.query(
+    'SELECT * FROM monitoramentos WHERE organizacao_id = ? AND licitacao_id = ?',
+    [organizacaoId, licitacaoId]
+  );
   return monitoramento;
 }
 
-async function desligar(licitacaoId, motivo = null) {
+async function desligar(organizacaoId, licitacaoId, motivo = null) {
   await pool.query(
-    'UPDATE monitoramentos SET ativo = 0, encerrado_em = NOW(), ultimo_erro = ? WHERE licitacao_id = ?',
-    [motivo, licitacaoId]
+    'UPDATE monitoramentos SET ativo = 0, encerrado_em = NOW(), ultimo_erro = ? WHERE organizacao_id = ? AND licitacao_id = ?',
+    [motivo, organizacaoId, licitacaoId]
   );
 }
 
@@ -73,17 +75,28 @@ async function desligar(licitacaoId, motivo = null) {
  * (seção 21.2): o que está em disputa, o favorito, e as encerradas recentes
  * que alimentam a base de preços.
  */
+async function podeAcompanhar(organizacaoId) {
+  const dados = await limites.daOrganizacao(organizacaoId);
+  if (!dados) return false;
+  if (dados.isenta) return true;
+  if (!dados.situacao.pode_escrever || !limites.temRecurso(dados.plano, 'acompanhamentos')) return false;
+  return !(await limites.conferir(organizacaoId, 'monitoramentos'));
+}
+
 async function ligarOsQueFaltam({ limite = 500 } = {}) {
   const [candidatas] = await pool.query(
-    `SELECT l.id, l.etapa, l.fim_propostas, l.favorito, l.pontuacao
-       FROM licitacoes l
-       LEFT JOIN monitoramentos m ON m.licitacao_id = l.id
+    `SELECT l.id, l.organizacao_id, l.etapa, l.fim_propostas, l.favorito, l.pontuacao
+       FROM ${escopo.porOrganizacao()} l
+       LEFT JOIN monitoramentos m ON m.licitacao_id = l.id AND m.organizacao_id = l.organizacao_id
       WHERE m.id IS NULL
         AND l.descartada = 0
         AND (
           l.etapa IN (?, ?, ?)
           OR l.favorito = 1
-          OR (l.fim_propostas IS NOT NULL
+          -- A encerrada recente alimenta a base de preços, que é do catálogo:
+          -- vigiá-la uma vez basta, pela organização operadora (Seção 1b).
+          OR (l.organizacao_id = ${escopo.ORGANIZACAO_OPERADORA}
+              AND l.fim_propostas IS NOT NULL
               AND l.fim_propostas < NOW()
               AND l.fim_propostas >= DATE_SUB(NOW(), INTERVAL ? DAY))
         )
@@ -97,12 +110,14 @@ async function ligarOsQueFaltam({ limite = 500 } = {}) {
   for (const licitacao of candidatas) {
     const cadencia = regras.cadenciaDe(licitacao, agora);
     if (!cadencia) continue;
+    // Seção 3: sem acompanhamentos no plano (ou no teto), nada de monitor automático.
+    if (!(await podeAcompanhar(licitacao.organizacao_id))) continue;
     const motivo = regras.ETAPAS_DISPUTANDO.includes(licitacao.etapa)
       ? 'disputando'
       : licitacao.favorito
         ? 'interesse'
         : 'preco';
-    await ligar({ licitacaoId: licitacao.id, motivo, agora });
+    await ligar({ organizacaoId: licitacao.organizacao_id, licitacaoId: licitacao.id, motivo, agora });
     ligados += 1;
   }
   return { ligados, candidatas: candidatas.length };
@@ -111,11 +126,12 @@ async function ligarOsQueFaltam({ limite = 500 } = {}) {
 /** As que estão na hora de olhar, na ordem em que importam. */
 async function devidas({ limite = 40 } = {}) {
   const [linhas] = await pool.query(
-    `SELECT m.*, l.etapa, l.objeto, l.orgao_nome, l.orgao_cnpj, l.chave_externa, l.fonte_id,
+    `SELECT m.*, COALESCE(o.etapa, 'Triagem') AS etapa, l.objeto, l.orgao_nome, l.orgao_cnpj, l.chave_externa, l.fonte_id,
             l.abertura_propostas, l.fim_propostas, l.situacao, l.valor_estimado, l.pasta,
             l.cnpj_vencedor, l.uf, f.adaptador
        FROM monitoramentos m
        JOIN licitacoes l ON l.id = m.licitacao_id
+       LEFT JOIN org_licitacoes o ON o.licitacao_id = m.licitacao_id AND o.organizacao_id = m.organizacao_id
        JOIN fontes f ON f.id = l.fonte_id
       WHERE m.ativo = 1
         AND (m.proxima_checagem IS NULL OR m.proxima_checagem <= NOW())
@@ -129,6 +145,7 @@ async function devidas({ limite = 40 } = {}) {
 /** Alerta vermelho: o edital mudou. É o aviso que a seção 21.3 pede em destaque. */
 async function alertarEditalAlterado(licitacao, oQueMudou) {
   return alertas.criar({
+    organizacaoId: licitacao.organizacao_id,
     tipo: 'edital_alterado',
     nivel: 'vermelho',
     // A chave inclui o hash novo: cada alteração gera um aviso, e a mesma
@@ -143,7 +160,7 @@ async function alertarEditalAlterado(licitacao, oQueMudou) {
 }
 
 /** A linha do tempo de uma licitação (seção 21.4). */
-async function linhaDoTempo(licitacaoId) {
+async function linhaDoTempo(organizacaoId, licitacaoId) {
   const [eventos] = await pool.query(
     `SELECT id, tipo, descricao, dados, ocorrido_em, criado_em
        FROM eventos_licitacao WHERE licitacao_id = ?
@@ -151,8 +168,8 @@ async function linhaDoTempo(licitacaoId) {
     [licitacaoId]
   );
   const [[monitoramento]] = await pool.query(
-    'SELECT * FROM monitoramentos WHERE licitacao_id = ?',
-    [licitacaoId]
+    'SELECT * FROM monitoramentos WHERE organizacao_id = ? AND licitacao_id = ?',
+    [organizacaoId, licitacaoId]
   );
   return {
     eventos: eventos.map((e) => ({

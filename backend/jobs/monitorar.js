@@ -20,6 +20,7 @@ const crypto = require('crypto');
 const { pipeline } = require('stream/promises');
 
 const pool = require('../config/db');
+const escopo = require('../servicos/escopo');
 const fila = require('../servicos/fila');
 const adaptadores = require('../adaptadores');
 const arquivos = require('../servicos/arquivos');
@@ -131,7 +132,9 @@ async function baixarNovaVersao({ licitacaoId, pasta, arquivo, adaptador, versao
 async function moverPeloResultado(licitacao) {
   if (!regras.ETAPAS_DISPUTANDO.includes(licitacao.etapa)) return null;
 
-  const meuCnpj = (await perfil.cnpjDaEmpresa().catch(() => null)) || null;
+  // O CNPJ é o da organização dona deste monitoramento (Seção 1b): a mesma
+  // licitação pode ser "Ganhamos" para uma e "Perdemos" para outra.
+  const meuCnpj = (await perfil.cnpjDaEmpresa(licitacao.organizacao_id).catch(() => null)) || null;
   const [vencedores] = await pool.query(
     `SELECT cnpj_vencedor, fornecedor_vencedor, SUM(valor_homologado) AS total, COUNT(*) AS itens
        FROM licitacao_itens
@@ -150,12 +153,10 @@ async function moverPeloResultado(licitacao) {
   // chuta. Fica o evento e o card parado, com o aviso na tela.
   if (!meuCnpj) return { etapa: null, aviso: 'sem CNPJ no perfil da empresa — o card não se move sozinho' };
 
+  // O vencedor é fato público (catálogo); a etapa é da organização.
   await pool.query(
-    `UPDATE licitacoes
-        SET etapa = ?, etapa_em = NOW(), vencedor = ?, cnpj_vencedor = ?, valor_final = ?
-      WHERE id = ?`,
+    `UPDATE licitacoes SET vencedor = ?, cnpj_vencedor = ?, valor_final = ? WHERE id = ?`,
     [
-      etapa,
       recortar(principal.fornecedor_vencedor, 255),
       recortar(principal.cnpj_vencedor, 20),
       Number(principal.total) || null,
@@ -163,8 +164,12 @@ async function moverPeloResultado(licitacao) {
     ]
   );
   await pool.query(
-    "INSERT INTO anotacoes (licitacao_id, texto, tipo) VALUES (?, ?, 'sistema')",
-    [licitacao.id, `${licitacao.etapa} → ${etapa} (resultado publicado no portal)`]
+    'UPDATE org_licitacoes SET etapa = ?, etapa_em = NOW() WHERE organizacao_id = ? AND licitacao_id = ?',
+    [etapa, licitacao.organizacao_id, licitacao.id]
+  );
+  await pool.query(
+    "INSERT INTO anotacoes (organizacao_id, licitacao_id, texto, tipo) VALUES (?, ?, ?, 'sistema')",
+    [licitacao.organizacao_id, licitacao.id, `${licitacao.etapa} → ${etapa} (resultado publicado no portal)`]
   );
 
   return { etapa, vencedor: principal.fornecedor_vencedor, valor: Number(principal.total) || null };
@@ -176,6 +181,7 @@ async function checar(monitoramento, { agora = new Date() } = {}) {
   const adaptador = adaptadores.obter(monitoramento.adaptador);
   const resumo = { licitacao_id: licitacao.licitacao_id, eventos: [], alertas: 0 };
   const id = licitacao.licitacao_id;
+  const organizacaoId = monitoramento.organizacao_id;
 
   // ---------------------------------------------------- detalhe: datas e situação
   let detalhe = null;
@@ -198,7 +204,7 @@ async function checar(monitoramento, { agora = new Date() } = {}) {
       });
       resumo.eventos.push('data_alterada');
       if (await servico.alertarEditalAlterado(
-        { id, orgao_nome: licitacao.orgao_nome, fim_propostas: detalhe.fim_propostas },
+        { id, organizacao_id: organizacaoId, orgao_nome: licitacao.orgao_nome, fim_propostas: detalhe.fim_propostas },
         { hash: hashNovo, resumo: `o prazo passou de ${antes} para ${depois}` }
       )) {
         resumo.alertas += 1;
@@ -228,8 +234,9 @@ async function checar(monitoramento, { agora = new Date() } = {}) {
         WHERE id = ?`,
       [detalhe.situacao, detalhe.abertura_propostas, detalhe.fim_propostas, detalhe.valor_homologado, id]
     );
-    await pool.query('UPDATE monitoramentos SET hash_datas = ? WHERE licitacao_id = ?', [
+    await pool.query('UPDATE monitoramentos SET hash_datas = ? WHERE organizacao_id = ? AND licitacao_id = ?', [
       regras.hashDatas(detalhe),
+      organizacaoId,
       id,
     ]);
   }
@@ -267,7 +274,7 @@ async function checar(monitoramento, { agora = new Date() } = {}) {
       resumo.eventos.push('edital_alterado');
 
       if (await servico.alertarEditalAlterado(
-        { id, orgao_nome: licitacao.orgao_nome, fim_propostas: licitacao.fim_propostas },
+        { id, organizacao_id: organizacaoId, orgao_nome: licitacao.orgao_nome, fim_propostas: licitacao.fim_propostas },
         { hash: hashNovo, resumo: texto }
       )) {
         resumo.alertas += 1;
@@ -295,7 +302,11 @@ async function checar(monitoramento, { agora = new Date() } = {}) {
       }
     }
 
-    await pool.query('UPDATE monitoramentos SET hash_arquivos = ? WHERE licitacao_id = ?', [hashNovo, id]);
+    await pool.query('UPDATE monitoramentos SET hash_arquivos = ? WHERE organizacao_id = ? AND licitacao_id = ?', [
+      hashNovo,
+      organizacaoId,
+      id,
+    ]);
   }
 
   // -------------------------------------------------------------- resultado
@@ -319,17 +330,18 @@ async function checar(monitoramento, { agora = new Date() } = {}) {
       });
       resumo.eventos.push('resultado');
 
-      const movido = await moverPeloResultado({ id, etapa: licitacao.etapa });
+      const movido = await moverPeloResultado({ id, organizacao_id: organizacaoId, etapa: licitacao.etapa });
       if (movido && movido.etapa) {
         resumo.eventos.push(`card → ${movido.etapa}`);
         await alertas.criar({
+          organizacaoId,
           tipo: 'resultado',
           nivel: movido.etapa === 'Ganhamos' ? 'info' : 'atencao',
           chave: `resultado:${id}`,
           licitacaoId: id,
           mensagem:
             movido.etapa === 'Ganhamos'
-              ? `Ganhamos: ${licitacao.orgao_nome || 'órgão'} homologou para a Studio Mythos.`
+              ? `Ganhamos: ${licitacao.orgao_nome || 'órgão'} homologou para a sua empresa.`
               : `Perdemos para ${movido.vencedor || 'outro fornecedor'} — ${licitacao.orgao_nome || 'órgão'}.`,
         });
         resumo.alertas += 1;
@@ -339,16 +351,19 @@ async function checar(monitoramento, { agora = new Date() } = {}) {
   }
 
   // ------------------------------------------------- próxima volta, ou o fim
-  const [[atual]] = await pool.query('SELECT id, etapa, fim_propostas FROM licitacoes WHERE id = ?', [id]);
+  const [[atual]] = await pool.query(
+    `SELECT id, etapa, fim_propostas FROM ${escopo.daOrganizacao(organizacaoId, { todas: true })} l WHERE id = ?`,
+    [id]
+  );
   const cadencia = regras.cadenciaDe(atual, agora);
   if (!cadencia) {
-    await servico.desligar(id);
+    await servico.desligar(organizacaoId, id);
     resumo.proxima = null;
   } else {
     const proxima = regras.proximaChecagem(cadencia, agora);
     await pool.query(
-      'UPDATE monitoramentos SET proxima_checagem = ?, checagens = checagens + 1, ultimo_erro = NULL WHERE licitacao_id = ?',
-      [proxima, id]
+      'UPDATE monitoramentos SET proxima_checagem = ?, checagens = checagens + 1, ultimo_erro = NULL WHERE id = ?',
+      [proxima, monitoramento.id]
     );
     resumo.proxima = proxima;
     resumo.cadencia = cadencia.chave;
@@ -392,8 +407,8 @@ async function monitorar({ limite = 25 } = {}) {
             SET proxima_checagem = DATE_ADD(NOW(), INTERVAL 3 HOUR),
                 checagens = checagens + 1,
                 ultimo_erro = ?
-          WHERE licitacao_id = ?`,
-        [recortar(erro.message, 255), monitoramento.licitacao_id]
+          WHERE id = ?`,
+        [recortar(erro.message, 255), monitoramento.id]
       );
     }
   }

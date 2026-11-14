@@ -14,6 +14,7 @@
 const { whatsapp: cfg, urlPublica } = require('../config/ambiente');
 const { buscar } = require('./http');
 const configuracoes = require('./configuracoes');
+const { textoDeModelo } = require('../regras/notificacoes');
 
 const VERSAO_API = 'v21.0';
 let avisouDesligado = false;
@@ -22,12 +23,13 @@ let avisouDesligado = false;
  * Para qual número vai. A tela manda (seção 11.13); vazia lá, vale o
  * WHATSAPP_DESTINO do ambiente.
  */
-async function destinatario() {
-  return configuracoes.texto('alerta_whatsapp_destino', cfg.destino);
+async function destinatario(organizacaoId) {
+  // Seção 1b: o destino é da organização; o do ambiente só vale para a operadora.
+  return configuracoes.textoDaOrganizacao(organizacaoId, 'alerta_whatsapp_destino', cfg.destino);
 }
 
-async function configurado() {
-  return Boolean(cfg.token && cfg.telefoneId && (await destinatario()));
+async function configurado(organizacaoId) {
+  return Boolean(servicoLigado() && (await destinatario(organizacaoId)));
 }
 
 /** Só dígitos: a API recusa número com +, espaço ou parêntese. */
@@ -40,7 +42,7 @@ function montarTexto(avisos) {
     const quando = a.quando
       ? new Date(a.quando).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
       : null;
-    return `• ${a.mensagem}${quando ? `\n  Fim das propostas: ${quando}` : ''}`;
+    return `• ${a.mensagem}${quando ? `\n  ${a.rotulo_quando || 'Fim das propostas'}: ${quando}` : ''}`;
   });
 
   const cabecalho =
@@ -53,15 +55,47 @@ function montarTexto(avisos) {
   return partes.join('\n');
 }
 
+/** O servidor tem conta da Meta configurada? */
+function servicoLigado() {
+  return Boolean(cfg.token && cfg.telefoneId);
+}
+
 /**
- * Envia os avisos em uma única mensagem.
+ * Corpo da chamada à Meta. Com `WHATSAPP_MODELO` (modelo aprovado pela Meta,
+ * Seção 9) a mensagem sai como template — o único formato que passa fora da
+ * janela de 24 h; sem ele, texto livre, como antes.
+ */
+function montarCorpoApi(destino, avisos) {
+  if (cfg.modelo) {
+    return {
+      messaging_product: 'whatsapp',
+      to: destino,
+      type: 'template',
+      template: {
+        name: cfg.modelo,
+        language: { code: cfg.modeloIdioma },
+        components: [{ type: 'body', parameters: [{ type: 'text', text: textoDeModelo(avisos) }] }],
+      },
+    };
+  }
+  return {
+    messaging_product: 'whatsapp',
+    to: destino,
+    type: 'text',
+    text: { preview_url: false, body: montarTexto(avisos).slice(0, 4000) },
+  };
+}
+
+/**
+ * Envia os avisos em uma única mensagem para `numero` (Seção 9: o destino é de
+ * cada pessoa ou da caixa da organização; quem escolhe é o despacho).
  * @returns {{enviado:boolean, motivo?:string}}
  */
-async function enviarAvisos(avisos) {
+async function enviarAvisos(numero, avisos) {
   if (!avisos || !avisos.length) return { enviado: false, motivo: 'nada a enviar' };
 
-  const destino = numeroLimpo(await destinatario());
-  if (!cfg.token || !cfg.telefoneId || !destino) {
+  const destino = numeroLimpo(numero);
+  if (!servicoLigado() || !destino) {
     if (!avisouDesligado) {
       console.log(
         'WhatsApp de alerta desligado: defina WHATSAPP_TOKEN e WHATSAPP_PHONE_ID no .env, e o número em Configurações (ou WHATSAPP_DESTINO).'
@@ -72,26 +106,21 @@ async function enviarAvisos(avisos) {
   }
 
   try {
-    await buscar(`https://graph.facebook.com/${VERSAO_API}/${cfg.telefoneId}/messages`, {
+    await buscar(`${cfg.apiUrl}/${VERSAO_API}/${cfg.telefoneId}/messages`, {
       metodo: 'POST',
       cabecalhos: {
         Authorization: `Bearer ${cfg.token}`,
         'Content-Type': 'application/json',
       },
-      corpo: JSON.stringify({
-        messaging_product: 'whatsapp',
-        to: destino,
-        type: 'text',
-        text: { preview_url: false, body: montarTexto(avisos).slice(0, 4000) },
-      }),
+      corpo: JSON.stringify(montarCorpoApi(destino, avisos)),
       // Recusa da Meta não é intermitência: repetir três vezes só gasta tempo.
       tentativas: 1,
     });
     return { enviado: true };
   } catch (erro) {
     console.error('Não foi possível enviar o WhatsApp de alerta:', erro.message);
-    return { enviado: false, motivo: erro.message };
+    return { enviado: false, motivo: erro.message, externo: true };
   }
 }
 
-module.exports = { enviarAvisos, configurado, destinatario, montarTexto, numeroLimpo };
+module.exports = { enviarAvisos, servicoLigado, configurado, destinatario, montarTexto, numeroLimpo };

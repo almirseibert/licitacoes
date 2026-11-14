@@ -6,6 +6,7 @@
 const express = require('express');
 const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
+const escopo = require('../servicos/escopo');
 const fila = require('../servicos/fila');
 const { CATALOGO, PORCODIGO } = require('../regras/exigencias');
 
@@ -57,13 +58,14 @@ rotas.get('/', async (req, res) => {
     const [[licitacao]] = await pool.query(
       `SELECT id, objeto_social, objeto_social_motivo, valor_estimado,
               exigencias_status, exigencias_em, arquivos_status
-         FROM licitacoes WHERE id = ?`,
+         FROM ${escopo.daOrganizacao(req.organizacaoId, { todas: true })} l WHERE id = ?`,
       [req.params.id]
     );
     if (!licitacao) return res.status(404).json({ erro: 'Licitação não encontrada.' });
 
     const [[perfil]] = await pool.query(
-      'SELECT natureza, regime, capital_social FROM empresa_perfis ORDER BY padrao DESC, id ASC LIMIT 1'
+      'SELECT natureza, regime, capital_social FROM empresa_perfis WHERE organizacao_id = ? ORDER BY padrao DESC, id ASC LIMIT 1',
+      [req.organizacaoId]
     );
 
     const [detectadas] = await pool.query(

@@ -45,7 +45,7 @@ const ETAPAS = [
   },
   {
     chave: 'Ganhamos',
-    descricao: 'Adjudicada para a Studio Mythos',
+    descricao: 'Adjudicada para a sua empresa',
     cor: 'ok',
     pede: ['valor_final'],
     // Abre o contrato com o checklist da seção 28.3. Ganhar é metade: a outra

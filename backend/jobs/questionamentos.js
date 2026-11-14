@@ -4,6 +4,7 @@
 // Diário, 08h. Depois de vencido esse prazo, exigência restritiva já não se
 // discute: só resta não disputar. É por isso que o aviso sai cedo.
 const pool = require('../config/db');
+const escopo = require('../servicos/escopo');
 const fila = require('../servicos/fila');
 const alertas = require('../servicos/alertas');
 const feriados = require('../servicos/feriados');
@@ -31,10 +32,10 @@ async function calcularPrazos({ pontuacaoMinima = PONTUACAO_MINIMA, limite = 200
 
   const [licitacoes] = await pool.query(
     `SELECT id, abertura_propostas, uf, municipio
-       FROM licitacoes
+       FROM ${escopo.agregadoDasOrganizacoes()} l
       WHERE descartada = 0
         AND abertura_propostas IS NOT NULL
-        AND (pontuacao >= ? OR favorito = 1 OR etapa <> 'Triagem')
+        AND (pontuacao >= ? OR favorito = 1 OR em_disputa = 1)
         AND (fim_propostas IS NULL OR fim_propostas >= DATE_SUB(NOW(), INTERVAL 7 DAY))
       LIMIT ?`,
     [pontuacaoMinima, limite]
@@ -67,8 +68,8 @@ async function calcularPrazos({ pontuacaoMinima = PONTUACAO_MINIMA, limite = 200
  */
 async function avisarPrazos({ pontuacaoMinima = PONTUACAO_MINIMA } = {}) {
   const [linhas] = await pool.query(
-    `SELECT id, objeto, orgao_nome, prazo_questionamento, abertura_propostas
-       FROM licitacoes
+    `SELECT id, organizacao_id, objeto, orgao_nome, prazo_questionamento, abertura_propostas
+       FROM ${escopo.porOrganizacao()} l
       WHERE descartada = 0
         AND prazo_questionamento IS NOT NULL
         AND prazo_questionamento > NOW()
@@ -80,6 +81,7 @@ async function avisarPrazos({ pontuacaoMinima = PONTUACAO_MINIMA } = {}) {
   let criados = 0;
   for (const l of linhas) {
     const criado = await alertas.criar({
+      organizacaoId: l.organizacao_id,
       tipo: 'prazo_questionamento',
       nivel: 'atencao',
       chave: `prazo_questionamento:${l.id}`,

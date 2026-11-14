@@ -69,7 +69,7 @@ export default function Contratos({ aoAbrir }) {
   return (
     <div className="h-full flex flex-col">
       <div className="px-4 py-3 border-b border-borda flex items-center gap-4 shrink-0 flex-wrap">
-        <h1 className="font-titulo text-xl">Contratos</h1>
+        <h1 className="font-titulo text-xl">Meus contratos</h1>
         <div className="flex items-center gap-1">
           {SITUACOES.map((s) => (
             <button
@@ -149,7 +149,7 @@ function Faixa({ receita }) {
 
       {pct !== null && (
         <div className="mt-3">
-          <div className="h-1.5 bg-white/[0.06] rounded overflow-hidden">
+          <div className="h-1.5 bg-realce/[0.06] rounded overflow-hidden">
             <div
               className={`h-full ${receita.perto_do_teto ? 'bg-atencao' : 'bg-voltagem'}`}
               style={{ width: `${(pct * 100).toFixed(1)}%` }}
@@ -225,7 +225,7 @@ function Linha({ contrato, expandido, aoExpandir, aoMudar, aoAbrirLicitacao }) {
         </div>
 
         {execucao !== null && (
-          <div className="mt-2 ml-8 h-1 bg-white/[0.06] rounded overflow-hidden">
+          <div className="mt-2 ml-8 h-1 bg-realce/[0.06] rounded overflow-hidden">
             <div className="h-full bg-ok" style={{ width: `${(execucao * 100).toFixed(1)}%` }} />
           </div>
         )}

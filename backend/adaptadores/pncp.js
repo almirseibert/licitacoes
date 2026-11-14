@@ -145,6 +145,10 @@ module.exports = {
       numero_compra: dados.numeroCompra || null,
       processo: dados.processo || null,
       objeto: dados.objetoCompra || null,
+      // A "observação" da licitação no PNCP e o registro de preços (Seção 7).
+      informacao_complementar: dados.informacaoComplementar || null,
+      srp: typeof dados.srp === 'boolean' ? dados.srp : null,
+      esfera: { F: 'Federal', E: 'Estadual', M: 'Municipal', D: 'Municipal' }[dados.orgaoEntidade && dados.orgaoEntidade.esferaId] || null,
       orgao_nome: (dados.orgaoEntidade && dados.orgaoEntidade.razaoSocial) || null,
       unidade: (dados.unidadeOrgao && dados.unidadeOrgao.nomeUnidade) || null,
       uf: (dados.unidadeOrgao && dados.unidadeOrgao.ufSigla) || null,

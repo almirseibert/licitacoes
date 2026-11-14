@@ -2,6 +2,7 @@
 const express = require('express');
 const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
+const escopo = require('../servicos/escopo');
 const fila = require('../servicos/fila');
 const pesos = require('../regras/pesos');
 const ajustes = require('../servicos/configuracoes');
@@ -9,15 +10,19 @@ const notificar = require('../servicos/notificar');
 
 const rotas = express.Router();
 
-rotas.get('/', async (_req, res) => {
+rotas.get('/', async (req, res) => {
   try {
-    const regras = await pesos.listar();
-    const [perfis] = await pool.query('SELECT * FROM empresa_perfis ORDER BY padrao DESC, id ASC');
+    const org = req.organizacaoId;
+    const regras = await pesos.listar(org);
+    const [perfis] = await pool.query(
+      'SELECT * FROM empresa_perfis WHERE organizacao_id = ? ORDER BY padrao DESC, id ASC',
+      [org]
+    );
 
     // Ranking da seção 6.2: por onde o objeto social está nos custando oportunidade.
     const [ranking] = await pool.query(
       `SELECT palavra_casada AS termo, grupo, COUNT(*) AS fora, ROUND(AVG(valor_estimado)) AS valor_medio
-         FROM licitacoes
+         FROM ${escopo.daOrganizacao(org)} l
         WHERE objeto_social = 'fora' AND descartada = 0 AND palavra_casada IS NOT NULL
         GROUP BY palavra_casada, grupo
         ORDER BY fora DESC
@@ -30,10 +35,10 @@ rotas.get('/', async (_req, res) => {
          SUM(objeto_social = 'parcial') AS parcial,
          SUM(objeto_social = 'fora')    AS fora,
          SUM(objeto_social IS NULL)     AS sem_checagem
-       FROM licitacoes WHERE descartada = 0`
+       FROM ${escopo.daOrganizacao(org)} l WHERE descartada = 0`
     );
 
-    const [listaAjustes, canais] = await Promise.all([ajustes.listar(), notificar.canais()]);
+    const [listaAjustes, canais] = await Promise.all([ajustes.listar(org), notificar.canais(org)]);
 
     res.json({
       pesos: regras,
@@ -57,11 +62,11 @@ rotas.get('/', async (_req, res) => {
 // Valor vazio devolve a chave ao que está na variável de ambiente.
 rotas.patch('/ajustes', async (req, res) => {
   try {
-    const { gravadas, recusadas } = await ajustes.salvar(req.body || {});
+    const { gravadas, recusadas } = await ajustes.salvar(req.organizacaoId, req.body || {});
     if (recusadas.length && !gravadas.length) {
       return res.status(400).json({
         erro: `Não reconheci ou não aceitei: ${recusadas.join(', ')}.`,
-        detalhe: `chaves válidas: ${Object.keys(ajustes.CHAVES).join(', ')}`,
+        detalhe: `chaves válidas: ${Object.keys(ajustes.CHAVES_ORG).join(', ')} (e as de operação, só na organização operadora)`,
       });
     }
     res.json({
@@ -88,7 +93,7 @@ rotas.patch('/ajustes', async (req, res) => {
 // PATCH /api/configuracoes/pesos — { palavra_max: 40, modalidade: { dispensa: 15 } }
 rotas.patch('/pesos', async (req, res) => {
   try {
-    const quantos = await pesos.salvar(req.body || {});
+    const quantos = await pesos.salvar(req.organizacaoId, req.body || {});
     res.json({
       ok: true,
       mensagem: `${quantos} ${quantos === 1 ? 'peso salvo' : 'pesos salvos'}. Repontue para aplicar ao que já está no Radar.`,
@@ -100,7 +105,7 @@ rotas.patch('/pesos', async (req, res) => {
 
 rotas.post('/pesos/:chave/restaurar', async (req, res) => {
   try {
-    await pesos.restaurar(req.params.chave);
+    await pesos.restaurar(req.organizacaoId, req.params.chave);
     res.json({ ok: true, mensagem: 'Peso voltou ao padrão de fábrica.' });
   } catch (erro) {
     res.status(400).json({ erro: erro.message });
@@ -108,9 +113,14 @@ rotas.post('/pesos/:chave/restaurar', async (req, res) => {
 });
 
 // POST /api/configuracoes/repontuar — recalcula o que já está gravado, sem ir aos portais.
-rotas.post('/repontuar', async (_req, res) => {
+rotas.post('/repontuar', async (req, res) => {
   try {
-    await fila.enfileirar('repontuar', {}, { prioridade: 1, chaveUnica: 'repontuar' });
+    // Só a organização que pediu: os pesos e palavras são dela (Seção 1b).
+    await fila.enfileirar(
+      'repontuar',
+      { organizacaoId: req.organizacaoId },
+      { prioridade: 1, chaveUnica: `repontuar:${req.organizacaoId}` }
+    );
     res.status(202).json({
       ok: true,
       mensagem: 'Repontuação na fila. O Radar se reorganiza assim que o worker processar.',

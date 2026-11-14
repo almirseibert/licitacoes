@@ -7,10 +7,12 @@
 const pool = require('../config/db');
 
 /** O perfil pedido, ou o padrão. Sem perfil não há o que assinar. */
-async function padrao(perfilId) {
+async function padrao(organizacaoId, perfilId) {
   const [linhas] = perfilId
-    ? await pool.query('SELECT * FROM empresa_perfis WHERE id = ?', [perfilId])
-    : await pool.query('SELECT * FROM empresa_perfis ORDER BY padrao DESC, id ASC LIMIT 1');
+    ? await pool.query('SELECT * FROM empresa_perfis WHERE id = ? AND organizacao_id = ?', [perfilId, organizacaoId])
+    : await pool.query('SELECT * FROM empresa_perfis WHERE organizacao_id = ? ORDER BY padrao DESC, id ASC LIMIT 1', [
+        organizacaoId,
+      ]);
   if (!linhas.length) throw new Error('Cadastre o perfil da empresa antes de montar um envio.');
   return linhas[0];
 }
@@ -22,8 +24,8 @@ async function padrao(perfilId) {
  * não é detalhe: sem CNPJ o painel não tem como comparar com o vencedor, e
  * prefere deixar o card parado a chutar.
  */
-async function cnpjDaEmpresa(perfilId) {
-  const perfil = await padrao(perfilId).catch(() => null);
+async function cnpjDaEmpresa(organizacaoId, perfilId) {
+  const perfil = await padrao(organizacaoId, perfilId).catch(() => null);
   const digitos = String((perfil && perfil.cnpj) || '').replace(/\D/g, '');
   return digitos.length === 14 ? digitos : null;
 }

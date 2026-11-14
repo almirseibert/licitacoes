@@ -40,12 +40,12 @@ function rotuloDe(codigo, titulo) {
 
 // Continua exportado daqui — as rotas o chamam por `envio.perfilPadrao` —, mas
 // a consulta vive em servicos/perfil.js para quebrar o círculo com `proposta`.
-const perfilPadrao = (perfilId) => perfis.padrao(perfilId);
+const perfilPadrao = (organizacaoId, perfilId) => perfis.padrao(organizacaoId, perfilId);
 
-async function escolherKit(perfilId, kitId) {
+async function escolherKit(organizacaoId, perfilId, kitId) {
   const [kits] = await pool.query(
-    'SELECT * FROM documento_kits WHERE perfil_id = ? AND ativo = 1 ORDER BY padrao DESC, nome ASC',
-    [perfilId]
+    'SELECT * FROM documento_kits WHERE organizacao_id = ? AND perfil_id = ? AND ativo = 1 ORDER BY padrao DESC, nome ASC',
+    [organizacaoId, perfilId]
   );
   if (!kits.length) throw new Error('Nenhum kit cadastrado para este perfil.');
   const escolhido = (kitId && kits.find((k) => k.id === Number(kitId))) || kits[0];
@@ -62,12 +62,15 @@ const DECLARACOES_DE_PRAXE = new Set(['cumpre_requisitos', 'fato_impeditivo', 'c
  * Quando o edital traz anexo próprio de declaração, o modelo genérico perde
  * para o anexo — a tela avisa, como manda a seção 18.2.
  */
-async function sugerirDeclaracoes({ licitacaoId, exigidos, perfilId }) {
+async function sugerirDeclaracoes({ organizacaoId, licitacaoId, exigidos, perfilId }) {
+  // Modelo do sistema (organizacao_id NULL) serve a todos; a cópia editada é
+  // só de quem a fez (Seção 1b).
   const [modelos] = await pool.query(
     `SELECT id, codigo, titulo, padrao_sistema FROM modelos_declaracao
-      WHERE ativo = 1 AND (perfil_id IS NULL OR perfil_id = ?)
+      WHERE ativo = 1 AND (organizacao_id IS NULL OR organizacao_id = ?)
+        AND (perfil_id IS NULL OR perfil_id = ?)
       ORDER BY padrao_sistema ASC, titulo ASC`,
-    [perfilId]
+    [organizacaoId, perfilId]
   );
   if (!modelos.length) return [];
 
@@ -105,12 +108,12 @@ async function sugerirDeclaracoes({ licitacaoId, exigidos, perfilId }) {
 /**
  * Monta a seleção sem gravar nada — é o que a tela "Montar envio" desenha.
  */
-async function montar({ licitacaoId, kitId = null, perfilId = null }) {
+async function montar({ organizacaoId, licitacaoId, kitId = null, perfilId = null }) {
   const [[licitacao]] = await pool.query('SELECT * FROM licitacoes WHERE id = ?', [licitacaoId]);
   if (!licitacao) throw new Error(`Licitação ${licitacaoId} não encontrada.`);
 
-  const perfil = await perfilPadrao(perfilId);
-  const { kit, kits } = await escolherKit(perfil.id, kitId);
+  const perfil = await perfilPadrao(organizacaoId, perfilId);
+  const { kit, kits } = await escolherKit(organizacaoId, perfil.id, kitId);
 
   const [itens] = await pool.query(
     'SELECT * FROM documento_kit_itens WHERE kit_id = ? ORDER BY ordem ASC',
@@ -126,9 +129,9 @@ async function montar({ licitacaoId, kitId = null, perfilId = null }) {
   // Só a versão ativa mais recente de cada código entra na seleção.
   const [documentos] = await pool.query(
     `SELECT d.* FROM empresa_documentos d
-      WHERE d.perfil_id = ? AND d.ativo = 1
+      WHERE d.organizacao_id = ? AND d.perfil_id = ? AND d.ativo = 1
       ORDER BY d.codigo ASC, d.versao DESC`,
-    [perfil.id]
+    [organizacaoId, perfil.id]
   );
   const noCofre = new Map();
   for (const documento of documentos) {
@@ -210,21 +213,21 @@ async function montar({ licitacaoId, kitId = null, perfilId = null }) {
     }
   }
 
-  const declaracoes = await sugerirDeclaracoes({ licitacaoId, exigidos, perfilId: perfil.id });
+  const declaracoes = await sugerirDeclaracoes({ organizacaoId, licitacaoId, exigidos, perfilId: perfil.id });
 
   const [anexos] = await pool.query(
-    'SELECT id, titulo, nome_arquivo, tamanho_bytes FROM licitacao_anexos WHERE licitacao_id = ? ORDER BY id',
-    [licitacaoId]
+    'SELECT id, titulo, nome_arquivo, tamanho_bytes FROM licitacao_anexos WHERE organizacao_id = ? AND licitacao_id = ? ORDER BY id',
+    [organizacaoId, licitacaoId]
   );
 
   // Bloco 3 (seção 17.4): a proposta gerada pela seção 19 entra aqui, junto do
   // que você anexa à mão. Sem isso o usuário geraria a proposta e teria de
   // baixar e reanexar o próprio arquivo.
-  const propostas = await proposta.arquivosParaEnvio(licitacaoId);
+  const propostas = await proposta.arquivosParaEnvio(organizacaoId, licitacaoId);
 
   const [pacotes] = await pool.query(
-    'SELECT id, formato, nome_arquivo, folhas, gerado_em FROM pacotes WHERE licitacao_id = ? ORDER BY id DESC LIMIT 5',
-    [licitacaoId]
+    'SELECT id, formato, nome_arquivo, folhas, gerado_em FROM pacotes WHERE organizacao_id = ? AND licitacao_id = ? ORDER BY id DESC LIMIT 5',
+    [organizacaoId, licitacaoId]
   );
 
   return {
@@ -258,13 +261,14 @@ async function montar({ licitacaoId, kitId = null, perfilId = null }) {
  *   - confirmaVencidos: deixa passar documento vencido (fica registrado)
  */
 async function gerar({
+  organizacaoId,
   licitacaoId, kitId = null, perfilId = null, formato = 'pdf',
   documentos = null, anexos = null, declaracoes = null, propostas = null,
   confirmaVencidos = false, observacao = null,
 }) {
-  const montagem = await montar({ licitacaoId, kitId, perfilId });
+  const montagem = await montar({ organizacaoId, licitacaoId, kitId, perfilId });
   const [[licitacao]] = await pool.query('SELECT * FROM licitacoes WHERE id = ?', [licitacaoId]);
-  const perfil = await perfilPadrao(montagem.perfil.id);
+  const perfil = await perfilPadrao(organizacaoId, montagem.perfil.id);
 
   // Sem lista explícita, vale o que a montagem marcou.
   const escolhidos = documentos
@@ -273,8 +277,8 @@ async function gerar({
 
   const [doBanco] = escolhidos.length
     ? await pool.query(
-        `SELECT * FROM empresa_documentos WHERE id IN (${escolhidos.map(() => '?').join(',')})`,
-        escolhidos
+        `SELECT * FROM empresa_documentos WHERE organizacao_id = ? AND id IN (${escolhidos.map(() => '?').join(',')})`,
+        [organizacaoId, ...escolhidos]
       )
     : [[]];
   const porId = new Map(doBanco.map((d) => [d.id, d]));
@@ -316,8 +320,9 @@ async function gerar({
   const lacunas = [];
   if (idsDeclaracoes.length) {
     const [modelos] = await pool.query(
-      `SELECT * FROM modelos_declaracao WHERE id IN (${idsDeclaracoes.map(() => '?').join(',')})`,
-      idsDeclaracoes
+      `SELECT * FROM modelos_declaracao
+        WHERE (organizacao_id IS NULL OR organizacao_id = ?) AND id IN (${idsDeclaracoes.map(() => '?').join(',')})`,
+      [organizacaoId, ...idsDeclaracoes]
     );
     const dadosDaDeclaracao = declaracao.variaveis({ licitacao, perfil });
 
@@ -327,7 +332,7 @@ async function gerar({
 
       const bytes = await declaracao.gerarPdf({ titulo: modelo.titulo, texto, dados: dadosDaDeclaracao });
       const nome = `${arquivos.limpar(modelo.titulo).replace(/\s+/g, '_').slice(0, 80)}.pdf`;
-      const salvo = await pacote.gravar(`declaracoes/${licitacaoId}`, nome, bytes);
+      const salvo = await pacote.gravar(`org/${organizacaoId}/declaracoes/${licitacaoId}`, nome, bytes);
 
       pecas.push({
         ordem,
@@ -371,8 +376,9 @@ async function gerar({
   const idsAnexos = anexos ? anexos.map(Number) : montagem.anexos.map((a) => a.id);
   if (idsAnexos.length) {
     const [linhasAnexo] = await pool.query(
-      `SELECT * FROM licitacao_anexos WHERE licitacao_id = ? AND id IN (${idsAnexos.map(() => '?').join(',')})`,
-      [licitacaoId, ...idsAnexos]
+      `SELECT * FROM licitacao_anexos
+        WHERE organizacao_id = ? AND licitacao_id = ? AND id IN (${idsAnexos.map(() => '?').join(',')})`,
+      [organizacaoId, licitacaoId, ...idsAnexos]
     );
     for (const anexo of linhasAnexo) {
       if (!anexo.arquivo_path || !arquivos.dentroDoVolume(anexo.arquivo_path)) continue;

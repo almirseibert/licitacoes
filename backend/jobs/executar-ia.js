@@ -5,6 +5,7 @@
 //   npm run ia -- --palavras         → sugere palavras-chave (seção 23.5)
 // Acrescente --forcar para ignorar o cache.
 const pool = require('../config/db');
+const escopo = require('../servicos/escopo');
 const ia = require('../servicos/ia');
 const job = require('./ia-resumos');
 
@@ -74,7 +75,7 @@ async function principal() {
       // coluna que não está no SELECT, e a ordem aqui importa (favorita e
       // pontuação primeiro).
       `SELECT l.id
-         FROM licitacoes l
+         FROM ${escopo.agregadoDasOrganizacoes()} l
          JOIN licitacao_arquivos a ON a.licitacao_id = l.id AND a.status = 'ok' AND a.texto_extraido IS NOT NULL
         WHERE l.descartada = 0 ${forcar ? '' : 'AND l.ia_resumo IS NULL'}
         GROUP BY l.id, l.favorito, l.pontuacao

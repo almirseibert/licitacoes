@@ -107,12 +107,17 @@ export default function AlertasELimites({ ajustes, canais, aoErro, aoAvisar, aoS
               <span className="text-[11px] uppercase tracking-wide text-texto-suave">{def.rotulo}</span>
               <input
                 type={def.tipo}
-                className="campo-caixa w-full mt-0.5"
+                className="campo-caixa w-full mt-0.5 disabled:opacity-60"
                 value={valorDe(a.chave)}
-                placeholder={doAmbiente ? 'usando a variável de ambiente' : ''}
+                placeholder={doAmbiente ? (a.global ? 'usando a variável de ambiente' : 'ninguém recebe por este canal') : ''}
+                disabled={a.editavel === false}
                 onChange={(e) => setCampos({ ...campos, [a.chave]: e.target.value })}
               />
-              <span className="block text-[11px] text-texto-suave mt-0.5">{a.descricao}</span>
+              <span className="block text-[11px] text-texto-suave mt-0.5">
+                {a.descricao}
+                {/* Seção 1b: o que é operação do serviço vale para todos e só a equipe do painel muda. */}
+                {a.editavel === false && ' Vale para todo o serviço; só a equipe do painel muda.'}
+              </span>
             </label>
           );
         })}

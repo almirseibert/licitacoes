@@ -1,4 +1,4 @@
-// Os onze modelos do seed (seção 18.2).
+// Os treze modelos do seed (seção 18.2; os dois últimos, Seção 10 do plano SaaS).
 //
 // São modelos GENÉRICOS, redigidos conforme a Lei 14.133/2021 e a LC 123/2006.
 // Quando o edital traz anexo próprio de declaração, o anexo do edital é que
@@ -85,5 +85,19 @@ DECLARA estar ciente de que a prestação de declaração falsa sujeita a licita
     corpo: `A empresa {{razao_social}}, inscrita no CNPJ sob o nº {{cnpj}}, por intermédio de seu representante legal, {{representante}}, DECLARA que recebeu e examinou o edital da licitação {{modalidade}} nº {{numero_licitacao}}{{processo_frase}}, promovida por {{orgao}}, e seus anexos, e que concorda integralmente com as condições neles estabelecidas, nada tendo a opor.
 
 DECLARA, ainda, que os preços propostos incluem todos os custos e despesas necessários ao cumprimento integral do objeto.`,
+  },
+  {
+    codigo: 'renuncia_vistoria',
+    titulo: 'Declaração de renúncia à vistoria técnica',
+    corpo: `A empresa {{razao_social}}, inscrita no CNPJ sob o nº {{cnpj}}, por intermédio de seu representante legal, {{representante}}, portador do CPF nº {{cpf_representante}}, DECLARA, nos termos do art. 63, § 3º, da Lei nº 14.133/2021, que optou por não realizar a vistoria prevista no edital da licitação {{modalidade}} nº {{numero_licitacao}}, promovida por {{orgao}}, e que tem pleno conhecimento das condições e peculiaridades inerentes à natureza do objeto.
+
+DECLARA, ainda, que assume total responsabilidade por esse fato e que não utilizará a falta de vistoria para quaisquer questionamentos futuros que ensejem avenças técnicas ou financeiras com o Contratante.`,
+  },
+  {
+    codigo: 'carta_credenciamento',
+    titulo: 'Carta de credenciamento',
+    corpo: `A empresa {{razao_social}}, inscrita no CNPJ sob o nº {{cnpj}}, por intermédio de seu representante legal, {{representante}}, portador do CPF nº {{cpf_representante}}, CREDENCIA o(a) Sr.(a) ____________, portador(a) do RG nº ____________ e do CPF nº ____________, para representá-la na licitação {{modalidade}} nº {{numero_licitacao}}{{processo_frase}}, promovida por {{orgao}}, conferindo-lhe poderes para formular ofertas e lances, manifestar intenção de recurso e dela desistir, assinar atas e praticar todos os demais atos inerentes ao certame em nome da representada.
+
+Acompanha esta carta cópia do ato constitutivo que comprova os poderes de quem a assina.`,
   },
 ];

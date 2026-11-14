@@ -183,4 +183,4 @@ async function gerarPdf({ titulo, texto, dados }) {
   return Buffer.from(await documento.save());
 }
 
-module.exports = { variaveis, preencher, gerarPdf, porExtenso, cidadeDoEndereco, LACUNA, OPCIONAIS };
+module.exports = { variaveis, preencher, gerarPdf, porExtenso, cidadeDoEndereco, quebrar, seguro, LACUNA, OPCIONAIS };

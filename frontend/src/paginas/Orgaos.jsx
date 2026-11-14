@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Loader2, RefreshCcw, Building2, ShieldCheck, ShieldAlert, Search, X } from 'lucide-react';
 import { api } from '../servicos/api';
 import { moeda, resumir, data as formatarData } from '../servicos/formato';
+import PerfilFornecedor from '../componentes/PerfilFornecedor';
 
 /**
  * Telas de dossiê (seções 26 e 27) — órgãos e concorrentes.
@@ -10,7 +11,7 @@ import { moeda, resumir, data as formatarData } from '../servicos/formato';
  * está em responder duas perguntas antes de gastar o dia montando proposta —
  * "este órgão costuma exigir o quê?" e "qual o piso que estes três praticam?".
  */
-export default function Orgaos({ aoAbrir }) {
+export default function Orgaos({ aoAbrir, comMercado = false }) {
   const [aba, setAba] = useState('orgaos');
   const [orgaos, setOrgaos] = useState(null);
   const [concorrentes, setConcorrentes] = useState([]);
@@ -122,7 +123,7 @@ export default function Orgaos({ aoAbrir }) {
         )}
       </div>
 
-      {ficha && <Ficha {...ficha} aoFechar={() => setFicha(null)} aoAbrirLicitacao={aoAbrir} />}
+      {ficha && <Ficha {...ficha} comMercado={comMercado} aoFechar={() => setFicha(null)} aoAbrirLicitacao={aoAbrir} />}
     </div>
   );
 }
@@ -154,7 +155,7 @@ function TabelaOrgaos({ linhas, aoAbrir }) {
         </thead>
         <tbody>
           {linhas.map((o) => (
-            <tr key={o.cnpj} className="border-b border-borda/40 hover:bg-white/[0.03]">
+            <tr key={o.cnpj} className="border-b border-borda/40 hover:bg-realce/[0.03]">
               <td className="py-1.5">
                 <button className="text-left hover:text-voltagem flex items-center gap-1.5" onClick={() => aoAbrir(o.cnpj)}>
                   <Building2 size={12} className="text-texto-suave shrink-0" />
@@ -202,7 +203,7 @@ function TabelaConcorrentes({ linhas, aoAbrir }) {
         </thead>
         <tbody>
           {linhas.map((c) => (
-            <tr key={c.cnpj} className="border-b border-borda/40 hover:bg-white/[0.03]">
+            <tr key={c.cnpj} className="border-b border-borda/40 hover:bg-realce/[0.03]">
               <td className="py-1.5">
                 <button className="text-left hover:text-voltagem" onClick={() => aoAbrir(c.cnpj)}>
                   {resumir(c.razao_social || c.empresa, 40)}
@@ -238,7 +239,7 @@ function TabelaConcorrentes({ linhas, aoAbrir }) {
 }
 
 /** A ficha da seção 26.1 ou 27.1, numa gaveta. */
-function Ficha({ tipo, cnpj, aoFechar, aoAbrirLicitacao }) {
+function Ficha({ tipo, cnpj, comMercado, aoFechar, aoAbrirLicitacao }) {
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState(null);
   const [ocupado, setOcupado] = useState(false);
@@ -369,7 +370,11 @@ function Ficha({ tipo, cnpj, aoFechar, aoAbrirLicitacao }) {
                 <Campo rotulo="Ganhou" valor={`${dados.concorrente.vitorias} itens`} />
                 <Campo rotulo="Desconto médio" valor={pct(dados.concorrente.desconto_medio)} />
                 <Campo rotulo="Desconto mediano" valor={pct(dados.concorrente.desconto_mediano)} />
-                <Campo rotulo="Desclassificada" valor={`${dados.concorrente.desclassificacoes} vezes`} />
+                {/* Seção 13: o PNCP não publica desclassificação; zero aqui seria afirmação sem dado. */}
+                <Campo
+                  rotulo="Desclassificada"
+                  valor={dados.lista_propostas ? `${dados.concorrente.desclassificacoes} vezes` : 'não disponível'}
+                />
                 <Campo rotulo="Atua em" valor={(dados.concorrente.ufs || []).join(', ') || '—'} />
                 <Campo
                   rotulo="Encontrou você"
@@ -395,6 +400,13 @@ function Ficha({ tipo, cnpj, aoFechar, aoAbrirLicitacao }) {
                     Se o seu custo está acima disto, aquela disputa não é sua — e é melhor saber antes de
                     gastar o dia montando proposta.
                   </p>
+                </Bloco>
+              )}
+
+              {/* O perfil do mercado é do recurso "mercado": plano sem ele não vê o bloco. */}
+              {comMercado && (
+                <Bloco titulo="No mercado — contratos no PNCP">
+                  <PerfilFornecedor cnpj={cnpj} />
                 </Bloco>
               )}
 

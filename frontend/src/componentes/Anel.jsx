@@ -10,13 +10,14 @@ export default function Anel({ pontuacao = 0, tamanho = 38 }) {
   return (
     <div className="relative shrink-0" style={{ width: tamanho, height: tamanho }} title={`${faixa.rotulo} — ${pontuacao} de 100`}>
       <svg width={tamanho} height={tamanho} className="-rotate-90">
-        <circle cx={tamanho / 2} cy={tamanho / 2} r={raio} fill="none" stroke="#1F2937" strokeWidth="3" />
+        {/* `stroke` por classe/estilo, não por atributo: atributo SVG não lê var() do tema. */}
+        <circle cx={tamanho / 2} cy={tamanho / 2} r={raio} fill="none" className="stroke-borda" strokeWidth="3" />
         <circle
           cx={tamanho / 2}
           cy={tamanho / 2}
           r={raio}
           fill="none"
-          stroke={faixa.cor}
+          style={{ stroke: faixa.cor }}
           strokeWidth="3"
           strokeLinecap="round"
           strokeDasharray={`${preenchido} ${circunferencia}`}

@@ -9,6 +9,7 @@
 //
 // Sem PORTAL_TRANSPARENCIA_CHAVE o job é um no-op barato e diz por quê.
 const pool = require('../config/db');
+const escopo = require('../servicos/escopo');
 const fila = require('../servicos/fila');
 const sancoes = require('../servicos/sancoes');
 
@@ -25,13 +26,16 @@ async function rodar({ quantos = QUANTOS_CONCORRENTES } = {}) {
 
   // 1. O próprio CNPJ. É o que importa de verdade: empresa sancionada não
   // participa, e descobrir isso no dia da sessão é tarde.
-  try {
-    const propria = await sancoes.checarPropriaEmpresa();
-    resumo.propria = propria;
-    resumo.consultados += 1;
-    if (propria && propria.sancionado) resumo.sancionados.push('a própria empresa');
-  } catch (erro) {
-    resumo.erros.push(`própria empresa: ${erro.message}`);
+  // Seção 1b: uma consulta por organização ativa — cada uma tem seu CNPJ.
+  for (const organizacaoId of await escopo.organizacoesAtivas(pool)) {
+    try {
+      const propria = await sancoes.checarPropriaEmpresa(organizacaoId);
+      if (escopo.ehOperadora(organizacaoId)) resumo.propria = propria;
+      if (propria && propria.ok !== false) resumo.consultados += 1;
+      if (propria && propria.sancionado) resumo.sancionados.push(`a empresa da organização ${organizacaoId}`);
+    } catch (erro) {
+      resumo.erros.push(`organização ${organizacaoId}: ${erro.message}`);
+    }
   }
 
   // 2. Os concorrentes mais frequentes.
@@ -39,7 +43,7 @@ async function rodar({ quantos = QUANTOS_CONCORRENTES } = {}) {
     `SELECT cnpj, razao_social
        FROM concorrentes
       WHERE cnpj IS NOT NULL AND cnpj <> ''
-      ORDER BY encontros DESC, disputas DESC
+      ORDER BY disputas DESC, itens DESC
       LIMIT ?`,
     [quantos]
   );

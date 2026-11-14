@@ -6,8 +6,9 @@ const path = require('path');
 const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
-const { autenticar } = require('./middlewares/autenticar');
+const { autenticar, confirmarVinculo, leitorSoLe } = require('./middlewares/autenticar');
 const { responderErro } = require('./middlewares/responder-erro');
+const { assinaturaValida, exigirRecurso } = require('./servicos/limites');
 const { ambiente, urlPublica } = require('./config/ambiente');
 
 const app = express();
@@ -19,6 +20,8 @@ const app = express();
 // e não há razão para permitir isso num painel interno. Em desenvolvimento (ou
 // sem URL_PUBLICA definida) segue aberto, porque o Vite serve noutra porta.
 app.use(cors(ambiente === 'production' && urlPublica ? { origin: urlPublica } : undefined));
+// O webhook de cobrança confere o HMAC do corpo CRU: entra antes do parser JSON.
+app.use('/api/cobranca', require('./rotas/cobranca'));
 app.use(express.json({ limit: '2mb' }));
 
 app.get('/api/saude', (_req, res) => {
@@ -26,26 +29,47 @@ app.get('/api/saude', (_req, res) => {
 });
 
 app.use('/api/auth', require('./rotas/auth'));
+// Link de descadastro do e-mail do boletim (Seção 4): sem token, assinado por HMAC.
+app.use('/api/boletins/descadastro', require('./rotas/boletins').publico);
+app.use('/api/publico', require('./rotas/publico'));
 
-// Tudo abaixo exige token.
-app.use('/api/licitacoes', autenticar, require('./rotas/licitacoes'));
-app.use('/api/fontes', autenticar, require('./rotas/fontes'));
-app.use('/api/palavras', autenticar, require('./rotas/palavras'));
-app.use('/api/painel', autenticar, require('./rotas/painel'));
-app.use('/api/configuracoes', autenticar, require('./rotas/configuracoes'));
-app.use('/api/empresa', autenticar, require('./rotas/empresa'));
-app.use('/api/kits', autenticar, require('./rotas/kits'));
-app.use('/api/modelos-declaracao', autenticar, require('./rotas/modelos'));
-app.use('/api/alertas', autenticar, require('./rotas/alertas'));
-app.use('/api/precos-referencia', autenticar, require('./rotas/precos-referencia'));
-app.use('/api/concorrentes', autenticar, require('./rotas/concorrentes'));
-app.use('/api/diagnostico', autenticar, require('./rotas/diagnostico'));
-app.use('/api/oportunidades', autenticar, require('./rotas/oportunidades'));
-app.use('/api/calendario', autenticar, require('./rotas/calendario'));
-app.use('/api/ia', autenticar, require('./rotas/ia'));
-app.use('/api/dossies', autenticar, require('./rotas/dossies'));
-app.use('/api/feriados', autenticar, require('./rotas/feriados'));
-app.use('/api/contratos', autenticar, require('./rotas/contratos'));
+// Tudo abaixo exige token. Seção 3: `assinaturaValida` barra a organização
+// suspensa e deixa só leitura para teste/assinatura vencidos; `exigirRecurso`
+// barra o módulo que o plano não tem (402, com o plano que resolve).
+const comToken = [autenticar, confirmarVinculo];
+const protegida = [...comToken, assinaturaValida, leitorSoLe];
+const modulo = (recurso) => [...protegida, exigirRecurso(recurso)];
+
+// Fora da `assinaturaValida`: quem venceu precisa ver o plano e pedir outro.
+app.use('/api/assinatura', ...comToken, leitorSoLe, require('./rotas/assinatura'));
+app.use('/api/admin', ...comToken, leitorSoLe, require('./rotas/admin'));
+
+app.use('/api/licitacoes', ...protegida, require('./rotas/licitacoes'));
+app.use('/api/fontes', ...protegida, require('./rotas/fontes'));
+app.use('/api/palavras', ...protegida, require('./rotas/palavras'));
+app.use('/api/painel', ...protegida, require('./rotas/painel'));
+app.use('/api/configuracoes', ...protegida, require('./rotas/configuracoes'));
+app.use('/api/empresa', ...protegida, require('./rotas/empresa'));
+app.use('/api/kits', ...protegida, require('./rotas/kits'));
+app.use('/api/portais', ...protegida, require('./rotas/portais'));
+app.use('/api/modelos-declaracao', ...protegida, require('./rotas/modelos'));
+app.use('/api/alertas', ...protegida, require('./rotas/alertas'));
+// Sem `leitorSoLe`: quem só lê a organização ainda escolhe como quer ser avisado.
+app.use('/api/notificacoes', ...comToken, assinaturaValida, require('./rotas/notificacoes'));
+app.use('/api/calendario', ...protegida, require('./rotas/calendario'));
+app.use('/api/feriados', ...protegida, require('./rotas/feriados'));
+app.use('/api/precos-referencia', ...modulo('historico'), require('./rotas/precos-referencia'));
+app.use('/api/concorrentes', ...modulo('concorrentes'), require('./rotas/concorrentes'));
+app.use('/api/dossies', ...modulo('concorrentes'), require('./rotas/dossies'));
+app.use('/api/diagnostico', ...modulo('relatorios'), require('./rotas/diagnostico'));
+app.use('/api/oportunidades', ...modulo('estrategicas'), require('./rotas/oportunidades'));
+app.use('/api/ia', ...modulo('ia'), require('./rotas/ia'));
+app.use('/api/boletins', ...modulo('boletim'), require('./rotas/boletins').rotas);
+app.use('/api/contratos', ...modulo('contratos'), require('./rotas/contratos'));
+app.use('/api/gestao', ...modulo('gestao'), require('./rotas/gestao'));
+// Seção 12: catálogo público do mercado (contratos e atas) e acompanhamentos.
+app.use('/api/mercado', ...modulo('mercado'), require('./rotas/mercado').mercado);
+app.use('/api/acompanhamentos', ...modulo('acompanhamentos'), require('./rotas/mercado').acompanhamentos);
 
 app.use('/api', (_req, res) => {
   res.status(404).json({ erro: 'Rota não encontrada.' });

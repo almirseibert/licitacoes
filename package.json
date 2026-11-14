@@ -30,7 +30,11 @@
     "prazos": "node backend/jobs/executar-prazos.js",
     "contratos": "node backend/jobs/executar-contratos.js",
     "limpar": "node backend/jobs/executar-limpeza.js",
-    "sancoes": "node backend/jobs/executar-sancoes.js"
+    "sancoes": "node backend/jobs/executar-sancoes.js",
+    "boletim": "node backend/jobs/executar-boletim.js",
+    "notificar": "node backend/jobs/executar-notificar.js",
+    "validades": "node backend/jobs/executar-validades.js",
+    "mercado": "node backend/jobs/executar-mercado.js"
   },
   "engines": {
     "node": ">=20"
@@ -49,7 +53,8 @@
     "mysql2": "^3.11.3",
     "nodemailer": "^10.3.1",
     "pdf-lib": "^1.17.1",
-    "pdf-parse": "^2.4.5"
+    "pdf-parse": "^2.4.5",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "eslint": "^9.17.0",

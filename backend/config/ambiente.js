@@ -40,6 +40,13 @@ module.exports = {
     de: process.env.SMTP_DE || '',
     para: process.env.ALERTA_PARA || '',
   },
+  // Seção 3 do plano SaaS: 'manual' = o administrador ativa o plano pela tela.
+  // O webhook do gateway (Asaas ou Stripe, a escolher) só abre com provedor
+  // diferente de 'manual' E segredo definido — nenhuma chave no git.
+  cobranca: {
+    provedor: process.env.COBRANCA_PROVEDOR || 'manual',
+    segredoWebhook: process.env.COBRANCA_WEBHOOK_SEGREDO || '',
+  },
   jwt: {
     get segredo() { return obrigatorio('JWT_SECRET'); },
     expira: process.env.JWT_EXPIRA || '8h',
@@ -56,6 +63,8 @@ module.exports = {
     // Desliga a IA sem apagar a chave (seção 29).
     ativa: (process.env.IA_ATIVA || 'true').toLowerCase() !== 'false',
     modelo: process.env.IA_MODELO || 'gemini-2.5-flash',
+    // Só para teste local com um servidor que imita a API; em produção, vazio.
+    urlBase: (process.env.IA_URL_BASE || 'https://generativelanguage.googleapis.com').replace(/\/+$/, ''),
     // Teto de texto do edital enviado ao modelo (seção 23.3).
     maxCaracteres: Number(process.env.IA_MAX_CARACTERES || 60000),
     timeoutMs: Number(process.env.IA_TIMEOUT_MS || 90000),
@@ -63,6 +72,15 @@ module.exports = {
     // dois saem do mesmo orçamento no Gemini 2.5 — ver o comentário em
     // servicos/ia.js.
     maxTokensSaida: Number(process.env.IA_MAX_TOKENS_SAIDA || 4096),
+    // Seção 11: a ficha completa do edital, com uma citação por campo, não
+    // cabe nos 4096 da leitura curta.
+    maxTokensResumo: Number(process.env.IA_MAX_TOKENS_RESUMO || 16000),
+    // ...e leva mais que os 90 s da leitura curta para ser escrita.
+    timeoutResumoMs: Number(process.env.IA_TIMEOUT_RESUMO_MS || 240000),
+    // 'gemini' (API nativa, chave em x-goog-api-key) ou 'openai' (endpoint
+    // compatível do próprio Gemini, chave em Authorization: Bearer — é o que
+    // um cofre de credenciais que só injeta Bearer consegue entregar).
+    protocolo: (process.env.IA_PROTOCOLO || 'gemini').toLowerCase() === 'openai' ? 'openai' : 'gemini',
     orcamentoRaciocinio: Number(process.env.IA_ORCAMENTO_RACIOCINIO || 512),
     // Pontuação a partir da qual vale gastar token (seção 23.3).
     pontuacaoMinima: Number(process.env.IA_PONTUACAO_MINIMA || 55),
@@ -102,5 +120,17 @@ module.exports = {
     token: process.env.WHATSAPP_TOKEN || '',
     telefoneId: process.env.WHATSAPP_PHONE_ID || '',
     destino: process.env.WHATSAPP_DESTINO || '',
+    // Seção 9: modelo aprovado pela Meta. Sem ele, só texto livre (janela de 24 h).
+    modelo: process.env.WHATSAPP_MODELO || '',
+    modeloIdioma: process.env.WHATSAPP_MODELO_IDIOMA || 'pt_BR',
+    // Só muda para apontar a um espelho/simulador em teste; o padrão é a Meta.
+    apiUrl: semBarraFinal(process.env.WHATSAPP_API_URL || 'https://graph.facebook.com'),
+  },
+  // Push do navegador (Web Push, Seção 9). Sem as chaves VAPID fica desligado.
+  // Gere uma vez com: npx web-push generate-vapid-keys
+  push: {
+    chavePublica: process.env.VAPID_CHAVE_PUBLICA || '',
+    chavePrivada: process.env.VAPID_CHAVE_PRIVADA || '',
+    assunto: process.env.VAPID_ASSUNTO || '',
   },
 };

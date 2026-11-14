@@ -1,10 +1,191 @@
 import { useEffect, useState } from 'react';
-import { Loader2, RefreshCcw, BellPlus, Info, Repeat } from 'lucide-react';
+import { Loader2, RefreshCcw, BellPlus, Info, Repeat, ChevronLeft, ChevronRight } from 'lucide-react';
+import PorMim from '../componentes/PorMim';
 import { api } from '../servicos/api';
-import { moeda, data as formatarData, resumir } from '../servicos/formato';
+import { moeda, data as formatarData, resumir, dataHora } from '../servicos/formato';
 
 /**
- * Tela "Calendário" (seção 24.4) — doze meses com as recorrências previstas.
+ * Tela "Calendário" (Seção 8): a agenda de trabalho do mês — prazo e abertura
+ * das licitações acompanhadas, prazo das tarefas e andamentos — com a agenda
+ * do dia ao lado; e, na segunda aba, as recorrências da seção 24.4.
+ */
+export default function Calendario({ aoAbrir }) {
+  const [aba, setAba] = useState('agenda');
+  return (
+    <div className="h-full flex flex-col">
+      <div className="px-4 py-3 border-b border-borda flex items-center gap-4 shrink-0">
+        <h1 className="font-titulo text-xl">Calendário</h1>
+        <nav className="flex gap-3 text-xs">
+          {[
+            ['agenda', 'Agenda'],
+            ['recorrencias', 'Recorrências'],
+          ].map(([chave, rotulo]) => (
+            <button
+              key={chave}
+              onClick={() => setAba(chave)}
+              aria-pressed={aba === chave}
+              className={`pb-1 border-b-2 ${aba === chave ? 'border-texto text-texto' : 'border-transparent text-texto-suave hover:text-texto'}`}
+            >
+              {rotulo}
+            </button>
+          ))}
+        </nav>
+      </div>
+      <div className="flex-1 min-h-0">{aba === 'agenda' ? <Agenda aoAbrir={aoAbrir} /> : <Recorrencias />}</div>
+    </div>
+  );
+}
+
+const ROTULO_EVENTO = { prazo: 'fim das propostas', abertura: 'abertura', tarefa: 'tarefa', andamento: 'andamento' };
+const COR_EVENTO = { prazo: 'bg-erro', abertura: 'bg-voltagem', tarefa: 'bg-atencao', andamento: 'bg-texto-suave' };
+const DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+
+const doisDigitos = (n) => String(n).padStart(2, '0');
+const chaveDia = (d) => `${d.getFullYear()}-${doisDigitos(d.getMonth() + 1)}-${doisDigitos(d.getDate())}`;
+
+function casasDoMes(mes) {
+  const casas = [];
+  const primeiro = new Date(mes);
+  primeiro.setDate(1 - primeiro.getDay());
+  const ultimo = new Date(mes.getFullYear(), mes.getMonth() + 1, 0);
+  for (const d = new Date(primeiro); d <= ultimo || d.getDay() !== 0; d.setDate(d.getDate() + 1)) {
+    casas.push(new Date(d));
+  }
+  return casas;
+}
+
+function Agenda({ aoAbrir }) {
+  const hoje = chaveDia(new Date());
+  const [mes, setMes] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [por, setPor] = useState('todos');
+  const [eventos, setEventos] = useState(null);
+  const [erro, setErro] = useState(null);
+  const [diaEscolhido, setDiaEscolhido] = useState(hoje);
+
+  // Grade de semanas: começa no domingo antes do dia 1 e vai até o sábado
+  // depois do último — e a agenda pede a grade inteira, não só o mês, para a
+  // casa do mês vizinho não aparecer vazia.
+  const casas = casasDoMes(mes);
+  const de = chaveDia(casas[0]);
+  const ate = chaveDia(casas[casas.length - 1]);
+
+  useEffect(() => {
+    setEventos(null);
+    api
+      .agenda(de, ate, por)
+      .then((r) => {
+        setEventos(r.eventos);
+        setErro(null);
+      })
+      .catch((e) => setErro(e.message));
+  }, [de, ate, por]);
+
+  const porDia = new Map();
+  for (const e of eventos || []) {
+    if (!porDia.has(e.dia)) porDia.set(e.dia, []);
+    porDia.get(e.dia).push(e);
+  }
+
+  const doDia = porDia.get(diaEscolhido) || [];
+  const andar = (n) => setMes((m) => new Date(m.getFullYear(), m.getMonth() + n, 1));
+
+  return (
+    <div className="h-full overflow-auto p-4">
+      <div className="flex flex-wrap items-center gap-3 mb-3">
+        <button className="botao" onClick={() => andar(-1)} aria-label="Mês anterior"><ChevronLeft size={14} /></button>
+        <p className="text-sm w-36 text-center">
+          {(() => {
+            const t = mes.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+            return t.charAt(0).toUpperCase() + t.slice(1);
+          })()}
+        </p>
+        <button className="botao" onClick={() => andar(1)} aria-label="Próximo mês"><ChevronRight size={14} /></button>
+        <PorMim valor={por} aoMudar={setPor} />
+        <ul className="flex flex-wrap gap-3 text-[11px] text-texto-suave ml-auto">
+          {Object.entries(ROTULO_EVENTO).map(([tipo, rotulo]) => (
+            <li key={tipo} className="flex items-center gap-1">
+              <span className={`inline-block w-2 h-2 rounded-full ${COR_EVENTO[tipo]}`} /> {rotulo}
+            </li>
+          ))}
+        </ul>
+      </div>
+      {erro && <p className="text-xs text-erro mb-2">{erro}</p>}
+
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_20rem] gap-4">
+        <div>
+          <div className="grid grid-cols-7 text-[10px] uppercase tracking-wide text-texto-suave mb-1">
+            {DIAS_SEMANA.map((d) => <span key={d} className="px-1">{d}</span>)}
+          </div>
+          <div className="grid grid-cols-7 gap-px bg-borda border border-borda rounded overflow-hidden">
+            {casas.map((d) => {
+              const chave = chaveDia(d);
+              const lista = porDia.get(chave) || [];
+              const foraDoMes = d.getMonth() !== mes.getMonth();
+              return (
+                <button
+                  key={chave}
+                  onClick={() => setDiaEscolhido(chave)}
+                  aria-label={`${d.toLocaleDateString('pt-BR')}: ${lista.length} evento(s)`}
+                  aria-pressed={diaEscolhido === chave}
+                  className={`min-h-[3.5rem] p-1 text-left bg-obsidiana hover:bg-superficie ${foraDoMes ? 'opacity-40' : ''} ${
+                    diaEscolhido === chave ? 'ring-1 ring-inset ring-texto' : ''
+                  }`}
+                >
+                  <span className={`text-[11px] font-mono ${chave === hoje ? 'text-voltagem font-bold' : 'text-texto-suave'}`}>
+                    {d.getDate()}
+                  </span>
+                  <span className="flex flex-wrap gap-0.5 mt-1">
+                    {lista.slice(0, 6).map((e, i) => (
+                      <span key={i} className={`w-1.5 h-1.5 rounded-full ${COR_EVENTO[e.tipo]}`} />
+                    ))}
+                    {lista.length > 6 && <span className="text-[9px] text-texto-suave">+{lista.length - 6}</span>}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {!eventos && !erro && <Loader2 size={14} className="animate-spin text-texto-suave mt-2" />}
+        </div>
+
+        <section aria-label="Agenda do dia" className="border border-borda rounded">
+          <h2 className="px-3 py-2 border-b border-borda text-sm">
+            {diaEscolhido === hoje ? 'Agenda de hoje' : `Agenda de ${formatarData(diaEscolhido)}`}
+          </h2>
+          {doDia.length === 0 ? (
+            <p className="px-3 py-3 text-xs text-texto-suave">Nada marcado neste dia.</p>
+          ) : (
+            <ul className="divide-y divide-borda">
+              {doDia.map((e, i) => (
+                <li key={i} className="px-3 py-2">
+                  <p className="text-[11px] text-texto-suave flex items-center gap-1.5">
+                    <span className={`inline-block w-2 h-2 rounded-full ${COR_EVENTO[e.tipo]}`} />
+                    {ROTULO_EVENTO[e.tipo]}
+                    {e.tipo !== 'tarefa' && ` · ${dataHora(e.quando).slice(-5)}`}
+                    {e.concluida && ' · concluída'}
+                  </p>
+                  {e.licitacao_id ? (
+                    <button className="text-left text-sm hover:underline" onClick={() => aoAbrir && aoAbrir(e.licitacao_id)}>
+                      {resumir(e.titulo, 120)}
+                    </button>
+                  ) : (
+                    <p className="text-sm">{resumir(e.titulo, 120)}</p>
+                  )}
+                  {e.detalhe && <p className="text-[11px] text-texto-suave">{e.detalhe}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Recorrências (seção 24.4) — doze meses com as recorrências previstas.
  *
  * Serve para planejar o ano: em que mês vale ter certidão em dia e caixa para
  * garantia. Por isso os meses começam no corrente, e não em janeiro — ninguém
@@ -13,7 +194,7 @@ import { moeda, data as formatarData, resumir } from '../servicos/formato';
  * A confiança aparece em todas as linhas, sem eufemismo: 0,5 é "aconteceu duas
  * vezes", não é promessa. Esconder isso faria a tela parecer um oráculo.
  */
-export default function Calendario() {
+function Recorrencias() {
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState(null);
   const [aviso, setAviso] = useState(null);
@@ -69,7 +250,7 @@ export default function Calendario() {
   return (
     <div className="h-full flex flex-col">
       <div className="px-4 py-3 border-b border-borda flex items-center gap-4 shrink-0 flex-wrap">
-        <h1 className="font-titulo text-xl">Calendário</h1>
+        <h2 className="text-sm">Recorrências previstas</h2>
         <p className="text-xs text-texto-suave">
           {dados.resumo.comprovadas} recorrência(s) com duas ocorrências ou mais ·{' '}
           {dados.resumo.previstas} com janela prevista

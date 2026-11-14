@@ -6,9 +6,26 @@ const fs = require('fs');
 const express = require('express');
 const { responderErro } = require('../middlewares/responder-erro');
 const servico = require('../servicos/proposta');
+const pool = require('../config/db');
 const arquivos = require('../servicos/arquivos');
 
 const rotas = express.Router({ mergeParams: true });
+
+// Seção 1b: toda rota com :propostaId só segue se a proposta é desta
+// organização e desta licitação — o serviço trabalha pelo id e não repete a
+// checagem em cada função.
+rotas.param('propostaId', async (req, res, next, propostaId) => {
+  try {
+    const [[existe]] = await pool.query(
+      'SELECT id FROM propostas WHERE id = ? AND licitacao_id = ? AND organizacao_id = ?',
+      [propostaId, req.params.id, req.organizacaoId]
+    );
+    if (!existe) return res.status(404).json({ erro: 'Proposta não encontrada.' });
+    return next();
+  } catch (erro) {
+    return responderErro(res, 500, 'Não foi possível abrir a proposta.', erro);
+  }
+});
 
 const TIPOS = {
   pdf: 'application/pdf',
@@ -18,7 +35,7 @@ const TIPOS = {
 // GET — as propostas desta licitação.
 rotas.get('/', async (req, res) => {
   try {
-    res.json({ dados: await servico.listar(Number(req.params.id)) });
+    res.json({ dados: await servico.listar(req.organizacaoId, Number(req.params.id)) });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível carregar as propostas.', erro);
   }
@@ -28,6 +45,7 @@ rotas.get('/', async (req, res) => {
 rotas.post('/', async (req, res) => {
   try {
     const criada = await servico.criar({
+      organizacaoId: req.organizacaoId,
       licitacaoId: Number(req.params.id),
       perfilId: (req.body || {}).perfil_id || null,
     });

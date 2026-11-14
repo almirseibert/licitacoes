@@ -11,6 +11,7 @@ rotas.get('/', async (req, res) => {
   try {
     res.json({
       dados: await servico.listarConcorrentes({
+        organizacaoId: req.organizacaoId,
         grupo: req.query.grupo || undefined,
         limite: Math.min(Number(req.query.limite) || 50, 200),
       }),
@@ -22,7 +23,7 @@ rotas.get('/', async (req, res) => {
 
 rotas.get('/:cnpj', async (req, res) => {
   try {
-    const ficha = await servico.perfilDoConcorrente(req.params.cnpj);
+    const ficha = await servico.perfilDoConcorrente(req.organizacaoId, req.params.cnpj);
     if (!ficha) {
       return res.status(404).json({
         erro: 'Este CNPJ ainda não apareceu em nenhuma licitação que o painel acompanha.',

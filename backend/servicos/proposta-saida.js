@@ -444,7 +444,8 @@ function nomeDoArquivo({ licitacao, perfil, formato }) {
 
 /** Gera os dois arquivos e grava no volume, devolvendo os caminhos relativos. */
 async function gravar({ proposta, licitacao, perfil, itens, exigeMarca }) {
-  const pasta = `propostas/${licitacao.id}`;
+  // Seção 1b: o arquivo da proposta fica na pasta da organização.
+  const pasta = `org/${proposta.organizacao_id}/propostas/${licitacao.id}`;
 
   const pdf = await gerarPdf({ proposta, licitacao, perfil, itens, exigeMarca });
   const nomePdf = nomeDoArquivo({ licitacao, perfil, formato: 'pdf' });

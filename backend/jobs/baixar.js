@@ -20,6 +20,7 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 
 const pool = require('../config/db');
+const escopo = require('../servicos/escopo');
 const fila = require('../servicos/fila');
 const adaptadores = require('../adaptadores');
 const arquivos = require('../servicos/arquivos');
@@ -298,7 +299,7 @@ async function escreverInfo(pastaAbsoluta, licitacao, licitacaoId) {
  */
 async function baixarEditais({ limite = 20, pontuacaoMin = 55 } = {}) {
   const [linhas] = await pool.query(
-    `SELECT id FROM licitacoes
+    `SELECT id FROM ${escopo.agregadoDasOrganizacoes()} l
       WHERE arquivos_status IN ('nao_baixado', 'parcial')
         AND descartada = 0
         AND pontuacao >= ?

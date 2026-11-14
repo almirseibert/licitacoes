@@ -4,6 +4,7 @@ import { api } from '../servicos/api';
 import { moeda } from '../servicos/formato';
 import DadosDaEmpresa from '../componentes/DadosDaEmpresa';
 import AlertasELimites from '../componentes/AlertasELimites';
+import MeusAvisos from '../componentes/MeusAvisos';
 
 /**
  * Configurações (seção 11.13): dados da empresa, pesos da pontuação, CNAEs,
@@ -227,6 +228,8 @@ export default function Configuracoes() {
         </section>
 
         <DadosDaEmpresa perfil={perfil} aoErro={setErro} aoAvisar={setAviso} aoSalvar={carregar} />
+
+        <MeusAvisos aoErro={setErro} aoAvisar={setAviso} />
 
         <AlertasELimites
           ajustes={ajustes}

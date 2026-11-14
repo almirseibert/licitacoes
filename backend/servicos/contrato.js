@@ -5,6 +5,7 @@
 // diante é você que preenche: o painel não lê contrato de portal nenhum, nem
 // inventa data que o edital é quem fixa.
 const pool = require('../config/db');
+const { daOrganizacao } = require('./escopo');
 const regras = require('../regras/contrato');
 const feriadosServico = require('./feriados');
 const perfilEmpresa = require('./perfil');
@@ -53,15 +54,18 @@ function comoDia(valor) {
  *
  * @param {Date|string} convocadoEm a data da convocação; na falta, hoje.
  */
-async function abrir(licitacaoId, { convocadoEm = null } = {}) {
+async function abrir(organizacaoId, licitacaoId, { convocadoEm = null } = {}) {
   const [[licitacao]] = await pool.query(
     `SELECT id, objeto, orgao_nome, uf, municipio, valor_final, valor_proposto, valor_estimado
-       FROM licitacoes WHERE id = ?`,
+       FROM ${daOrganizacao(organizacaoId, { todas: true })} l WHERE id = ?`,
     [licitacaoId]
   );
   if (!licitacao) throw new Error('Licitação não encontrada.');
 
-  const [[existente]] = await pool.query('SELECT * FROM contratos WHERE licitacao_id = ?', [licitacaoId]);
+  const [[existente]] = await pool.query('SELECT * FROM contratos WHERE organizacao_id = ? AND licitacao_id = ?', [
+    organizacaoId,
+    licitacaoId,
+  ]);
   if (existente) {
     const marcos = await garantirMarcos(existente.id);
     return { contrato: existente, criado: false, marcos_criados: marcos.criados };
@@ -73,8 +77,8 @@ async function abrir(licitacaoId, { convocadoEm = null } = {}) {
   const valor = licitacao.valor_final || licitacao.valor_proposto || null;
 
   const [r] = await pool.query(
-    `INSERT INTO contratos (licitacao_id, valor, situacao) VALUES (?, ?, 'aguardando_assinatura')`,
-    [licitacaoId, valor]
+    `INSERT INTO contratos (organizacao_id, licitacao_id, valor, situacao) VALUES (?, ?, ?, 'aguardando_assinatura')`,
+    [organizacaoId, licitacaoId, valor]
   );
 
   const marcos = await garantirMarcos(r.insertId, { convocadoEm });
@@ -91,8 +95,10 @@ async function abrir(licitacaoId, { convocadoEm = null } = {}) {
  */
 async function garantirMarcos(contratoId, { convocadoEm = null } = {}) {
   const [[contrato]] = await pool.query(
-    `SELECT c.*, l.uf, l.municipio, l.etapa_em
-       FROM contratos c JOIN licitacoes l ON l.id = c.licitacao_id
+    `SELECT c.*, l.uf, l.municipio, o.etapa_em
+       FROM contratos c
+       JOIN licitacoes l ON l.id = c.licitacao_id
+       LEFT JOIN org_licitacoes o ON o.licitacao_id = c.licitacao_id AND o.organizacao_id = c.organizacao_id
       WHERE c.id = ?`,
     [contratoId]
   );
@@ -164,13 +170,13 @@ async function garantirMarcos(contratoId, { convocadoEm = null } = {}) {
 }
 
 /** Um contrato com os marcos, a faixa da LC 123 e o que falta. */
-async function ver(contratoId) {
+async function ver(organizacaoId, contratoId) {
   const [[contrato]] = await pool.query(
     `SELECT c.*, l.objeto, l.orgao_nome, l.orgao_cnpj, l.uf, l.municipio, l.modalidade,
             l.numero_compra, l.etapa, l.link_portal
-       FROM contratos c JOIN licitacoes l ON l.id = c.licitacao_id
-      WHERE c.id = ?`,
-    [contratoId]
+       FROM contratos c JOIN ${daOrganizacao(organizacaoId, { todas: true })} l ON l.id = c.licitacao_id
+      WHERE c.id = ? AND c.organizacao_id = ?`,
+    [contratoId, organizacaoId]
   );
   if (!contrato) return null;
 
@@ -204,9 +210,9 @@ function proximoMarco(marcos) {
   return { ...escolhido, dias_restantes: dias, atrasado: dias < 0 };
 }
 
-async function listar({ situacao = null } = {}) {
-  const condicoes = [];
-  const valores = [];
+async function listar({ organizacaoId, situacao = null } = {}) {
+  const condicoes = ['c.organizacao_id = ?'];
+  const valores = [organizacaoId];
   if (situacao) {
     condicoes.push('c.situacao = ?');
     valores.push(situacao);
@@ -215,7 +221,7 @@ async function listar({ situacao = null } = {}) {
   const [contratos] = await pool.query(
     `SELECT c.*, l.objeto, l.orgao_nome, l.uf, l.numero_compra, l.modalidade
        FROM contratos c JOIN licitacoes l ON l.id = c.licitacao_id
-      ${condicoes.length ? `WHERE ${condicoes.join(' AND ')}` : ''}
+      WHERE ${condicoes.join(' AND ')}
       ORDER BY FIELD(c.situacao, 'vigente', 'aguardando_assinatura', 'prorrogado', 'encerrado', 'rescindido'),
                c.vigencia_fim IS NULL, c.vigencia_fim ASC, c.id DESC`,
     valores
@@ -245,7 +251,27 @@ async function listar({ situacao = null } = {}) {
   });
 }
 
-async function salvar(contratoId, corpo = {}) {
+/** O contrato é desta organização? Toda escrita passa por aqui antes. */
+async function daOrganizacaoOuNada(organizacaoId, contratoId) {
+  const [[c]] = await pool.query('SELECT id FROM contratos WHERE id = ? AND organizacao_id = ?', [
+    contratoId,
+    organizacaoId,
+  ]);
+  return Boolean(c);
+}
+
+/** O marco é de um contrato desta organização? */
+async function marcoDaOrganizacao(organizacaoId, marcoId) {
+  const [[m]] = await pool.query(
+    `SELECT m.id FROM contrato_marcos m JOIN contratos c ON c.id = m.contrato_id
+      WHERE m.id = ? AND c.organizacao_id = ?`,
+    [marcoId, organizacaoId]
+  );
+  return Boolean(m);
+}
+
+async function salvar(organizacaoId, contratoId, corpo = {}) {
+  if (!(await daOrganizacaoOuNada(organizacaoId, contratoId))) return null;
   const partes = [];
   const valores = [];
 
@@ -267,7 +293,11 @@ async function salvar(contratoId, corpo = {}) {
   }
 
   if (!partes.length) throw new Error('Nada para atualizar.');
-  await pool.query(`UPDATE contratos SET ${partes.join(', ')} WHERE id = ?`, [...valores, contratoId]);
+  await pool.query(`UPDATE contratos SET ${partes.join(', ')} WHERE id = ? AND organizacao_id = ?`, [
+    ...valores,
+    contratoId,
+    organizacaoId,
+  ]);
 
   // Mudou data de assinatura, vigência, valor ou a exigência de garantia: os
   // marcos automáticos que ainda não existiam passam a existir — a garantia,
@@ -277,10 +307,11 @@ async function salvar(contratoId, corpo = {}) {
     await garantirMarcos(contratoId);
   }
 
-  return ver(contratoId);
+  return ver(organizacaoId, contratoId);
 }
 
-async function salvarMarco(marcoId, corpo = {}) {
+async function salvarMarco(organizacaoId, marcoId, corpo = {}) {
+  if (!(await marcoDaOrganizacao(organizacaoId, marcoId))) return null;
   const partes = [];
   const valores = [];
 
@@ -301,7 +332,8 @@ async function salvarMarco(marcoId, corpo = {}) {
 }
 
 /** Marco acrescentado à mão — medição mensal, por exemplo. */
-async function criarMarco(contratoId, { tipo, titulo, previsto_para, valor, observacao } = {}) {
+async function criarMarco(organizacaoId, contratoId, { tipo, titulo, previsto_para, valor, observacao } = {}) {
+  if (!(await daOrganizacaoOuNada(organizacaoId, contratoId))) return null;
   const tipos = ['assinatura', 'empenho', 'garantia', 'entrega', 'aceite', 'nota_fiscal', 'pagamento', 'renovacao', 'medicao'];
   if (!tipos.includes(tipo)) throw new Error(`Tipo de marco inválido: ${tipo}.`);
   if (!titulo) throw new Error('Dê um título ao marco.');
@@ -315,7 +347,9 @@ async function criarMarco(contratoId, { tipo, titulo, previsto_para, valor, obse
   return marco;
 }
 
-async function removerMarco(marcoId) {
+async function removerMarco(organizacaoId, marcoId) {
+  // null = não existe para esta organização (404); false = existe mas é automático.
+  if (!(await marcoDaOrganizacao(organizacaoId, marcoId))) return null;
   // Marco automático não se apaga: ele volta no próximo `garantirMarcos`, e
   // apagar um prazo com multa por engano é o tipo de coisa que o painel existe
   // para evitar. Para tirá-lo da frente, conclua-o.
@@ -332,20 +366,21 @@ async function removerMarco(marcoId) {
  * ele existe, porque é ele que vale para a declaração; sem ele, sobre o do
  * painel, dizendo que é parcial.
  */
-async function receita12m(perfilId = null) {
+async function receita12m(organizacaoId, perfilId = null) {
   const [[somado]] = await pool.query(
     `SELECT COALESCE(SUM(valor_executado), 0) AS executado, COUNT(*) AS contratos
        FROM contratos
-      WHERE valor_executado > 0
+      WHERE organizacao_id = ? AND valor_executado > 0
         AND (
           -- O que foi executado no período: vigência que alcança os últimos 12
           -- meses, ou contrato assinado dentro deles.
           (vigencia_fim IS NOT NULL AND vigencia_fim >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH))
           OR (assinado_em IS NOT NULL AND assinado_em >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH))
-        )`
+        )`,
+    [organizacaoId]
   );
 
-  const perfil = await perfilEmpresa.padrao(perfilId).catch(() => null);
+  const perfil = await perfilEmpresa.padrao(organizacaoId, perfilId).catch(() => null);
   const doContador = perfil && Number(perfil.receita_12m) > 0 ? Number(perfil.receita_12m) : null;
   const doPainel = Number(somado.executado);
 

@@ -2,11 +2,12 @@
 const express = require('express');
 const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
+const escopo = require('../servicos/escopo');
 const fila = require('../servicos/fila');
 
 const rotas = express.Router();
 
-rotas.get('/resumo', async (_req, res) => {
+rotas.get('/resumo', async (req, res) => {
   try {
     const [[numeros]] = await pool.query(
       `SELECT
@@ -17,7 +18,7 @@ rotas.get('/resumo', async (_req, res) => {
          SUM(l.beneficio_me IN ('exclusivo','cota')) AS exclusivas_me,
          SUM(l.etapa = 'Vou disputar') AS vou_disputar,
          SUM(l.valor_estimado) AS valor_em_jogo
-       FROM licitacoes l
+       FROM ${escopo.daOrganizacao(req.organizacaoId)} l
       WHERE l.descartada = 0 AND (l.fim_propostas IS NULL OR l.fim_propostas >= NOW())`
     );
 

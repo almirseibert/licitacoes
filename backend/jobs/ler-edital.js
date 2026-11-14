@@ -10,6 +10,7 @@ const fs = require('fs');
 const path = require('path');
 
 const pool = require('../config/db');
+const escopo = require('../servicos/escopo');
 const fila = require('../servicos/fila');
 const arquivos = require('../servicos/arquivos');
 const documento = require('../servicos/texto-documento');
@@ -110,7 +111,9 @@ async function lerEdital({ licitacaoId }) {
       paginas.push({ ...pagina, arquivoId: registro.id });
     }
 
-    const inteiro = lido.paginas.map((p) => p.texto).join('\n');
+    // Páginas separadas por \f (form feed): é o que deixa o Pergunte ao Edital
+    // citar a página (regras/busca-edital.js). Para regex e boletim, \f é espaço.
+    const inteiro = lido.paginas.map((p) => p.texto.replace(/\f/g, ' ')).join('\f');
     await pool.query(
       'UPDATE licitacao_arquivos SET texto_extraido = ?, paginas = ?, precisa_leitura_manual = ? WHERE id = ?',
       [inteiro.slice(0, MAX_TEXTO_GUARDADO), lido.total, lido.precisaLeituraManual ? 1 : 0, registro.id]
@@ -176,7 +179,7 @@ async function gravarIndefinido(licitacaoId) {
 /** Enfileira a leitura das licitações que já têm documento e ainda não foram lidas. */
 async function lerEditais({ limite = 20 } = {}) {
   const [linhas] = await pool.query(
-    `SELECT id FROM licitacoes
+    `SELECT id FROM ${escopo.agregadoDasOrganizacoes()} l
       WHERE arquivos_status IN ('ok','parcial')
         AND exigencias_status = 'nao_lido'
         AND descartada = 0

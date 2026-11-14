@@ -9,9 +9,9 @@
 // por órgão: a primeira versão fazia cinco idas ao banco para cada um dos 1.344
 // órgãos e passava de cinco minutos. Agrupado, são oito consultas no total.
 const pool = require('../config/db');
+const escopo = require('../servicos/escopo');
 const fila = require('../servicos/fila');
 const regrasPreco = require('../regras/preco');
-const perfil = require('../servicos/perfil');
 
 // Quantas linhas por INSERT. Lote grande demais estoura max_allowed_packet.
 const LOTE = 200;
@@ -62,7 +62,11 @@ async function gravarEmLotes(sql, linhas) {
  * A tela diz isso — "disputou" aqui significa "apareceu no resultado".
  */
 async function agregarConcorrentes() {
-  const meuCnpj = await perfil.cnpjDaEmpresa().catch(() => null);
+  // Seção 1b: `concorrentes` é catálogo. O grupo usado aqui é o da
+  // classificação da organização operadora (o grupo vem das palavras-chave), e
+  // o "encontrou você" deixou de ser gravado: é de cada organização e a ficha
+  // o calcula na hora (rotas/dossies.js).
+  const grupoOperadora = `LEFT JOIN org_licitacoes og ON og.licitacao_id = l.id AND og.organizacao_id = ${escopo.ORGANIZACAO_OPERADORA}`;
 
   const [base] = await pool.query(
     `SELECT p.cnpj,
@@ -82,9 +86,10 @@ async function agregarConcorrentes() {
   // Uma consulta para todos: itens vencidos, com o estimado ao lado para o
   // desconto e o grupo para o menor preço.
   const [vencidos] = await pool.query(
-    `SELECT i.cnpj_vencedor AS cnpj, i.valor_homologado, i.valor_total_estimado, l.grupo
+    `SELECT i.cnpj_vencedor AS cnpj, i.valor_homologado, i.valor_total_estimado, og.grupo
        FROM licitacao_itens i
        JOIN licitacoes l ON l.id = i.licitacao_id
+       ${grupoOperadora}
       WHERE i.cnpj_vencedor IN (?)`,
     [cnpjs]
   );
@@ -95,28 +100,17 @@ async function agregarConcorrentes() {
     [cnpjs]
   );
   const [grupos] = await pool.query(
-    `SELECT p.cnpj, l.grupo, COUNT(DISTINCT l.id) AS n
+    `SELECT p.cnpj, og.grupo, COUNT(DISTINCT l.id) AS n
        FROM propostas_concorrentes p JOIN licitacoes l ON l.id = p.licitacao_id
-      WHERE p.cnpj IN (?) AND l.grupo IS NOT NULL
-      GROUP BY p.cnpj, l.grupo ORDER BY n DESC`,
+       ${grupoOperadora}
+      WHERE p.cnpj IN (?) AND og.grupo IS NOT NULL
+      GROUP BY p.cnpj, og.grupo ORDER BY n DESC`,
     [cnpjs]
   );
-  // "Encontrou você": licitações já decididas em que os dois apareceram.
-  const [encontros] = meuCnpj
-    ? await pool.query(
-        `SELECT p.cnpj, COUNT(DISTINCT l.id) AS n, SUM(l.cnpj_vencedor = p.cnpj) AS dele
-           FROM licitacoes l
-           JOIN propostas_concorrentes p ON p.licitacao_id = l.id
-          WHERE p.cnpj IN (?) AND p.cnpj <> ? AND l.etapa IN ('Ganhamos','Perdemos')
-          GROUP BY p.cnpj`,
-        [cnpjs, meuCnpj]
-      )
-    : [[]];
 
   const porVencidos = porChave(vencidos, 'cnpj');
   const porUf = porChave(ufs, 'cnpj');
   const porGrupo = porChave(grupos, 'cnpj');
-  const porEncontro = new Map(encontros.map((e) => [e.cnpj, e]));
 
   const linhas = base.map((c) => {
     const itens = porVencidos.get(c.cnpj) || [];
@@ -136,8 +130,6 @@ async function agregarConcorrentes() {
       if (!menorPorGrupo[grupo] || valor < menorPorGrupo[grupo]) menorPorGrupo[grupo] = valor;
     }
 
-    const enc = porEncontro.get(c.cnpj);
-
     return [
       c.cnpj,
       recortar(c.empresa, 255),
@@ -153,8 +145,8 @@ async function agregarConcorrentes() {
       JSON.stringify((porUf.get(c.cnpj) || []).map((u) => u.uf)),
       JSON.stringify((porGrupo.get(c.cnpj) || []).map((g) => ({ grupo: g.grupo, licitacoes: Number(g.n) }))),
       Number(c.desclassificacoes || 0),
-      enc ? Number(enc.n || 0) : 0,
-      enc ? Number(enc.dele || 0) : 0,
+      0, // encontros: por organização, na ficha (rotas/dossies.js)
+      0,
     ];
   });
 

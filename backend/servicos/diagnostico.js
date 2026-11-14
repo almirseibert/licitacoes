@@ -6,6 +6,7 @@
 // informado", visível, porque esconder isso faria o ranking parecer mais
 // confiável do que é.
 const pool = require('../config/db');
+const { daOrganizacao } = require('./escopo');
 const descarte = require('../regras/descarte');
 const exigencias = require('../regras/exigencias');
 const servicoPreco = require('./preco');
@@ -101,11 +102,11 @@ function simular(bloqueio) {
  * barrou) e aparece em `nao_analisadas`, que conta a outra história: volume
  * demais chegando, ou corte mal calibrado (seção 20.4).
  */
-async function diagnosticar({ dias = 90 } = {}) {
+async function diagnosticar({ organizacaoId, dias = 90 } = {}) {
   const [linhas] = await pool.query(
     `SELECT id, objeto, orgao_nome, uf, grupo, modalidade, valor_estimado, pontuacao,
             motivo_descarte, codigo_barrou, descartado_em
-       FROM licitacoes
+       FROM ${daOrganizacao(organizacaoId)} l
       WHERE descartada = 1
         AND motivo_descarte IS NOT NULL
         AND descartado_em IS NOT NULL
