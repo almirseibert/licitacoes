@@ -36,7 +36,7 @@ const REGRAS = [
 ];
 
 const COMPILADAS = REGRAS.map(([metodo, padrao, acao, entidade, campos]) => ({
-  metodo, re: new RegExp(padrao), acao, entidade, campos,
+  metodo, re: new RegExp(padrao, 'i'), acao, entidade, campos,
 }));
 
 /** O id de quem foi criado: está na raiz da resposta (`{ id }`) ou num objeto dentro dela (`{ tarefa: { id } }`). */

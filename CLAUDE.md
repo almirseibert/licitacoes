@@ -69,9 +69,10 @@ npm install && npm run migrar && npm run semear
 `npm run prazos` (dias úteis e o limite de esclarecimento), `npm run dossies`
 (fichas de concorrente e órgão), `npm run contratos` (marcos do contrato e a faixa da LC 123;
 `-- --contrato=<id>` mostra o checklist de um), `npm run limpar` (`.tmp` velho e
-arquivos de licitação descartada há mais de 180 dias — a ficha fica, porque é dela
+arquivos de licitação descartada há mais de 180 dias e auditoria com mais de 24 meses — a ficha fica, porque é dela
 que o diagnóstico vive), `npm run sancoes` (CEIS/CNEP do próprio CNPJ e dos
-concorrentes recorrentes), `npm run webhooks` (entrega de novas oportunidades; `-- --simular`).
+concorrentes recorrentes), `npm run webhooks` (entrega de novas oportunidades; `-- --simular`), `npm run lgpd` (exclusão de
+dados cujo pedido passou dos 7 dias de carência; `-- --listar` só mostra os agendados).
 
 Antes de fechar qualquer fase: `npm run lint && npm test`. São 30 testes em `testes/`,
 sem banco e sem rede, no que erra calado — a conduta da coleta (5.4), a validação da

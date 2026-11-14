@@ -28,7 +28,7 @@ cofre de senha de portal e a assinatura digital (ver a tabela de divergências n
 |---|---|---|---|
 | **A — Fundação SaaS** | 0 ✅, 1 (1a ✅, 1b ✅, 1c), 2 ✅, 3 ✅ | Conta própria, equipe, dados isolados, tema claro/escuro, plano e cobrança | Dá para cobrar e isolar clientes |
 | **B — Paridade de captação** | 4 ✅, 7 ✅, 8 ✅, 9 ✅, 10 ✅ | Boletim diário, banco de licitações completo, gestão com tarefas, avisos por tipo, documentos | Substitui o uso diário do ConLicitação na captação |
-| **C — IA e inteligência** | 5 ✅, 11 (11b), 12 ✅ (12b), 13 ✅ (13b), 14 ✅ (14b), 15 ✅ (15b), 17 | Pergunte ao Edital, resumo com checklist, acompanhamentos, contratos e atas, concorrentes e mercado, API, onboarding | **Versão 1 vendável** — fim da Fase C |
+| **C — IA e inteligência** | 5 ✅, 11 (11b), 12 ✅ (12b), 13 ✅ (13b), 14 ✅ (14b), 15 ✅ (15b), 17 ✅ (17b) | Pergunte ao Edital, resumo com checklist, acompanhamentos, contratos e atas, concorrentes e mercado, API, onboarding | **Versão 1 vendável** — fim da Fase C |
 | **D — Estratégia e automação** | 6, 16 | Monitor de chat, alerta de deserta por segmento, consultor jurídico | Planos mais caros |
 | **E — Ecossistema** | 18 | Seguro garantia, assessoria cadastral, cursos por parceria | Receita complementar |
 
@@ -901,18 +901,62 @@ MariaDB) e organização com milhares de participações (a consulta traz as lin
 
 ---
 
-## Seção 17 — Onboarding, ajuda e suporte (Fase C — entra na versão 1)
-- [ ] Assistente de primeiro acesso: cadastra a empresa, os CNAEs, as palavras-chave e o primeiro
-      filtro em poucos passos (hoje o seed faz isso só para a Studio Mythos).
-- [ ] Central de ajuda com vídeos curtos por ferramenta, e "Solicitações" (protocolo, assunto, data,
-      status) para falar com o suporte.
-- [ ] Pesquisa NPS depois de 30 dias de uso; **status das ferramentas** (coleta e worker de pé).
-- [ ] Termos de uso, política de privacidade, aviso de que a IA pode errar; exclusão de dados sob
-      pedido (LGPD).
-- [ ] Trilha de auditoria: quem entrou, quem alterou documento, tarefa e etapa.
+## Seção 17 — Onboarding, ajuda e suporte (Fase C — entra na versão 1) — ✅ feito em 14/11/2026 (com pendências na 17b)
+- [x] Assistente de primeiro acesso ("Primeiros passos"): empresa (razão social, CNPJ com dígito conferido,
+      CNAEs), palavras-chave, exclusões, estados e o primeiro filtro; reentrante; abre sozinho para a
+      organização nova (dono/admin). O seed continua só da Studio Mythos.
+- [x] Central de ajuda com guias por ferramenta e busca; **"Solicitações"** (protocolo `SOL-AAAA-NNNNNN`,
+      assunto, data, status; o suporte responde em Ajuda › Atendimento, com aviso por e-mail ao cliente).
+      **Vídeos: não gravados** — o campo é nulo e a tela diz "Vídeo em produção" (17b).
+- [x] NPS depois de 30 dias de uso (dispensar volta em 30 dias, responder em 180) e agregado para o suporte;
+      **status das ferramentas** (worker por batimento de 1 min, fila, coleta, boletim, e-mail, IA).
+- [~] Termos de uso, política de privacidade, aviso da IA (aceite por versão, no cadastro e quando muda);
+      exclusão de dados sob pedido e cópia dos dados (LGPD). **Os textos são minuta sem revisão de advogado**
+      (mesmo bloqueio da Seção 16): a API devolve `revisado_por_advogado: false` e a tela avisa.
+- [x] Trilha de auditoria: quem entrou, quem alterou documento, tarefa, etapa, equipe, token/webhook; guarda o
+      quê e nunca o conteúdo; 24 meses.
 
 **Aceite:** uma organização nova, sem apoio de ninguém da equipe, chega ao primeiro boletim em
 menos de 15 minutos.
+
+**Aceite medido (14/11/2026, API real e navegador, MariaDB 10.11, banco zerado migra até a 033):**
+roteiro de **84 conferências pela API real, 84/84**, e **44 pelo navegador (Playwright, 1366 px e 390 px), 44/44**.
+Organização nova, do clique em "Criar conta" ao primeiro boletim na tela: **0,8 s pela API e 1,3 s pela tela** (a
+pessoa digitando levaria minutos; o limite é 15). Boletim com 6 licitações de RS = consulta SQL direta (6);
+todas de RS. Assistente: CNPJ com dígito errado, sem palavra e UF inventada → 400 em português; reentrante (0
+palavra nova na segunda vez). Isolamento entre duas organizações: a Y não abre nem escreve na solicitação da X
+(404), não vê a trilha, o assistente nem a exportação da X; leitor não abre solicitação, não lê auditoria, não
+exporta (403), mas aceita os termos. Auditoria registrou criou_conta, concluiu_assistente, criou/alterou
+tarefa, subiu/removeu documento, mudou_etapa e entrou (com IP), sem o título da tarefa nem o nome do arquivo.
+NPS: não devido no 1º dia, devido com 31 dias, some depois de responder; agregado do suporte = 100 com uma nota 9.
+Status: sem batimento = worker "parado"; com batimento = "ok" (e o worker real gravou o batimento). Exclusão:
+nome errado → 400, senha errada → 403, operadora → 403, carência de 7 dias, segundo pedido → 409, cancelar
+funciona, `npm run lgpd` antes do prazo não apaga; vencida: organização, **44 linhas em 43 tabelas**, 2
+usuários e **2 arquivos do volume** removidos (a pasta `org/<id>` some), comprovante em `lgpd_exclusoes`, nenhuma
+tabela com `organizacao_id` guarda resto, e a organização Y segue intacta. Exportação sem `senha_hash` nem
+tokens. Lint limpo, **214/214 testes** (31 novos: `testes/onboarding.test.js` e
+`testes/auditoria-suporte-status.test.js`). `code-review` (8 achados): corrigidos o bloqueio por cobrança
+recorrente (olha o provedor, não o status), a constante da operadora duplicada, o apagar de arquivo preso a
+`org/<id>/`, o redirecionamento ao assistente e a lista de colunas omitidas na exportação. `simplify` (4
+revisores): normalizador, `comProtocolo`, consultas em paralelo, abas, estado do assistente vindo do App, boletim
+do assistente só do filtro dele, índice da limpeza. `security-review`: nenhum achado de alta confiança.
+
+**Não verificado:** catálogo **sintético** (PNCP inacessível aqui) — o "primeiro boletim" sai de 31 licitações de
+teste; e-mail **real** (sem SMTP o boletim fica na tela e o painel diz isso); MySQL 8 (o teste é MariaDB); uma
+**pessoa de verdade** fazendo o roteiro sem apoio (a medida acima é de script, não de usuário).
+
+**Seção 17b — pendente:**
+- [ ] Revisão de advogado dos termos e da política (e passar `REVISADO_POR_ADVOGADO` para `true`); preencher
+      `OPERADORA_*` e `SUPORTE_EMAIL` no ambiente.
+- [ ] Gravar os vídeos curtos por ferramenta e preencher `video` em `backend/config/dados/ajuda.js`.
+- [ ] Sugerir palavras-chave a partir dos CNAEs (precisa de um dicionário CNAE × termos; nada foi inventado).
+- [ ] Exportação LGPD em streaming (hoje monta até 50 mil linhas por tabela em memória e avisa se cortou) e um
+      teste de CI que falhe quando surgir tabela com `organizacao_id` sem classificação (exporta/fora).
+- [ ] Convite: exigir e gravar o aceite dos termos no servidor (hoje só o modal por cima do painel).
+- [ ] Devolver `pode_administrar` do backend em vez de o front decidir por lista de papéis; tela inicial única
+      (assistente × radar × dashboard) em vez de dois efeitos.
+- [ ] Auditar também palavras-chave, configurações e proposta; mover a classificação para declaração por rota.
+- [ ] Rodar o roteiro com uma pessoa de fora da equipe e cronometrar de verdade.
 
 ---
 

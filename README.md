@@ -377,6 +377,25 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
   mercado (`historico_precos`). Sem custo, a margem é lacuna. `GET /api/desempenho`. Contas puras em
   `backend/regras/desempenho.js` (`testes/desempenho.test.js`), consultas em
   `backend/servicos/desempenho.js`. **Aceite medido**: ver o plano (Seção 15).
+- **Seção 17 — Onboarding, ajuda e suporte, entregue em 14/11/2026.** Migração `033_onboarding_suporte.sql`
+  (termos aceitos, solicitações e mensagens, NPS, trilha de auditoria, batimento do worker, comprovante de
+  exclusão LGPD; organizações antigas nascem com o assistente concluído). **Primeiros passos**: assistente
+  de 3 passos (empresa e CNAEs → palavras-chave e estados → primeiro boletim gerado na hora, com a lista
+  na tela; sem SMTP ele diz que nada foi enviado). Cadastro exige aceite dos termos (versão gravada); quem
+  entra por convite ou quando a versão muda vê o aceite por cima do painel. **Ajuda**: guias por ferramenta
+  com busca (vídeo nulo = "em produção"), **Solicitações** com protocolo `SOL-AAAA-NNNNNN` (cliente vê as
+  suas, admin as da organização; o suporte responde em Ajuda › Atendimento, que também mostra o NPS).
+  **NPS** depois de 30 dias de uso (dispensar volta em 30 dias; responder, em 180). **Status** (worker pelo
+  batimento de 1 min, fila, coleta, boletim, e-mail, IA). **Auditoria** (admin/dono): entrou, documento,
+  tarefa, etapa, equipe, token/webhook, exportação e exclusão — só o que aconteceu, nunca o conteúdo; 24
+  meses, limpos por `npm run limpar`. **Privacidade e dados**: termos, política e aviso da IA (minuta, **sem
+  revisão de advogado** — a API devolve `revisado_por_advogado: false` e a tela avisa), cópia dos dados
+  (JSON, sem credenciais) e exclusão pelo dono (nome + senha + 7 dias de carência; `npm run lgpd` executa as
+  vencidas, o worker também; apaga tabelas, pessoas que só existiam ali e a pasta `org/<id>/` do volume).
+  Rotas `/api/onboarding`, `/api/suporte`, `/api/status`, `/api/auditoria`, `/api/lgpd`,
+  `/api/publico/legal`, `/api/admin/solicitacoes` e `/api/admin/nps`. Regras puras em `backend/regras/`
+  (`testes/onboarding.test.js`, `testes/auditoria-suporte-status.test.js`). Variáveis: `SUPORTE_EMAIL`,
+  `OPERADORA_*`. **Aceite medido**: ver o plano (Seção 17).
 - `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
   ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
 
@@ -1310,6 +1329,19 @@ GET    /api/mercado/recorrentes                ?segmento=|filtro=&dias=30|90|180
 GET    /api/mercado/fornecedores/:cnpj         perfil por CNPJ no mercado (PNCP)
 GET    /api/diagnostico/perdas                 ?meses=3|6|12|24 — motivos de perda e recomendação
 GET    /api/desempenho                         ?janela=todo|1m|3m|6m|1a|definido&de=&ate= — Meu desempenho (seção 15)
+GET    /api/publico/legal                      — termos, política e aviso da IA, sem login (seção 17)
+GET    /api/onboarding                         — passos do assistente, termos e NPS (seção 17)
+POST   /api/onboarding/concluir                { empresa, palavras, exclusoes, ufs } — grava empresa, palavras e o filtro (admin)
+POST   /api/onboarding/boletim                 — gera já o primeiro boletim (admin)
+POST   /api/onboarding/termos/aceitar          — aceita a versão vigente dos termos
+POST   /api/onboarding/nps                     { nota 0..10, comentario? } · POST /api/onboarding/nps/dispensar
+GET    /api/suporte/ajuda                      ?q= — guias da central
+GET    /api/suporte/solicitacoes[/:id]         — solicitações (admin vê as da organização)
+POST   /api/suporte/solicitacoes               { assunto, categoria, texto } · POST /:id/mensagens · POST /:id/encerrar
+GET    /api/status                             — worker, fila, coleta, boletim, e-mail e IA
+GET    /api/auditoria                          ?entidade=&acao=&usuario=&de=&ate=&pagina= — trilha (admin)
+GET    /api/lgpd                               — situação da exclusão · GET /exportar (admin) · POST/DELETE /exclusao (dono)
+GET    /api/admin/solicitacoes[/:id]           — atendimento (operadora) · POST /:id/responder · GET /api/admin/nps
 GET    /api/acompanhamentos                    publicações posteriores ao edital (filtros; ?favoritas=1)
 GET    /api/contratos                          lista, faturado em 12m e faixa
 GET    /api/gestao/tarefas                     ?visao=atrasadas|hoje|futuras|concluidas&por=mim&licitacao_id=

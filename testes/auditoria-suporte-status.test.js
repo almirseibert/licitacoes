@@ -47,6 +47,11 @@ test('auditoria: PATCH de licitação sem campo de controle, GET e rota desconhe
   assert.equal(aud.classificar('POST', '/palavras', {}), null);
 });
 
+test('auditoria: caminho com outra caixa também é auditado (o Express roteia sem ligar para caixa)', () => {
+  assert.equal(aud.classificar('DELETE', '/Empresa/Documentos/7').acao, 'removeu_documento');
+  assert.equal(aud.reconhece('PATCH', '/GESTAO/tarefas/3'), true);
+});
+
 test('auditoria: query e barra final não atrapalham; rótulo cai para a própria ação', () => {
   assert.equal(aud.classificar('DELETE', '/gestao/tarefas/4/?x=1').acao, 'removeu_tarefa');
   assert.equal(aud.rotulo('mudou_etapa'), 'Mudou a etapa de uma licitação');
