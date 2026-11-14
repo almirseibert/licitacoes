@@ -138,8 +138,9 @@ responde deste ambiente; os dados vieram da API de consulta) e envio real de e-m
       (`servicos/exigencias.js`; Radar, kit de envio e seguro garantia leem a visão da organização).
 - [x] `alertas.listar` junta direto com `licitacoes` e `org_licitacoes` (sem a tabela derivada do catálogo).
 - [x] Ficha do concorrente: "menor preço por grupo" e "grupos em que disputa" calculados na leitura pelo grupo
-      da organização; `recorrencias.grupo` deixou de ser gravado (nenhuma tela o lia). O job de dossiês grava
-      NULL nessas colunas (lacuna, não valor).
+      da organização; migração `038_ficha_na_leitura.sql` apaga `recorrencias.grupo` e
+      `concorrentes.menor_preco_json`/`grupos` (dado que depende de quem olha não mora no catálogo) e indexa
+      `licitacao_itens(cnpj_vencedor, licitacao_id)`.
 - [ ] Rodar a coleta pelo adaptador do PNCP (busca textual) num ambiente que alcance
       `/api/search` e conferir as linhas de `org_licitacoes` criadas por organização.
 - [ ] Medir o custo de `exigidaSql` (Radar) e da ficha do concorrente com um catálogo grande — aqui só com
@@ -156,7 +157,8 @@ rodada sem mudança = 1 ida e 0 alertas; portal fora do ar = 1 tentativa, as dua
 resultado lido uma vez e A → Ganhamos, B → Perdemos, cada uma com o próprio alerta. Migração 037 conferida
 com dados antigos: 3 confirmações copiadas para a organização 1, relidas só as de edital baixado, coluna
 apagada, `recorrencias.grupo` NULL. Lint limpo, **260/260** testes (3 novos em `testes/exigencias-org.test.js`).
-`code-review`: 10 achados, 4 corrigidos (erro de organização irmã no "checar agora", `'{}'`/`'[]'` no catálogo,
+`code-review`: 10 achados, 4 corrigidos; `simplify`: hashes e erros em um UPDATE por licitação, colunas mortas apagadas, `adiar` no serviço do monitor;
+( (erro de organização irmã no "checar agora", `'{}'`/`'[]'` no catálogo,
 junção direta na ficha, listas de `IN` desnecessárias); deixados: baseline sem hash (já era assim por
 organização), alerta de estratégica condicionado a `pode_escrever` (pedido pelo plano; confirmar).
 **Não verificado:** coleta pelo PNCP de ponta a ponta; MySQL 8; custo em catálogo grande.

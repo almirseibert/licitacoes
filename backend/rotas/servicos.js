@@ -90,7 +90,7 @@ rotas.get('/licitacoes-com-garantia', async (req, res) => {
       `SELECT l.id, l.orgao_nome, l.numero_compra
          FROM ${escopo.daOrganizacao(req.organizacaoId)} l
         WHERE l.descartada = 0 AND (l.abertura_propostas IS NULL OR l.abertura_propostas >= NOW())
-          AND ${exigenciasOrg.exigidaSql({ licitacao: 'l.id', organizacao: 'l.organizacao_id', codigos: CODIGOS_DE_GARANTIA })}
+          AND ${exigenciasOrg.exigidaSql({ codigos: CODIGOS_DE_GARANTIA })}
         ORDER BY l.abertura_propostas IS NULL, l.abertura_propostas ASC LIMIT 50`
     );
     res.json({ licitacoes: linhas });

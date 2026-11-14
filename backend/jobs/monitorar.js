@@ -251,13 +251,11 @@ async function checarLicitacao(grupo, { agora = new Date() } = {}) {
         WHERE id = ?`,
       [detalhe.situacao, detalhe.abertura_propostas, detalhe.fim_propostas, detalhe.valor_homologado, id]
     );
-    for (const m of grupo) {
-      await pool.query('UPDATE monitoramentos SET hash_datas = ? WHERE organizacao_id = ? AND licitacao_id = ?', [
-        hashNovo,
-        m.organizacao_id,
-        id,
-      ]);
-    }
+    await pool.query('UPDATE monitoramentos SET hash_datas = ? WHERE licitacao_id = ? AND id IN (?)', [
+      hashNovo,
+      id,
+      grupo.map((m) => m.id),
+    ]);
   }
 
   // ---------------------------------------------------------- arquivos: o edital
@@ -320,20 +318,18 @@ async function checarLicitacao(grupo, { agora = new Date() } = {}) {
       }
     }
 
-    for (const m of grupo) {
-      await pool.query('UPDATE monitoramentos SET hash_arquivos = ? WHERE organizacao_id = ? AND licitacao_id = ?', [
-        hashNovo,
-        m.organizacao_id,
-        id,
-      ]);
-    }
+    await pool.query('UPDATE monitoramentos SET hash_arquivos = ? WHERE licitacao_id = ? AND id IN (?)', [
+      hashNovo,
+      id,
+      grupo.map((m) => m.id),
+    ]);
   }
 
   // -------------------------------------------------------------- resultado
   // Só depois do fim das propostas: antes disso não existe resultado nenhum e
   // a chamada seria desperdício de requisição no portal.
   const passouDoFim = base.fim_propostas && new Date(base.fim_propostas) < agora;
-  let resultado = null;
+  let houveResultado = false;
   if (passouDoFim) {
     const r = await encerradas.registrarResultados({ licitacaoId: id }).catch((erro) => ({
       gravados: 0,
@@ -341,7 +337,7 @@ async function checarLicitacao(grupo, { agora = new Date() } = {}) {
     }));
 
     if (r.gravados) {
-      resultado = r;
+      houveResultado = true;
       await servico.registrarEvento({
         licitacaoId: id,
         tipo: 'resultado',
@@ -360,7 +356,7 @@ async function checarLicitacao(grupo, { agora = new Date() } = {}) {
     const resumo = resumos[i];
     const organizacaoId = monitoramento.organizacao_id;
     try {
-      if (resultado) {
+      if (houveResultado) {
         const movido = await moverPeloResultado({ id, organizacao_id: organizacaoId, etapa: monitoramento.etapa });
         if (movido && movido.etapa) {
           resumo.eventos.push(`card → ${movido.etapa}`);
@@ -417,22 +413,10 @@ async function checar(monitoramento, { agora = new Date() } = {}) {
   const resumos = await checarLicitacao([monitoramento, ...irmaos], { agora });
   // A parte que falhou para as OUTRAS organizações não some: fica no monitor delas, como na rodada.
   for (let i = 1; i < resumos.length; i += 1) {
-    if (resumos[i].erro) await adiar(irmaos[i - 1].id, resumos[i].erro);
+    if (resumos[i].erro) await servico.adiar(irmaos[i - 1].id, resumos[i].erro);
   }
   if (resumos[0].erro) throw new Error(resumos[0].erro);
   return resumos[0];
-}
-
-/** Erro não trava a fila: adia esta e segue. Portal fora do ar é temporário, e insistir no mesmo minuto só piora. */
-async function adiar(monitoramentoId, mensagem) {
-  await pool.query(
-    `UPDATE monitoramentos
-        SET proxima_checagem = DATE_ADD(NOW(), INTERVAL 3 HOUR),
-            checagens = checagens + 1,
-            ultimo_erro = ?
-      WHERE id = ?`,
-    [recortar(mensagem, 255), monitoramentoId]
-  );
 }
 
 /**
@@ -460,13 +444,12 @@ async function monitorar({ limite = 25 } = {}) {
   // ler o portal de novo daqui a pouco para elas seria requisição jogada fora.
   const atendidas = await servico.ativosDasLicitacoes(pendentes.map((m) => m.licitacao_id));
   const porLicitacao = new Map();
-  for (const m of [...pendentes, ...atendidas]) {
-    if (!porLicitacao.has(m.licitacao_id)) porLicitacao.set(m.licitacao_id, new Map());
-    porLicitacao.get(m.licitacao_id).set(m.id, m);
+  for (const m of atendidas) {
+    if (!porLicitacao.has(m.licitacao_id)) porLicitacao.set(m.licitacao_id, []);
+    porLicitacao.get(m.licitacao_id).push(m);
   }
 
-  for (const [licitacaoId, linhas] of porLicitacao) {
-    const grupo = [...linhas.values()];
+  for (const [licitacaoId, grupo] of porLicitacao) {
     try {
       const resumos = await checarLicitacao(grupo, { agora });
       resumo.checadas += 1;
@@ -479,12 +462,12 @@ async function monitorar({ limite = 25 } = {}) {
         if (r.proxima === null) resumo.encerrados += 1;
         if (r.erro) {
           resumo.erros.push(`licitação ${licitacaoId} (organização ${r.organizacao_id}): ${r.erro}`);
-          await adiar(grupo[i].id, r.erro);
+          await servico.adiar(grupo[i].id, r.erro);
         }
       }
     } catch (erro) {
       resumo.erros.push(`licitação ${licitacaoId}: ${erro.message}`);
-      for (const m of grupo) await adiar(m.id, erro.message);
+      for (const m of grupo) await servico.adiar(m.id, erro.message);
     }
   }
 

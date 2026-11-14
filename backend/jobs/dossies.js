@@ -117,9 +117,7 @@ async function agregarConcorrentes() {
       itens.length,
       media(descontos),
       descontos.length ? regrasPreco.mediana(descontos) : null,
-      null, // menor preço por grupo: da organização, calculado na ficha (Seção 1c)
       JSON.stringify((porUf.get(c.cnpj) || []).map((u) => u.uf)),
-      null, // grupos em que disputa: idem
       Number(c.desclassificacoes || 0),
       0, // encontros: por organização, na ficha (rotas/dossies.js)
       0,
@@ -129,7 +127,7 @@ async function agregarConcorrentes() {
   await gravarEmLotes(
     `INSERT INTO concorrentes
        (cnpj, razao_social, uf, me_epp, mei, disputas, itens, vitorias,
-        desconto_medio, desconto_mediano, menor_preco_json, ufs, grupos,
+        desconto_medio, desconto_mediano, ufs,
         desclassificacoes, encontros, encontros_perdidos)
      VALUES {{VALORES}}
      ON DUPLICATE KEY UPDATE
@@ -137,7 +135,7 @@ async function agregarConcorrentes() {
        me_epp = VALUES(me_epp), mei = VALUES(mei),
        disputas = VALUES(disputas), itens = VALUES(itens), vitorias = VALUES(vitorias),
        desconto_medio = VALUES(desconto_medio), desconto_mediano = VALUES(desconto_mediano),
-       menor_preco_json = VALUES(menor_preco_json), ufs = VALUES(ufs), grupos = VALUES(grupos),
+       ufs = VALUES(ufs),
        desclassificacoes = VALUES(desclassificacoes),
        encontros = VALUES(encontros), encontros_perdidos = VALUES(encontros_perdidos)`,
     linhas

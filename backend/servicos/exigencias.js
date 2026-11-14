@@ -17,7 +17,7 @@ const { PORCODIGO } = require('../regras/exigencias');
  * @param {{ licitacao: string, organizacao: string, codigos: string[] }} colunas
  *        expressões SQL do id da licitação e da organização (ex.: 'l.id', 'l.organizacao_id')
  */
-function exigidaSql({ licitacao, organizacao, codigos }) {
+function exigidaSql({ licitacao = 'l.id', organizacao = 'l.organizacao_id', codigos }) {
   if (!codigos.length || codigos.some((c) => !PORCODIGO.has(c))) {
     throw new Error('código de exigência fora do catálogo');
   }
@@ -42,20 +42,19 @@ function exigidaSql({ licitacao, organizacao, codigos }) {
  */
 async function daLicitacao(organizacaoId, licitacaoId, { codigos = null, conexao = pool } = {}) {
   const filtro = codigos ? ' AND e.codigo IN (?)' : '';
-  const [lidas] = await conexao.query(
+  const [[lidas], [corrigidas]] = await Promise.all([conexao.query(
     `SELECT e.codigo, e.detectado, e.trecho, e.pagina, a.nome_arquivo
        FROM licitacao_exigencias e
        LEFT JOIN licitacao_arquivos a ON a.id = e.arquivo_id
       WHERE e.licitacao_id = ?${filtro}`,
     codigos ? [licitacaoId, codigos] : [licitacaoId]
-  );
-  const [corrigidas] = await conexao.query(
+  ), conexao.query(
     `SELECT codigo, detectado FROM org_exigencias
       WHERE organizacao_id = ? AND licitacao_id = ?${codigos ? ' AND codigo IN (?)' : ''}`,
     codigos
       ? [escopo.idOrganizacao(organizacaoId), licitacaoId, codigos]
       : [escopo.idOrganizacao(organizacaoId), licitacaoId]
-  );
+  )]);
 
   const mapa = new Map(lidas.map((l) => [l.codigo, { ...l, corrigido: false }]));
   for (const c of corrigidas) {

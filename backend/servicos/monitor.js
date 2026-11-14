@@ -70,6 +70,18 @@ async function desligar(organizacaoId, licitacaoId, motivo = null) {
   );
 }
 
+/** Erro não trava a fila: adia esta e segue. Portal fora do ar é temporário, e insistir no mesmo minuto só piora. */
+async function adiar(monitoramentoId, mensagem) {
+  await pool.query(
+    `UPDATE monitoramentos
+        SET proxima_checagem = DATE_ADD(NOW(), INTERVAL 3 HOUR),
+            checagens = checagens + 1,
+            ultimo_erro = ?
+      WHERE id = ?`,
+    [String(mensagem).slice(0, 255), monitoramentoId]
+  );
+}
+
 /**
  * Liga o monitoramento de tudo o que merece ser vigiado e ainda não é
  * (seção 21.2): o que está em disputa, o favorito, e as encerradas recentes
@@ -200,6 +212,7 @@ module.exports = {
   registrarEvento,
   ligar,
   desligar,
+  adiar,
   ligarOsQueFaltam,
   devidas,
   ativosDasLicitacoes,
