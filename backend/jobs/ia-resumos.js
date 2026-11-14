@@ -25,7 +25,9 @@ async function textoDaLicitacao(licitacaoId) {
       ORDER BY a.sequencial`,
     [licitacaoId, licitacaoId]
   );
-  return linhas.map((l) => l.texto_extraido).join('\n\n');
+  // \f separa páginas (Seção 5); para o resumo vira quebra de linha, como era —
+  // assim o hash do recorte não muda e o cache das leituras antigas continua valendo.
+  return linhas.map((l) => String(l.texto_extraido).replace(/\f/g, '\n')).join('\n\n');
 }
 
 /**

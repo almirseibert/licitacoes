@@ -23,6 +23,10 @@ const LIMITES = {
   porque: 600,
   termo: 80,
   lista: 12,
+  resposta: 1500,
+  citacao: 400,
+  citacoes: 3, // o mesmo número do prompt (servicos/ia.js)
+  citacaoMinima: 20, // abaixo disso, "de" ou "0" passaria por citação literal
 };
 
 function textoLimpo(valor, limite) {
@@ -166,4 +170,76 @@ function validarPalavras(bruto) {
   return { ok: true, motivo: null, descartados, dados: { termos } };
 }
 
-module.exports = { validarLeitura, validarPalavras, LIMITES, GRAVIDADES, RESPOSTAS };
+/**
+ * Valida a resposta do "Pergunte ao Edital" (Seção 5 do plano SaaS).
+ *
+ * A citação é o que dá valor à resposta, e é também onde o modelo mais
+ * inventa. Por isso: o trecho citado tem de ser um dos que mandamos (T1..Tn);
+ * arquivo e página vêm do nosso trecho, nunca do modelo; e a frase citada tem
+ * de estar, letra a letra (sem acento, caixa e espaço), dentro do trecho — a
+ * que não estiver é trocada pelo começo do trecho real e marcada
+ * `literal: false`, para a tela não exibir como citação o que o modelo
+ * parafraseou.
+ *
+ * @param {object} bruto    JSON devolvido pelo modelo
+ * @param {Array<{id,arquivoId,arquivo,pagina,texto}>} trechos  os enviados
+ */
+function validarResposta(bruto, trechos = []) {
+  const { normalizar } = require('./busca-edital');
+  const descartados = [];
+  if (!bruto || typeof bruto !== 'object' || Array.isArray(bruto)) {
+    return { ok: false, dados: null, descartados, motivo: 'a resposta não é um objeto JSON' };
+  }
+
+  const resposta = textoLimpo(bruto.resposta, LIMITES.resposta);
+  if (!resposta) {
+    return { ok: false, dados: null, descartados, motivo: 'a resposta veio vazia' };
+  }
+
+  const porId = new Map(trechos.map((t) => [t.id, t]));
+  const citacoes = [];
+  const usados = new Set();
+  for (const item of Array.isArray(bruto.citacoes) ? bruto.citacoes.slice(0, LIMITES.lista) : []) {
+    const id = item && typeof item.trecho === 'string' ? item.trecho.trim().toUpperCase() : '';
+    const trecho = porId.get(id);
+    if (!trecho) {
+      descartados.push(`citacoes: trecho fora dos enviados (${id || 'vazio'})`);
+      continue;
+    }
+    if (usados.has(id)) continue;
+    usados.add(id);
+    const frase = textoLimpo(item.citacao, LIMITES.citacao);
+    const alvo = normalizar(frase);
+    const literal = alvo.length >= LIMITES.citacaoMinima && normalizar(trecho.texto).includes(alvo);
+    if (frase && !literal) descartados.push(`citacoes: frase de ${id} não está no trecho`);
+    citacoes.push({
+      trecho: id,
+      arquivo_id: trecho.arquivoId || null,
+      arquivo: trecho.arquivo || null,
+      pagina: trecho.pagina || null,
+      citacao: literal ? frase : textoLimpo(trecho.texto, LIMITES.citacao),
+      literal,
+    });
+    if (citacoes.length >= LIMITES.citacoes) break;
+  }
+
+  // "Encontrado" só se sustenta com pelo menos uma frase literal do edital. É
+  // também a defesa contra a injeção que convence o modelo: ele afirma o que
+  // o texto plantado manda, mas não consegue citar o edital dizendo aquilo.
+  const encontrado = bruto.encontrado !== false && citacoes.some((c) => c.literal);
+  if (bruto.encontrado !== false && !encontrado) {
+    descartados.push('encontrado: sem nenhuma citação literal do edital');
+  }
+
+  // Fora de 0..1 é descartado, não arredondado: "confiança 7" vinda de um
+  // modelo manipulado não pode virar "confiança máxima".
+  const n = Number(bruto.confianca);
+  const confianca = bruto.confianca != null && Number.isFinite(n) && n >= 0 && n <= 1 ? n : null;
+  if (bruto.confianca != null && confianca === null) {
+    descartados.push('confianca: não é número entre 0 e 1');
+  }
+
+  return { ok: true, motivo: null, descartados, dados: { resposta, encontrado, citacoes, confianca } };
+}
+
+module.exports = { validarLeitura, validarPalavras, validarResposta, LIMITES, GRAVIDADES, RESPOSTAS };

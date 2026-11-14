@@ -509,6 +509,14 @@ export const api = {
   decidirLeituraIa: (id, situacao) =>
     requisitar(`/licitacoes/${id}/ia`, { method: 'PATCH', body: JSON.stringify({ situacao }) }),
 
+  // Pergunte ao Edital (Seção 5 do plano SaaS)
+  perguntasEdital: (id) => requisitar(`/licitacoes/${id}/perguntas`),
+  perguntarEdital: (id, corpo) =>
+    requisitar(`/licitacoes/${id}/perguntas`, { method: 'POST', body: JSON.stringify(corpo) }),
+  perguntaEdital: (id, pid) => requisitar(`/licitacoes/${id}/perguntas/${pid}`),
+  salvarPerguntaEdital: (id, pid, salva) =>
+    requisitar(`/licitacoes/${id}/perguntas/${pid}`, { method: 'PATCH', body: JSON.stringify({ salva }) }),
+
   gastoIa: (dias = 30) => requisitar(`/ia?dias=${dias}`),
 
   palavrasSugeridas: () => requisitar('/ia/palavras-sugeridas'),

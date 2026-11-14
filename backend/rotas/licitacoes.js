@@ -790,6 +790,9 @@ rotas.post('/:id/monitorar', async (req, res) => {
   }
 });
 
+// Pergunte ao Edital (Seção 5 do plano SaaS).
+rotas.use('/:id/perguntas', limites.exigirRecurso('ia'), require('./perguntas'));
+
 // GET /api/licitacoes/:id/ia — a sugestão da leitura assistida (seção 23).
 rotas.get('/:id/ia', limites.exigirRecurso('ia'), async (req, res) => {
   try {

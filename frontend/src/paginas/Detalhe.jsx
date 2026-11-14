@@ -9,6 +9,7 @@ import Envio from './Envio';
 import Historico from './Historico';
 import LinhaDoTempo from './LinhaDoTempo';
 import LeituraIA from './LeituraIA';
+import PerguntarEdital from './PerguntarEdital';
 import Questionamentos from './Questionamentos';
 import Preco from './Preco';
 import Proposta from './Proposta';
@@ -180,6 +181,7 @@ export default function Detalhe({ id, onFechar }) {
                 {[
                   // Gestão primeiro (Seção 8): o trabalho da equipe na licitação.
                   ['resumo', 'Resumo'],
+                  ['perguntar', 'Pergunte ao edital'],
                   ['tarefas', 'Tarefas'],
                   ['historico', 'Anotações'],
                   ['anexos', 'Anexos'],
@@ -218,6 +220,7 @@ export default function Detalhe({ id, onFechar }) {
 
             <div className="flex-1 overflow-auto p-4 text-sm">
               {aba === 'resumo' && <Resumo licitacao={licitacao} id={id} />}
+              {aba === 'perguntar' && <PerguntarEdital id={id} />}
               {aba === 'itens' && <Itens itens={licitacao.itens || []} />}
               {aba === 'pontuacao' && <Pontuacao detalhe={licitacao.pontuacao_detalhe} />}
               {aba === 'arquivos' && <Arquivos id={id} />}

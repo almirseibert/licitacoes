@@ -63,6 +63,8 @@ module.exports = {
     // Desliga a IA sem apagar a chave (seção 29).
     ativa: (process.env.IA_ATIVA || 'true').toLowerCase() !== 'false',
     modelo: process.env.IA_MODELO || 'gemini-2.5-flash',
+    // Só para teste local com um servidor que imita a API; em produção, vazio.
+    urlBase: (process.env.IA_URL_BASE || 'https://generativelanguage.googleapis.com').replace(/\/+$/, ''),
     // Teto de texto do edital enviado ao modelo (seção 23.3).
     maxCaracteres: Number(process.env.IA_MAX_CARACTERES || 60000),
     timeoutMs: Number(process.env.IA_TIMEOUT_MS || 90000),
