@@ -142,6 +142,16 @@ test('questionamento (11b): na impugnação, que não tem a frase da dúvida, o 
   assert.doesNotMatch(r.preencherQuestionamento(modelo, { citacao: { texto: 'x'.repeat(30), arquivo: 'E', pagina: 1 } }), /Ponto a ser examinado/);
 });
 
+test('questionamento (11b): "$&", "$1" e aspas no trecho ou no ponto entram como texto, não como padrão', () => {
+  const modelo = 'O item ____________ do edital exige ____________.\n\nResta ____________.';
+  const saida = r.preencherQuestionamento(modelo, {
+    ponto: 'multa de R$1.000 e "$&" acima do estimado.',
+    citacao: { texto: 'caução de R$ 500 e "garantia $1" mínima', arquivo: 'Edital', pagina: 2 },
+  });
+  assert.ok(saida.includes('"caução de R$ 500 e "garantia $1" mínima"'), saida);
+  assert.ok(saida.includes('Ponto a ser examinado (apontado pelo resumo do edital; confirme antes de enviar): multa de R$1.000 e "$&" acima do estimado.'), saida);
+});
+
 test('o prompt lista exatamente as chaves do catálogo', () => {
   process.env.GEMINI_API_KEY = '';
   const { INSTRUCAO_RESUMO } = require('../backend/servicos/ia');

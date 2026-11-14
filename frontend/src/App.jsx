@@ -134,6 +134,7 @@ export default function App() {
   const [plano, setPlano] = useState(null);
   // Seção 17: estado do assistente, dos termos e do NPS (tudo vem do backend).
   const [onb, setOnb] = useState(null);
+  const [onbPronto, setOnbPronto] = useState(false); // a chamada do assistente terminou (com ou sem sucesso)
   const [npsFechado, setNpsFechado] = useState(false);
   const recarregarOnb = () => api.onboarding().then(setOnb).catch(() => {});
 
@@ -159,7 +160,8 @@ export default function App() {
     api
       .onboarding()
       .then(setOnb)
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setOnbPronto(true));
   }, [usuario]);
 
   // Tela inicial: UMA decisão, tomada quando o plano e o assistente já chegaram (antes eram dois
@@ -168,11 +170,13 @@ export default function App() {
   // que daria erro. Depois de decidida, não mexe mais: quem navegou fica onde está.
   const inicialDecidida = useRef(false);
   useEffect(() => {
-    if (inicialDecidida.current || !plano || !onb) return;
+    // Espera as duas respostas, mas não depende de o assistente ter dado certo: se a chamada dele falhar,
+    // a regra de plano sem gestão ainda vale.
+    if (inicialDecidida.current || !plano || !onbPronto) return;
     inicialDecidida.current = true;
-    if (!onb.concluido && onb.pode_administrar) setTela((t) => (['dashboard', 'radar'].includes(t) ? 'primeiros_passos' : t));
+    if (onb && !onb.concluido && onb.pode_administrar) setTela((t) => (['dashboard', 'radar'].includes(t) ? 'primeiros_passos' : t));
     else if (!plano.isenta && plano.plano && !plano.plano.recursos.includes('gestao')) setTela((t) => (t === 'dashboard' ? 'radar' : t));
-  }, [plano, onb]);
+  }, [plano, onb, onbPronto]);
 
   const temRecurso = (recurso) =>
     !recurso || !plano || plano.isenta || (plano.plano && plano.plano.recursos.includes(recurso));

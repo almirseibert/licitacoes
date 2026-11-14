@@ -50,19 +50,25 @@ rotas.get('/', carregarFicha, (req, res) => {
 
 // Gera a ficha fora da requisição (um proxy reverso corta em 60 s e o modelo leva até 240 s): o POST
 // devolve 202 e a tela consulta o GET até a geração sair de 'pendente'. Nunca lança — todo desfecho
-// vira ficha guardada ou erro gravado na licitação.
-async function gerarEmSegundoPlano({ organizacaoId, licitacaoId, forcar }) {
+// vira ficha guardada ou erro gravado na licitação. A unidade do limite do mês foi reservada pela rota
+// (atômica) e só fica se o modelo cobrou.
+async function gerarEmSegundoPlano({ organizacaoId, licitacaoId, forcar, reserva, reservado }) {
+  let cobrou = false;
   try {
     const r = await resumo.gerar({ licitacaoId, forcar });
-    if (r.chamouModelo) await limites.registrarUso(organizacaoId, 'ia_resumos_mes');
-    if (r.ok) return await resumo.concluirGeracao(licitacaoId);
+    cobrou = r.chamouModelo;
+    if (r.ok) return await resumo.concluirGeracao(licitacaoId, reserva);
     if (r.codigo !== 'sem_texto') console.error('Resumo do edital:', r.motivo);
-    return await resumo.concluirGeracao(licitacaoId, r.codigo === 'sem_texto' ? r.motivo : FALHAS[r.codigo] || FALHAS.http);
+    return await resumo.concluirGeracao(licitacaoId, reserva, r.codigo === 'sem_texto' ? r.motivo : FALHAS[r.codigo] || FALHAS.http);
   } catch (erro) {
     console.error('Resumo do edital — falha ao gerar', licitacaoId, erro.message);
-    return resumo.concluirGeracao(licitacaoId, FALHAS.http).catch(() => {});
+    return resumo.concluirGeracao(licitacaoId, reserva, FALHAS.http).catch(() => {});
+  } finally {
+    if (reservado && !cobrou) await limites.devolverUso(organizacaoId, 'ia_resumos_mes').catch((erro) => console.error('Resumo do edital — não devolveu a cota:', erro.message));
   }
 }
+
+const JA_GERANDO = 'O resumo deste edital já está sendo gerado. Ele aparece aqui quando terminar.';
 
 // POST — gera a ficha. Só refaz a pedido (`forcar`); a guardada não custa nada e sai na hora (200).
 // Gerar de verdade responde 202: a ficha aparece no GET quando o modelo terminar.
@@ -74,16 +80,20 @@ rotas.post('/', carregarFicha, async (req, res) => {
       return res.json({ ...ficha, cache: true, mensagem: 'Este edital já foi resumido. Use "gerar de novo" para refazer.' });
     }
     if (!ia.disponivel()) return res.status(409).json({ erro: DESLIGADA });
-    if (ficha.geracao.situacao === 'pendente') {
-      return res.status(202).json({ ...ficha, mensagem: 'O resumo deste edital já está sendo gerado. Ele aparece aqui quando terminar.' });
-    }
-    const estouro = await limites.conferir(req.organizacaoId, 'ia_resumos_mes');
-    if (estouro) return res.status(402).json(estouro);
-    if (!(await resumo.reservarGeracao(idLicitacao(req)))) {
-      return res.status(202).json({ ...ficha, geracao: { situacao: 'pendente', erro: null }, mensagem: 'O resumo deste edital já está sendo gerado. Ele aparece aqui quando terminar.' });
+    if (ficha.geracao.situacao === 'pendente') return res.status(202).json({ ...ficha, mensagem: JA_GERANDO });
+
+    const cota = await limites.reservarUso(req.organizacaoId, 'ia_resumos_mes');
+    if (!cota.ok) return res.status(402).json(cota.corpo);
+    const reserva = await resumo.reservarGeracao(idLicitacao(req));
+    if (!reserva) {
+      // Outro pedido reservou a geração entre a leitura da ficha e agora: devolve a unidade da cota.
+      if (cota.reservado) await limites.devolverUso(req.organizacaoId, 'ia_resumos_mes');
+      return res.status(202).json({ ...ficha, geracao: { situacao: 'pendente', erro: null }, mensagem: JA_GERANDO });
     }
     // `gerarEmSegundoPlano` não lança; o catch é só para nada escapar como unhandledRejection.
-    setImmediate(() => gerarEmSegundoPlano({ organizacaoId: req.organizacaoId, licitacaoId: idLicitacao(req), forcar }).catch(() => {}));
+    setImmediate(() =>
+      gerarEmSegundoPlano({ organizacaoId: req.organizacaoId, licitacaoId: idLicitacao(req), forcar, reserva, reservado: cota.reservado }).catch(() => {})
+    );
     res.status(202).json({
       ...ficha,
       geracao: { situacao: 'pendente', erro: null },

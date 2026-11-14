@@ -90,22 +90,24 @@ async function autenticarToken(req, res, next) {
 }
 
 /**
- * Reserva UMA chamada da cota do mês, de forma atômica: o UPDATE só conta se ainda cabe, então
- * duas chamadas ao mesmo tempo não passam juntas do teto (antes: ler e depois somar).
- * @returns {Promise<boolean>} se coube
+ * Reserva UMA chamada da cota do mês, de forma atômica e numa ida só ao banco: o upsert só soma se ainda
+ * cabe (duas chamadas ao mesmo tempo não passam juntas do teto) e `LAST_INSERT_ID(expr)` devolve o
+ * valor depois da conta, sem um SELECT à parte.
+ * @returns {Promise<{reservou:boolean, usado:number}>}
  */
 async function reservarChamada(organizacaoId, limite) {
-  const mes = limites.mesDe();
-  await pool.query(
-    "INSERT IGNORE INTO uso_mensal (organizacao_id, mes, recurso, quantidade) VALUES (?, ?, 'api_chamadas_mes', 0)",
-    [organizacaoId, mes]
-  );
+  // Teto zero: nada cabe (e o `insertId` 0 do upsert se confundiria com "linha nova").
+  if (limite === 0) return { reservou: false, usado: 0 };
+  const soma = limite === null ? 'quantidade + 1' : 'IF(quantidade < ?, quantidade + 1, quantidade)';
   const [r] = await pool.query(
-    `UPDATE uso_mensal SET quantidade = quantidade + 1
-      WHERE organizacao_id = ? AND mes = ? AND recurso = 'api_chamadas_mes' ${limite === null ? '' : 'AND quantidade < ?'}`,
-    limite === null ? [organizacaoId, mes] : [organizacaoId, mes, limite]
+    `INSERT INTO uso_mensal (organizacao_id, mes, recurso, quantidade) VALUES (?, ?, 'api_chamadas_mes', 1)
+     ON DUPLICATE KEY UPDATE quantidade = LAST_INSERT_ID(${soma})`,
+    limite === null ? [organizacaoId, limites.mesDe()] : [organizacaoId, limites.mesDe(), limite]
   );
-  return r.affectedRows > 0;
+  // Linha nova (sem AUTO_INCREMENT o insertId é 0) = 1ª chamada do mês; linha existente que mudou
+  // conta 2 afetadas. Existente que já estava no teto não muda: `insertId` traz o valor, `reservou` é false.
+  const nova = r.insertId === 0 && r.affectedRows === 1;
+  return { reservou: nova || r.affectedRows === 2, usado: nova ? 1 : r.insertId };
 }
 
 /** Devolve a chamada reservada (resposta 5xx: erro nosso não gasta a cota do cliente). */
@@ -126,26 +128,16 @@ async function cotaMensal(req, res, next) {
     if (dados.isenta) return next();
     const teto = dados.plano && dados.plano.limites && 'api_chamadas_mes' in dados.plano.limites ? dados.plano.limites.api_chamadas_mes : 0;
     const limite = teto === null ? null : Number(teto);
-    if (!(await reservarChamada(req.organizacaoId, limite))) {
-      const [[linha]] = await pool.query(
-        "SELECT quantidade FROM uso_mensal WHERE organizacao_id = ? AND mes = ? AND recurso = 'api_chamadas_mes'",
-        [req.organizacaoId, limites.mesDe()]
-      );
-      const corpo = limites.erroLimite(dados.plano, dados.planos, 'api_chamadas_mes', { usado: linha ? Number(linha.quantidade) : 0, limite });
+    const { reservou, usado } = await reservarChamada(req.organizacaoId, limite);
+    if (!reservou) {
+      const corpo = limites.erroLimite(dados.plano, dados.planos, 'api_chamadas_mes', { usado, limite });
       res.set('Retry-After', '3600');
       return res.status(429).json(corpo);
     }
     res.on('finish', () => {
       if (res.statusCode >= 500) estornarChamada(req.organizacaoId);
     });
-    if (limite === null) res.set('X-Cota-Mensal-Restante', 'ilimitada');
-    else {
-      const [[linha]] = await pool.query(
-        "SELECT quantidade FROM uso_mensal WHERE organizacao_id = ? AND mes = ? AND recurso = 'api_chamadas_mes'",
-        [req.organizacaoId, limites.mesDe()]
-      );
-      res.set('X-Cota-Mensal-Restante', String(Math.max(0, limite - (linha ? Number(linha.quantidade) : 0))));
-    }
+    res.set('X-Cota-Mensal-Restante', limite === null ? 'ilimitada' : String(Math.max(0, limite - usado)));
     return next();
   } catch (erro) {
     return responderErro(res, 500, 'Não foi possível conferir a cota da API.', erro);

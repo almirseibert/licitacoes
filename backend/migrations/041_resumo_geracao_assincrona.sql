@@ -8,4 +8,7 @@
 ALTER TABLE licitacoes
   ADD COLUMN ia_ficha_situacao ENUM('pendente','erro') NULL,
   ADD COLUMN ia_ficha_erro VARCHAR(500) NULL,
-  ADD COLUMN ia_ficha_pedida_em DATETIME NULL;
+  ADD COLUMN ia_ficha_pedida_em DATETIME NULL,
+  -- Quem reservou: só a execução dona da reserva fecha a geração (uma execução velha, que acorda depois de
+  -- a reserva ter sido retomada por outra, não apaga o estado da nova).
+  ADD COLUMN ia_ficha_reserva CHAR(32) NULL;

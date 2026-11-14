@@ -39,22 +39,33 @@ rotas.get('/', async (req, res) => {
 });
 
 // GET /api/lgpd/exportar — baixa um JSON com tudo que a organização cadastrou, escrito aos poucos
-// (a memória não cresce com o tamanho da organização).
+// (a memória não cresce com o tamanho da organização). A trilha registra o pedido ANTES de sair o
+// primeiro byte: cópia parcial de dado pessoal, mesmo interrompida, não pode ficar sem rastro.
 rotas.get('/exportar', exigirPapel('admin'), async (req, res) => {
   try {
+    await auditoria.registrarDaRequisicao(req, 'exportou_dados', 'lgpd', null, null);
     res.setHeader('Content-Disposition', `attachment; filename="meus-dados-${diaNoFuso()}.json"`);
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    // `write` devolve false com a fila cheia: espera o `drain` para não acumular no processo.
-    const escrever = (texto) => (res.write(texto) ? undefined : new Promise((ok) => res.once('drain', ok)));
+    // `write` devolve false com a fila cheia: espera o `drain` — ou o fim da conexão, senão o cliente
+    // que fecha a aba deixaria a promessa pendente para sempre (e a conexão do banco presa).
+    const escrever = (texto) => {
+      if (res.destroyed || res.writableEnded) throw new Error('o cliente encerrou o download');
+      if (res.write(texto)) return undefined;
+      return new Promise((ok, falha) => {
+        const livre = () => { res.off('close', encerrou); ok(); };
+        const encerrou = () => { res.off('drain', livre); falha(new Error('o cliente encerrou o download')); };
+        res.once('drain', livre);
+        res.once('close', encerrou);
+      });
+    };
     await servico.exportarEmFluxo(req.organizacaoId, escrever);
     res.end();
-    await auditoria.registrarDaRequisicao(req, 'exportou_dados', 'lgpd', null, null);
   } catch (erro) {
     // Já começou a escrever: o cabeçalho de status foi, e o JSON fica incompleto de propósito
     // (inválido), em vez de parecer uma cópia completa.
     if (res.headersSent) {
       console.error('Exportação LGPD interrompida:', erro.message);
-      return res.destroy(erro);
+      return res.destroy();
     }
     responderErro(res, 500, 'Não foi possível montar a cópia dos dados.', erro);
   }

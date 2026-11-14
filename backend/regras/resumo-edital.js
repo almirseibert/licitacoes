@@ -344,16 +344,23 @@ function preencherQuestionamento(texto, { ponto, citacao }) {
     [/O item ____________ do termo de referência especifica ____________\./, `O edital especifica (${local}): "${citacao.texto}".`],
   ];
   const pontoLimpo = ponto ? ponto.replace(/\.$/, '') : '';
+  const dentroDaDuvida = /Resta dúvida quanto a ____________/;
+  // O ponto entra no TEXTO do pedido: no esclarecimento, na dúvida do item 2; na impugnação, que não
+  // tem essa frase, logo depois do primeiro trecho citado — antes só o trecho entrava e o ponto ficava
+  // numa nota da tela, que não vai ao órgão. É sugestão da IA: o texto diz isso, para quem assina conferir.
+  let sufixo = pontoLimpo && !dentroDaDuvida.test(texto)
+    ? ` Ponto a ser examinado (apontado pelo resumo do edital; confirme antes de enviar): ${pontoLimpo}.`
+    : '';
   let saida = texto;
-  for (const [padrao, troca] of trocas) saida = saida.replace(padrao, troca);
-  if (pontoLimpo) {
-    // O ponto entra no TEXTO do pedido: no esclarecimento, na dúvida do item 2; na impugnação, que
-    // não tem essa frase, logo depois do trecho citado — antes só o trecho entrava e o ponto ficava
-    // numa nota da tela, que não vai ao órgão. É sugestão da IA: o texto diz isso, para quem assina conferir.
-    const dentroDaDuvida = /Resta dúvida quanto a ____________/;
-    if (dentroDaDuvida.test(saida)) saida = saida.replace(dentroDaDuvida, `Resta dúvida quanto ao seguinte ponto: ${pontoLimpo}`);
-    else saida = saida.replace(/(O edital (?:estabelece|exige|especifica) \([^)]*\): "[^"]*"\.)/, `$1 Ponto a ser examinado (apontado pelo resumo do edital; confirme antes de enviar): ${pontoLimpo}.`);
+  // Funções como substituição: `$&`, `$1` e `$'` no trecho ou no ponto (valores em "R$") não valem como padrão.
+  for (const [padrao, troca] of trocas) {
+    saida = saida.replace(padrao, () => {
+      const linha = troca + sufixo;
+      sufixo = '';
+      return linha;
+    });
   }
+  if (pontoLimpo && dentroDaDuvida.test(saida)) saida = saida.replace(dentroDaDuvida, () => `Resta dúvida quanto ao seguinte ponto: ${pontoLimpo}`);
   return saida;
 }
 

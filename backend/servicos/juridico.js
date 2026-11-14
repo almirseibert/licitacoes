@@ -82,12 +82,19 @@ async function pendentes(organizacaoId) {
   return Number(r.n);
 }
 
+/**
+ * Grava a pergunta como pendente SE a organização ainda tem vaga (no máximo MAX_PENDENTES em andamento):
+ * um INSERT condicional, atômico — pedidos simultâneos não passam juntos do teto. `null` = sem vaga.
+ */
 async function criarMensagem(organizacaoId, conversaId, pergunta) {
-  const [r] = await pool.query('INSERT INTO juridico_mensagens (organizacao_id, conversa_id, pergunta) VALUES (?, ?, ?)', [
-    organizacaoId,
-    conversaId,
-    pergunta,
-  ]);
+  const [r] = await pool.query(
+    `INSERT INTO juridico_mensagens (organizacao_id, conversa_id, pergunta)
+     SELECT ?, ?, ? FROM DUAL
+      WHERE (SELECT COUNT(*) FROM juridico_mensagens
+              WHERE organizacao_id = ? AND situacao = 'pendente' AND criado_em >= NOW() - INTERVAL ? SECOND) < ?`,
+    [organizacaoId, conversaId, pergunta, organizacaoId, ESPERA_MAXIMA_S, MAX_PENDENTES]
+  );
+  if (!r.affectedRows) return null;
   // O título da conversa é o começo da primeira pergunta; mexer nela também sobe a conversa na lista.
   await pool.query(
     'UPDATE juridico_conversas SET titulo = COALESCE(titulo, ?), atualizado_em = NOW() WHERE id = ? AND organizacao_id = ?',
@@ -133,7 +140,9 @@ const artigosDe = (trechos) => trechos.map((t) => regras.resumoDoArtigo(t.artigo
 /**
  * Responde uma pergunta gravada. Nunca lança: todo desfecho vira linha 'respondida' ou 'erro'.
  */
-async function processar({ organizacaoId, id }) {
+async function processar({ organizacaoId, id, reservado = false }) {
+  // `reservado`: a rota já reservou uma unidade do limite do mês. Ela fica só se o modelo cobrou; senão volta.
+  let cobrou = false;
   try {
     const [[linha]] = await pool.query('SELECT * FROM juridico_mensagens WHERE id = ? AND organizacao_id = ?', [id, organizacaoId]);
     if (!linha || linha.situacao !== 'pendente') return;
@@ -165,7 +174,7 @@ async function processar({ organizacaoId, id }) {
       trechos,
       versaoBase: base.VERSAO_BASE,
     });
-    if (r.chamouModelo) await limites.registrarUso(organizacaoId, 'ia_juridico_mes');
+    cobrou = r.chamouModelo;
     if (!r.ok) {
       console.error('Consultor jurídico — o modelo falhou na pergunta', id, '—', r.motivo);
       return await concluir(organizacaoId, id, { erro: FALHAS[r.codigo] || FALHA_PADRAO });
@@ -177,6 +186,8 @@ async function processar({ organizacaoId, id }) {
   } catch (erro) {
     console.error('Consultor jurídico — falha ao processar', id, erro.message);
     await concluir(organizacaoId, id, { erro: FALHA_PADRAO }).catch(() => {});
+  } finally {
+    if (reservado && !cobrou) await limites.devolverUso(organizacaoId, 'ia_juridico_mes').catch((erro) => console.error('Consultor jurídico — não devolveu a cota:', erro.message));
   }
 }
 

@@ -101,20 +101,24 @@ rotas.post('/conversas/:id/mensagens', async (req, res) => {
   if (pedido.erro) return res.status(400).json({ erro: pedido.erro });
   try {
     const conversaId = numero(req.params.id);
-    const [conversa, estouro, emAndamento] = await Promise.all([
-      servico.obterConversa(req.organizacaoId, usuarioId(req), conversaId),
-      // Sem IA a pergunta não custa nada: o limite só vale com o modelo ligado.
-      ia.disponivel() ? limites.conferir(req.organizacaoId, 'ia_juridico_mes') : null,
-      servico.pendentes(req.organizacaoId),
-    ]);
+    const conversa = await servico.obterConversa(req.organizacaoId, usuarioId(req), conversaId);
     if (!conversa) return res.status(404).json({ erro: 'Conversa não encontrada.' });
-    if (estouro) return res.status(402).json(estouro);
-    if (emAndamento >= servico.MAX_PENDENTES) {
-      return res.status(429).json({ erro: `Já há ${servico.MAX_PENDENTES} perguntas sendo respondidas. Espere uma terminar.` });
+
+    // Reserva atômica de uma unidade do limite do mês (sem IA a pergunta não custa nada, não reserva).
+    // Devolvida no fim se o modelo não cobrou (sem artigo na base, cache, falha sem custo).
+    let reservado = false;
+    if (ia.disponivel()) {
+      const r = await limites.reservarUso(req.organizacaoId, 'ia_juridico_mes');
+      if (!r.ok) return res.status(402).json(r.corpo);
+      reservado = r.reservado;
     }
     const id = await servico.criarMensagem(req.organizacaoId, conversaId, pedido.pergunta);
+    if (id === null) {
+      if (reservado) await limites.devolverUso(req.organizacaoId, 'ia_juridico_mes');
+      return res.status(429).json({ erro: `Já há ${servico.MAX_PENDENTES} perguntas sendo respondidas. Espere uma terminar.` });
+    }
     // Fora da requisição: a tela não fica presa esperando o modelo. `processar` não lança.
-    setImmediate(() => servico.processar({ organizacaoId: req.organizacaoId, id }).catch((erro) => console.error('Consultor jurídico —', id, erro.message)));
+    setImmediate(() => servico.processar({ organizacaoId: req.organizacaoId, id, reservado }).catch((erro) => console.error('Consultor jurídico —', id, erro.message)));
     res.status(202).json({ id, situacao: 'pendente', mensagem: 'Pergunta recebida. A resposta aparece aqui em instantes.' });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível registrar a pergunta.', erro);

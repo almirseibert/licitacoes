@@ -142,7 +142,9 @@ async function relatorioMensal({ organizacaoId, meses = 12 } = {}) {
       'O desconto é o da sua proposta contra o valor estimado do órgão, e a média só inclui as ' +
       'licitações que têm os dois números. Meses em que você não registrou valor proposto contam ' +
       'a disputa, mas não entram na média. Proposta acima do estimado entra como desconto ' +
-      'negativo, e o mês diz quantas foram: uma só derruba a média de um mês com poucas disputas.',
+      'negativo, e o mês diz quantas foram: uma só derruba a média de um mês com poucas disputas. ' +
+      'O valor proposto é o da sua proposta (na ganha sem proposta registrada, o do resultado); na perdida, o ' +
+      'valor do resultado é o do vencedor e não entra.',
   };
 }
 

@@ -23,15 +23,13 @@ const MAX_NOVOS = 200;
 // Webhooks entregues ao mesmo tempo (cada um é um destino de cliente; 10 s de limite por lote).
 const ENTREGAS_EM_PARALELO = 4;
 
-const lerJson = (valor, padrao) => limites.lerJson(valor, padrao) || padrao;
-
 /** O mesmo segredo que a tela mostrou na criação: sal do banco + segredo da aplicação. */
 function segredoDe(linha) {
   return regras.segredoDoWebhook(jwt.segredo, linha.segredo_sal);
 }
 
 async function selecionarDoRadar(linha, perfil) {
-  const { onde, valores } = await filtrosDe(lerJson(perfil.filtros, {}), linha.organizacao_id, null);
+  const { onde, valores } = await filtrosDe(limites.lerJson(perfil.filtros, {}) || {}, linha.organizacao_id, null);
   const extras = [
     'l.criado_em >= NOW() - INTERVAL ? DAY',
     'l.criado_em >= ?',
@@ -163,4 +161,4 @@ async function rodar({ org = null, webhookId = null, simular = false } = {}) {
   return resultado;
 }
 
-module.exports = { rodar, emParalelo, entregarUm, selecionarNovos, segredoDe, MAX_FALHAS };
+module.exports = { rodar, entregarUm, selecionarNovos, segredoDe, MAX_FALHAS };

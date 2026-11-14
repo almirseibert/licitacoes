@@ -310,6 +310,38 @@ async function conferir(organizacaoId, chave, { acrescimo = 1, usadoAtual } = {}
   return erroLimite(dados.plano, dados.planos, chave, { usado, limite: r.limite, acrescimo });
 }
 
+/**
+ * Reserva UMA unidade de um limite mensal, de forma atômica: o UPDATE só conta se ainda cabe, então
+ * pedidos simultâneos não passam juntos do teto (`conferir` + `registrarUso` separados deixam passar).
+ * Quem reserva e depois não gasta (o modelo não foi chamado) devolve com `devolverUso`.
+ * @returns {Promise<{ok:true, reservado:boolean} | {ok:false, corpo:object}>} `reservado:false` = sem
+ *   contagem (organização isenta), e nada a devolver; `corpo` é o do 402.
+ */
+async function reservarUso(organizacaoId, chave) {
+  const dados = await daOrganizacao(organizacaoId);
+  if (!dados) return { ok: false, corpo: { erro: 'Organização não encontrada.' } };
+  if (dados.isenta) return { ok: true, reservado: false };
+  const mes = mesDe();
+  const limite = cabe(dados.plano && dados.plano.limites, chave, 0, 0).limite;
+  await db().query('INSERT IGNORE INTO uso_mensal (organizacao_id, mes, recurso, quantidade) VALUES (?, ?, ?, 0)', [Number(organizacaoId), mes, chave]);
+  const [r] = await db().query(
+    `UPDATE uso_mensal SET quantidade = quantidade + 1
+      WHERE organizacao_id = ? AND mes = ? AND recurso = ? ${limite === null ? '' : 'AND quantidade < ?'}`,
+    limite === null ? [Number(organizacaoId), mes, chave] : [Number(organizacaoId), mes, chave, limite]
+  );
+  if (r.affectedRows > 0) return { ok: true, reservado: true };
+  const usado = (await uso(organizacaoId))[chave];
+  return { ok: false, corpo: erroLimite(dados.plano, dados.planos, chave, { usado, limite }) };
+}
+
+/** Devolve a unidade reservada por `reservarUso` (o modelo não foi chamado, ou a chamada não foi cobrada). */
+async function devolverUso(organizacaoId, chave) {
+  await db().query(
+    'UPDATE uso_mensal SET quantidade = GREATEST(quantidade - 1, 0) WHERE organizacao_id = ? AND mes = ? AND recurso = ?',
+    [Number(organizacaoId), mesDe(), chave]
+  );
+}
+
 // -------------------------------------------------------------- middlewares
 
 function logPlano(req, corpo) {
@@ -386,6 +418,8 @@ module.exports = {
   uso,
   registrarUso,
   conferir,
+  reservarUso,
+  devolverUso,
   esquecer,
   assinaturaValida,
   exigirRecurso,

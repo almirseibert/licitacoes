@@ -3,6 +3,7 @@
 // A ficha é do edital (como `ia_resumo` da seção 23): uma por licitação, para
 // todas as organizações, porque o edital é o mesmo. Gera uma vez e só refaz a
 // pedido. As "considerações do licitante" são de cada organização.
+const crypto = require('crypto');
 const pool = require('../config/db');
 const ia = require('./ia');
 const docx = require('./docx');
@@ -52,24 +53,26 @@ function estadoDaGeracao(l) {
 }
 
 /**
- * Reserva a geração desta licitação (UPDATE condicional, atômico): `false` se já há uma em andamento
- * dentro do prazo. Pendente velha demais (processo caiu) pode ser retomada.
+ * Reserva a geração desta licitação (UPDATE condicional, atômico). Devolve o código da reserva, ou
+ * `null` se já há uma em andamento dentro do prazo. Pendente velha demais (processo caiu) pode ser
+ * retomada — e então só quem tem o código novo fecha a geração.
  */
 async function reservarGeracao(licitacaoId) {
+  const reserva = crypto.randomBytes(16).toString('hex');
   const [r] = await pool.query(
-    `UPDATE licitacoes SET ia_ficha_situacao = 'pendente', ia_ficha_erro = NULL, ia_ficha_pedida_em = NOW()
+    `UPDATE licitacoes SET ia_ficha_situacao = 'pendente', ia_ficha_erro = NULL, ia_ficha_pedida_em = NOW(), ia_ficha_reserva = ?
       WHERE id = ? AND (ia_ficha_situacao IS NULL OR ia_ficha_situacao = 'erro'
                         OR ia_ficha_pedida_em < NOW() - INTERVAL ? SECOND)`,
-    [licitacaoId, ESPERA_MAXIMA_S]
+    [reserva, licitacaoId, ESPERA_MAXIMA_S]
   );
-  return r.affectedRows > 0;
+  return r.affectedRows > 0 ? reserva : null;
 }
 
-/** Fecha a geração: sucesso limpa o estado; falha guarda a mensagem (a ficha anterior, se havia, fica). */
-async function concluirGeracao(licitacaoId, erro = null) {
+/** Fecha a geração da reserva: sucesso limpa o estado; falha guarda a mensagem (a ficha anterior, se havia, fica). */
+async function concluirGeracao(licitacaoId, reserva, erro = null) {
   await pool.query(
-    'UPDATE licitacoes SET ia_ficha_situacao = ?, ia_ficha_erro = ? WHERE id = ?',
-    [erro ? 'erro' : null, erro ? String(erro).slice(0, 500) : null, licitacaoId]
+    'UPDATE licitacoes SET ia_ficha_situacao = ?, ia_ficha_erro = ?, ia_ficha_reserva = NULL WHERE id = ? AND ia_ficha_reserva = ?',
+    [erro ? 'erro' : null, erro ? String(erro).slice(0, 500) : null, licitacaoId, reserva]
   );
 }
 

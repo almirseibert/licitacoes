@@ -44,8 +44,9 @@ const COLUNAS_BASE = `l.id, l.objeto, l.orgao_cnpj, l.orgao_nome, l.uf, l.modali
 async function participacoes(organizacaoId, periodo, { completo = false } = {}) {
   const filtro = filtroDoPeriodo(periodo);
   if (!completo) {
+    // Só o que as contas usam: o relatório mensal agrupa em memória e não precisa de objeto, órgão etc.
     const [linhas] = await pool.query(
-      `SELECT ${COLUNAS_BASE} FROM ${daOrganizacao(organizacaoId)} l WHERE ${filtro.sql} ORDER BY data DESC`,
+      `SELECT l.id, l.etapa, l.valor_estimado, l.valor_proposto, l.valor_final, ${DATA_DA_PARTICIPACAO} AS data FROM ${daOrganizacao(organizacaoId)} l WHERE ${filtro.sql} ORDER BY data DESC`,
       filtro.parametros
     );
     return { linhas, filtro };

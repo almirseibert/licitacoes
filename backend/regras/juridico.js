@@ -19,9 +19,9 @@ const MAX_ARTIGOS = 6;
 const textoDe = (a) => `${a.titulo}. ${a.texto} ${(a.termos || []).join(' ')}`;
 
 // A base é fixa: as palavras normalizadas de cada artigo saem uma vez, no carregamento.
-const PALAVRAS = base.ARTIGOS.map((a) => new Set(normalizarPalavras(textoDe(a)).split(' ')));
+const PALAVRAS = base.ARTIGOS.map((a) => [...new Set(normalizarPalavras(textoDe(a)).split(' '))]);
 // Título e termos do cliente valem mais que o corpo: dizem do que o artigo trata.
-const PALAVRAS_CHAVE = base.ARTIGOS.map((a) => new Set(normalizarPalavras(`${a.titulo} ${(a.termos || []).join(' ')}`).split(' ')));
+const PALAVRAS_CHAVE = base.ARTIGOS.map((a) => [...new Set(normalizarPalavras(`${a.titulo} ${(a.termos || []).join(' ')}`).split(' '))]);
 
 /**
  * O termo (raiz de até 5 letras, ver `termosDe`) casa com a palavra? Termo curto casa a
@@ -43,12 +43,12 @@ function casa(termo, palavra) {
 function pontuar(pergunta) {
   const termos = busca.termosDe(pergunta);
   if (!termos.length) return [];
-  const casados = PALAVRAS.map((palavras) => termos.filter((t) => [...palavras].some((p) => casa(t, p))));
+  const casados = PALAVRAS.map((palavras) => termos.filter((t) => palavras.some((p) => casa(t, p))));
   const df = new Map(termos.map((t) => [t, casados.filter((c) => c.includes(t)).length]));
   const minimo = termos.length >= 3 ? 2 : 1;
   return casados
     .map((c, ordem) => {
-      const peso = (t) => Math.log(1 + PALAVRAS.length / df.get(t)) * ([...PALAVRAS_CHAVE[ordem]].some((p) => casa(t, p)) ? 2 : 1);
+      const peso = (t) => Math.log(1 + PALAVRAS.length / df.get(t)) * (PALAVRAS_CHAVE[ordem].some((p) => casa(t, p)) ? 2 : 1);
       return { ordem, pontos: c.reduce((s, t) => s + peso(t), 0) * (1 + 0.5 * (c.length - 1)), n: c.length };
     })
     .filter((x) => x.n >= minimo)
