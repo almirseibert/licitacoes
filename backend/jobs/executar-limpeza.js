@@ -25,7 +25,7 @@ function mb(bytes) {
 
 limpar
   .rodar({ dias, horas })
-  .then(async ({ temporarios, descartadas }) => {
+  .then(async ({ temporarios, descartadas, auditoria }) => {
     console.log(
       `Temporários: ${temporarios.apagados} arquivo(s) .tmp com mais de ${horas} h apagados ` +
         `(${mb(temporarios.bytes)}).`
@@ -35,13 +35,15 @@ limpar
         `descartada(s) há mais de ${dias} dias (${mb(descartadas.bytes)}).`
     );
 
+    console.log(`Auditoria: ${auditoria.apagadas} registro(s) com mais de ${limpar.MESES_DA_AUDITORIA} meses apagados.`);
+
     const erros = [...temporarios.erros, ...descartadas.erros];
     if (erros.length) {
       console.log(`\n${erros.length} caminho(s) com problema:`);
       for (const erro of erros.slice(0, 10)) console.log(`  · ${erro}`);
     }
 
-    if (!temporarios.apagados && !descartadas.arquivos) {
+    if (!temporarios.apagados && !descartadas.arquivos && !auditoria.apagadas) {
       console.log('\nNada a limpar — o volume já está em ordem.');
     }
     await pool.end();

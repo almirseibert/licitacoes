@@ -156,6 +156,38 @@ export const api = {
   adminAcao: (id, corpo) =>
     requisitar(`/admin/organizacoes/${id}/acao`, { method: 'POST', body: JSON.stringify(corpo) }),
 
+  // ------------------- onboarding, ajuda, suporte, privacidade (Seção 17)
+  legal: () => requisitar('/publico/legal', { publica: true }),
+  onboarding: () => requisitar('/onboarding'),
+  concluirAssistente: (corpo) => requisitar('/onboarding/concluir', { method: 'POST', body: JSON.stringify(corpo) }),
+  primeiroBoletim: () => requisitar('/onboarding/boletim', { method: 'POST' }),
+  aceitarTermos: () => requisitar('/onboarding/termos/aceitar', { method: 'POST' }),
+  enviarNps: (nota, comentario) =>
+    requisitar('/onboarding/nps', { method: 'POST', body: JSON.stringify({ nota, comentario }) }),
+  dispensarNps: () => requisitar('/onboarding/nps/dispensar', { method: 'POST' }),
+  ajuda: (q = '') => requisitar(`/suporte/ajuda?q=${encodeURIComponent(q)}`),
+  solicitacoes: () => requisitar('/suporte/solicitacoes'),
+  solicitacao: (id) => requisitar(`/suporte/solicitacoes/${id}`),
+  abrirSolicitacao: (corpo) => requisitar('/suporte/solicitacoes', { method: 'POST', body: JSON.stringify(corpo) }),
+  escreverSolicitacao: (id, texto) =>
+    requisitar(`/suporte/solicitacoes/${id}/mensagens`, { method: 'POST', body: JSON.stringify({ texto }) }),
+  encerrarSolicitacao: (id) => requisitar(`/suporte/solicitacoes/${id}/encerrar`, { method: 'POST' }),
+  adminSolicitacoes: (status = '') => requisitar(`/admin/solicitacoes${status ? `?status=${status}` : ''}`),
+  adminSolicitacao: (id) => requisitar(`/admin/solicitacoes/${id}`),
+  adminResponder: (id, texto, status) =>
+    requisitar(`/admin/solicitacoes/${id}/responder`, { method: 'POST', body: JSON.stringify({ texto, status }) }),
+  adminNps: () => requisitar('/admin/nps'),
+  statusFerramentas: () => requisitar('/status'),
+  auditoria: (filtros = {}) => {
+    const q = new URLSearchParams(Object.entries(filtros).filter(([, v]) => v !== '' && v != null)).toString();
+    return requisitar(`/auditoria${q ? `?${q}` : ''}`);
+  },
+  lgpd: () => requisitar('/lgpd'),
+  baixarMeusDados: () => salvarComo('/lgpd/exportar', 'meus-dados.json'),
+  pedirExclusao: (confirmacao, senha) =>
+    requisitar('/lgpd/exclusao', { method: 'POST', body: JSON.stringify({ confirmacao, senha }) }),
+  cancelarExclusao: () => requisitar('/lgpd/exclusao', { method: 'DELETE' }),
+
   // Seção 2: preferência de tema do usuário ('claro' | 'escuro' | null).
   salvarTema: (tema) => requisitar('/auth/tema', { method: 'PATCH', body: JSON.stringify({ tema }) }),
 

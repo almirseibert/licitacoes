@@ -35,6 +35,8 @@ const boletim = require('../backend/jobs/boletim');
 const webhooks = require('../backend/jobs/webhooks');
 const mercado = require('../backend/jobs/mercado');
 const notificar = require('../backend/servicos/notificar');
+const status = require('../backend/servicos/status');
+const lgpd = require('../backend/servicos/lgpd');
 
 const sinal = { parar: false };
 
@@ -284,6 +286,19 @@ async function rodarDeHoraEmHora() {
       console.error('Falha no boletim:', erro.message);
     }
 
+    // Exclusão de dados sob pedido (LGPD, Seção 17): executa o que passou da
+    // carência de 7 dias. Try próprio, como o boletim.
+    try {
+      const excluidas = await lgpd.excluirVencidas();
+      for (const e of excluidas.excluidas) {
+        console.log(`LGPD: organização ${e.id} (${e.organizacao}) excluída — ${e.linhas} linha(s), ${e.arquivos} arquivo(s), ${e.usuarios} usuário(s).`);
+        for (const f of e.falhas.slice(0, 3)) console.log(`LGPD com arquivo não apagado: ${f}`);
+      }
+      for (const e of excluidas.erros.slice(0, 3)) console.log(`LGPD com erro: ${e}`);
+    } catch (erro) {
+      console.error('Falha na exclusão de dados:', erro.message);
+    }
+
     // Webhook de novas oportunidades (Seção 14): entrega o que é novo para cada
     // filtro com webhook, logo depois da coleta. Try próprio, como o boletim.
     try {
@@ -365,6 +380,11 @@ async function principal() {
   registrarTodos();
   console.log(`Worker de licitações iniciado. Driver da fila: ${cfgFila.driver}.`);
 
+  // Sinal de vida para a tela de Status das ferramentas (Seção 17). Vai antes das
+  // rodadas porque elas podem levar minutos, e o painel não deve achar que parou.
+  status.baterWorker();
+  const batimento = setInterval(status.baterWorker, 60 * 1000);
+
   await rodarDeHoraEmHora();
   await rodarFrequente();
 
@@ -381,6 +401,7 @@ async function principal() {
     console.log(`\n${nome} recebido. Encerrando o worker...`);
     sinal.parar = true;
     clearInterval(relogio);
+    clearInterval(batimento);
     setTimeout(() => process.exit(0), 2000);
   };
   process.on('SIGTERM', () => encerrar('SIGTERM'));

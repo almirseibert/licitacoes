@@ -12,7 +12,7 @@ import { definirTema } from '../servicos/tema';
  */
 export default function Login({ onEntrar }) {
   const [modo, setModo] = useState('entrar'); // entrar | cadastrar | esqueci
-  const [campos, setCampos] = useState({ nome: '', organizacao: '', email: '', senha: '' });
+  const [campos, setCampos] = useState({ nome: '', organizacao: '', email: '', senha: '', aceitou_termos: false });
   const [erro, setErro] = useState(null);
   const [aviso, setAviso] = useState(null);
   const [enviando, setEnviando] = useState(false);
@@ -80,6 +80,22 @@ export default function Login({ onEntrar }) {
             autoComplete={modo === 'cadastrar' ? 'new-password' : 'current-password'}
             minimo={modo === 'cadastrar' ? 8 : undefined}
           />
+        )}
+
+        {modo === 'cadastrar' && (
+          <label className="flex items-start gap-2 mb-4 text-xs text-texto-suave">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={campos.aceitou_termos}
+              onChange={(e) => setCampos({ ...campos, aceitou_termos: e.target.checked })}
+              required
+            />
+            <span>
+              Li e aceito os <a className="underline" href="/termos" target="_blank" rel="noreferrer">termos de uso</a> e a{' '}
+              <a className="underline" href="/privacidade" target="_blank" rel="noreferrer">política de privacidade</a>.
+            </span>
+          </label>
         )}
 
         {erro && <p className="text-xs text-erro mb-4" role="alert">{erro}</p>}

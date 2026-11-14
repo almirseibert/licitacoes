@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock, Newspaper, LayoutDashboard, ListTodo, ScrollText, BookMarked, BellRing, PieChart, Plug, Trophy } from 'lucide-react';
+import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock, Newspaper, LayoutDashboard, ListTodo, ScrollText, BookMarked, BellRing, PieChart, Plug, Trophy, Rocket, LifeBuoy, Activity, ShieldCheck, History } from 'lucide-react';
 import { api, obterToken, obterUsuario, obterOrganizacao, guardarSessao, encerrarSessao } from './servicos/api';
 import Login from './paginas/Login';
 import Convite from './paginas/Convite';
@@ -29,6 +29,14 @@ import Assinatura from './paginas/Assinatura';
 import Organizacoes from './paginas/Organizacoes';
 import Dashboard from './paginas/Dashboard';
 import Tarefas from './paginas/Tarefas';
+import Assistente from './paginas/Assistente';
+import Ajuda from './paginas/Ajuda';
+import Status from './paginas/Status';
+import Privacidade from './paginas/Privacidade';
+import Auditoria from './paginas/Auditoria';
+import Legal from './paginas/Legal';
+import AceiteTermos from './componentes/AceiteTermos';
+import PesquisaNps from './componentes/PesquisaNps';
 import Alertas from './componentes/Alertas';
 import AlternarTema from './componentes/AlternarTema';
 import { definirTema, seguirSistema, temaGuardado } from './servicos/tema';
@@ -63,6 +71,12 @@ const TELAS = [
   { chave: 'configuracoes', rotulo: 'Configurações', icone: SlidersHorizontal },
   { chave: 'assinatura', rotulo: 'Assinatura', icone: CreditCard },
   { chave: 'uso', rotulo: 'Uso do plano', icone: Gauge },
+  // Seção 17: onboarding, ajuda e suporte, status, privacidade e auditoria.
+  { chave: 'primeiros_passos', rotulo: 'Primeiros passos', icone: Rocket },
+  { chave: 'ajuda', rotulo: 'Ajuda', icone: LifeBuoy },
+  { chave: 'status', rotulo: 'Status', icone: Activity },
+  { chave: 'privacidade', rotulo: 'Privacidade e dados', icone: ShieldCheck },
+  { chave: 'auditoria', rotulo: 'Auditoria', icone: History, soAdmin: true },
   // Só aparece quando o backend diz `superadmin` (Seção 3).
   { chave: 'organizacoes', rotulo: 'Organizações', icone: Building2, soSuperadmin: true },
 ];
@@ -79,6 +93,9 @@ function linkDeEmail() {
   const achado = window.location.pathname.match(/^\/(convite|redefinir-senha)\/([A-Za-z0-9]+)\/?$/);
   return achado ? { tipo: achado[1], token: achado[2] } : null;
 }
+
+// Termos e política abertos sem login (Seção 17): /termos e /privacidade.
+const PAGINA_LEGAL = (window.location.pathname.match(/^\/(termos|privacidade)\/?$/) || [])[1];
 
 // Lista do Radar compartilhada por link (Seção 7): /publico/radar/<token>, sem login.
 const TOKEN_PUBLICO = (window.location.pathname.match(/^\/publico\/radar\/([A-Za-z0-9_-]{43})\/?$/) || [])[1];
@@ -104,6 +121,10 @@ export default function App() {
   // Plano da organização (Seção 3): recursos para o cadeado do menu, situação
   // para o aviso e `superadmin` para o menu de Organizações — tudo do backend.
   const [plano, setPlano] = useState(null);
+  // Seção 17: estado do assistente, dos termos e do NPS (tudo vem do backend).
+  const [onb, setOnb] = useState(null);
+  const [npsFechado, setNpsFechado] = useState(false);
+  const recarregarOnb = () => api.onboarding().then(setOnb).catch(() => {});
 
   useEffect(seguirSistema, []);
 
@@ -124,6 +145,14 @@ export default function App() {
       })
       .catch(() => {});
     api.assinatura().then(setPlano).catch(() => {});
+    api
+      .onboarding()
+      .then((e) => {
+        setOnb(e);
+        // Organização nova: o painel abre no assistente (só para quem pode configurá-la).
+        if (!e.concluido && ['dono', 'admin'].includes(e.papel)) setTela((t) => (['dashboard', 'radar'].includes(t) ? 'primeiros_passos' : t));
+      })
+      .catch(() => {});
   }, [usuario]);
 
   // Plano sem gestão (ou bloqueado) não abre no Dashboard, que daria erro.
@@ -145,6 +174,7 @@ export default function App() {
     setLink(null);
   };
 
+  if (PAGINA_LEGAL) return <Legal aba={PAGINA_LEGAL === 'privacidade' ? 'privacidade' : 'termos'} />;
   if (TOKEN_PUBLICO) return <RadarPublico token={TOKEN_PUBLICO} />;
   if (link && link.tipo === 'redefinir-senha') return <RedefinirSenha token={link.token} onSair={paraEntrada} />;
   if (link && link.tipo === 'convite') return <Convite token={link.token} onEntrar={entrar} onSair={paraEntrada} />;
@@ -193,7 +223,7 @@ export default function App() {
         </div>
 
         <div className="flex-1 py-2">
-          {TELAS.filter((t) => !t.soSuperadmin || (plano && plano.superadmin)).map(({ chave, rotulo, icone: Icone, recurso }) => (
+          {TELAS.filter((t) => (!t.soSuperadmin || (plano && plano.superadmin)) && (!t.soAdmin || (plano && ['dono', 'admin'].includes(plano.papel)))).map(({ chave, rotulo, icone: Icone, recurso }) => (
             <button
               key={chave}
               onClick={() => irPara(chave)}
@@ -283,8 +313,16 @@ export default function App() {
         {tela === 'assinatura' && <Assinatura aba="assinatura" key="assinatura" />}
         {tela === 'uso' && <Assinatura aba="uso" key="uso" />}
         {tela === 'organizacoes' && <Organizacoes />}
+        {tela === 'primeiros_passos' && <Assistente aoConcluir={recarregarOnb} aoIr={irPara} />}
+        {tela === 'ajuda' && <Ajuda key={parametros.aba || 'guias'} abaInicial={parametros.aba} superadmin={Boolean(plano && plano.superadmin)} aoIr={irPara} />}
+        {tela === 'status' && <Status aoIr={irPara} />}
+        {tela === 'privacidade' && <Privacidade aoIr={irPara} />}
+        {tela === 'auditoria' && <Auditoria aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />}
         </div>
       </main>
+
+      {onb && !onb.termos.aceita && <AceiteTermos aoAceitar={recarregarOnb} aoSair={sair} />}
+      {onb && onb.termos.aceita && onb.nps.devido && !npsFechado && <PesquisaNps aoFechar={() => { setNpsFechado(true); recarregarOnb(); }} />}
     </div>
   );
 }

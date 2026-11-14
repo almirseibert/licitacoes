@@ -9,6 +9,9 @@ const { responderErro } = require('../middlewares/responder-erro');
 const escopo = require('../servicos/escopo');
 const limites = require('../servicos/limites');
 const cobranca = require('../servicos/cobranca');
+const email = require('../servicos/email');
+const regrasSuporte = require('../regras/suporte');
+const regrasNps = require('../regras/onboarding');
 
 const rotas = express.Router();
 
@@ -98,6 +101,109 @@ rotas.post('/organizacoes/:id/acao', async (req, res) => {
   } catch (erro) {
     if (erro.status === 400 || erro.status === 404) return res.status(erro.status).json({ erro: erro.message });
     responderErro(res, 500, 'Não foi possível concluir a ação.', erro);
+  }
+});
+
+// ------------------------------------------------------- suporte (Seção 17)
+// GET /api/admin/solicitacoes?status=aberta|em_andamento|respondida|encerrada
+rotas.get('/solicitacoes', async (req, res) => {
+  const status = req.query.status;
+  if (status && !regrasSuporte.STATUS[status]) return res.status(400).json({ erro: 'Status inválido.' });
+  try {
+    const [linhas] = await pool.query(
+      `SELECT s.id, s.organizacao_id, o.nome AS organizacao, s.assunto, s.categoria, s.status, s.criada_em, s.atualizada_em, u.nome AS aberta_por
+         FROM solicitacoes s
+         JOIN organizacoes o ON o.id = s.organizacao_id
+         LEFT JOIN usuarios u ON u.id = s.usuario_id
+        ${status ? 'WHERE s.status = ?' : ''}
+        ORDER BY FIELD(s.status, 'aberta', 'em_andamento', 'respondida', 'encerrada'), s.atualizada_em DESC LIMIT 200`,
+      status ? [status] : []
+    );
+    res.json({
+      solicitacoes: linhas.map((s) => ({
+        ...s,
+        protocolo: regrasSuporte.protocolo(s.id, s.criada_em),
+        categoria_rotulo: regrasSuporte.CATEGORIAS[s.categoria],
+        status_rotulo: regrasSuporte.STATUS[s.status],
+      })),
+      categorias: regrasSuporte.CATEGORIAS,
+      status: regrasSuporte.STATUS,
+    });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível listar as solicitações.', erro);
+  }
+});
+
+// GET /api/admin/solicitacoes/:id
+rotas.get('/solicitacoes/:id', async (req, res) => {
+  try {
+    const [[s]] = await pool.query(
+      `SELECT s.id, s.organizacao_id, o.nome AS organizacao, s.assunto, s.categoria, s.status, s.criada_em, s.atualizada_em,
+              u.nome AS aberta_por, u.email AS aberta_por_email
+         FROM solicitacoes s JOIN organizacoes o ON o.id = s.organizacao_id LEFT JOIN usuarios u ON u.id = s.usuario_id
+        WHERE s.id = ?`,
+      [Number(req.params.id) || 0]
+    );
+    if (!s) return res.status(404).json({ erro: 'Solicitação não encontrada.' });
+    const [mensagens] = await pool.query(
+      `SELECT m.id, m.autor, m.texto, m.criada_em, u.nome FROM solicitacao_mensagens m
+         LEFT JOIN usuarios u ON u.id = m.usuario_id WHERE m.solicitacao_id = ? ORDER BY m.id`,
+      [s.id]
+    );
+    res.json({ ...s, protocolo: regrasSuporte.protocolo(s.id, s.criada_em), categoria_rotulo: regrasSuporte.CATEGORIAS[s.categoria], status_rotulo: regrasSuporte.STATUS[s.status], mensagens });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível carregar a solicitação.', erro);
+  }
+});
+
+// POST /api/admin/solicitacoes/:id/responder — { texto, status? }
+rotas.post('/solicitacoes/:id/responder', async (req, res) => {
+  const v = regrasSuporte.validarMensagem(req.body);
+  if (v.erro) return res.status(400).json({ erro: v.erro });
+  const pedido = req.body && req.body.status;
+  if (pedido && !regrasSuporte.STATUS[pedido]) return res.status(400).json({ erro: 'Status inválido.' });
+  try {
+    const [[s]] = await pool.query(
+      `SELECT s.id, s.assunto, s.status, s.criada_em, u.email, u.nome FROM solicitacoes s
+         LEFT JOIN usuarios u ON u.id = s.usuario_id WHERE s.id = ?`,
+      [Number(req.params.id) || 0]
+    );
+    if (!s) return res.status(404).json({ erro: 'Solicitação não encontrada.' });
+    await pool.query("INSERT INTO solicitacao_mensagens (solicitacao_id, autor, usuario_id, texto) VALUES (?, 'suporte', ?, ?)", [
+      s.id, req.usuario.id, v.dados.texto,
+    ]);
+    const novo = regrasSuporte.statusAposMensagem(s.status, 'suporte', pedido);
+    await pool.query('UPDATE solicitacoes SET status = ?, atualizada_em = NOW() WHERE id = ?', [novo, s.id]);
+
+    // Avisa quem abriu. Sem SMTP ou com erro, a resposta continua visível no painel.
+    let avisoEmail = 'sem_destinatario';
+    if (s.email) {
+      const protocolo = regrasSuporte.protocolo(s.id, s.criada_em);
+      const r = await email.enviarTransacional({
+        para: s.email,
+        assunto: `[Painel de Licitações] Resposta à solicitação ${protocolo}`,
+        texto: `Olá, ${s.nome}.\n\n${v.dados.texto}\n\n— Solicitação ${protocolo}: ${s.assunto}\nResponda pelo painel, em Ajuda › Solicitações.`,
+      }).catch((erro) => ({ enviado: false, motivo: erro.message }));
+      avisoEmail = r.enviado ? 'enviado' : 'nao_enviado';
+    }
+    res.json({ ok: true, status: novo, email: avisoEmail });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível responder agora.', erro);
+  }
+});
+
+// GET /api/admin/nps — a nota média de todas as organizações e os últimos comentários.
+rotas.get('/nps', async (_req, res) => {
+  try {
+    const [notas] = await pool.query('SELECT nota FROM nps_respostas WHERE nota IS NOT NULL');
+    const [comentarios] = await pool.query(
+      `SELECT n.nota, n.comentario, n.criada_em, o.nome AS organizacao FROM nps_respostas n
+         JOIN organizacoes o ON o.id = n.organizacao_id
+        WHERE n.nota IS NOT NULL AND n.comentario IS NOT NULL ORDER BY n.id DESC LIMIT 30`
+    );
+    res.json({ ...regrasNps.resumirNps(notas.map((n) => n.nota)), comentarios });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível carregar o NPS.', erro);
   }
 });
 

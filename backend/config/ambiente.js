@@ -40,6 +40,9 @@ module.exports = {
     de: process.env.SMTP_DE || '',
     para: process.env.ALERTA_PARA || '',
   },
+  // Seção 17: a caixa que recebe o aviso de solicitação nova. Vazio, a
+  // solicitação fica só no painel (o suporte a vê em Organizações).
+  suporteEmail: (process.env.SUPORTE_EMAIL || '').trim(),
   // Seção 3 do plano SaaS: 'manual' = o administrador ativa o plano pela tela.
   // O webhook do gateway (Asaas ou Stripe, a escolher) só abre com provedor
   // diferente de 'manual' E segredo definido — nenhuma chave no git.

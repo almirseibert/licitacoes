@@ -285,4 +285,4 @@ async function rodar({ agora = new Date(), org = null, simular = false, forcar =
   return resultado;
 }
 
-module.exports = { rodar, gerar, selecionar, garantirPerfilInicial, agoraNoFuso, DIAS_JANELA };
+module.exports = { rodar, gerar, selecionar, garantirPerfilInicial, podeReceber, agoraNoFuso, DIAS_JANELA };

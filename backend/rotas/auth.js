@@ -18,6 +18,8 @@ const email = require('../servicos/email');
 const fila = require('../servicos/fila');
 const limites = require('../servicos/limites');
 const cobranca = require('../servicos/cobranca');
+const onboarding = require('../servicos/onboarding');
+const auditoria = require('../servicos/auditoria');
 const {
   papelValido,
   gerarTokenConvite,
@@ -62,7 +64,7 @@ async function organizacoesDoUsuario(usuarioId) {
  * 'dono'. Rota pública: qualquer um pode assinar o painel (é o SaaS).
  */
 rotas.post('/cadastro', async (req, res) => {
-  const { nome, email: emailUsuario, senha, organizacao } = req.body || {};
+  const { nome, email: emailUsuario, senha, organizacao, aceitou_termos: aceitouTermos } = req.body || {};
 
   if (!nome || !String(nome).trim()) return res.status(400).json({ erro: 'Informe seu nome.' });
   if (!emailUsuario || !String(emailUsuario).trim()) {
@@ -73,6 +75,11 @@ rotas.post('/cadastro', async (req, res) => {
   }
   if (!organizacao || !String(organizacao).trim()) {
     return res.status(400).json({ erro: 'Informe o nome da sua empresa.' });
+  }
+
+  // Seção 17: criar conta é aceitar os termos e a política (versão vigente fica gravada).
+  if (aceitouTermos !== true) {
+    return res.status(400).json({ erro: 'Para criar a conta, leia e aceite os termos de uso e a política de privacidade.' });
   }
 
   const emailLimpo = String(emailUsuario).trim().toLowerCase();
@@ -103,6 +110,7 @@ rotas.post('/cadastro', async (req, res) => {
     );
     // Seção 3: toda organização nova nasce com a assinatura do teste grátis.
     await cobranca.abrirTeste(conexao, org.insertId);
+    await onboarding.aceitarTermos({ usuarioId: usuario.insertId, organizacaoId: org.insertId, ip: req.ip }, conexao);
 
     await conexao.commit();
 
@@ -113,6 +121,13 @@ rotas.post('/cadastro', async (req, res) => {
       .enfileirar('repontuar', { organizacaoId: org.insertId }, { prioridade: 5, chaveUnica: `repontuar:${org.insertId}` })
       .catch((erro) => console.error('Repontuação da organização nova não entrou na fila:', erro.message));
 
+    await auditoria.registrar({
+      organizacaoId: org.insertId,
+      usuario: { id: usuario.insertId, nome },
+      acao: 'criou_conta',
+      entidade: 'conta',
+      ip: req.ip,
+    });
     const token = assinar(usuario.insertId, nome, emailLimpo, org.insertId, 'dono');
     return res.status(201).json({
       token,
@@ -160,6 +175,13 @@ rotas.post('/login', async (req, res) => {
     // Entra direto na primeira (o painel troca depois, sem senha de novo).
     const principal = organizacoes[0];
     const token = assinar(usuario.id, usuario.nome, usuario.email, principal.id, principal.papel);
+    await auditoria.registrar({
+      organizacaoId: principal.id,
+      usuario: { id: usuario.id, nome: usuario.nome },
+      acao: 'entrou',
+      entidade: 'sessao',
+      ip: req.ip,
+    });
 
     return res.json({
       token,

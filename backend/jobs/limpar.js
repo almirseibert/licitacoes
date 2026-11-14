@@ -124,15 +124,30 @@ async function limparDescartadas({ dias = DIAS_DO_DESCARTE, limite = 200 } = {})
   return resumo;
 }
 
-/** As duas limpezas, na ordem. É o que o worker chama uma vez por dia. */
+/**
+ * A trilha de auditoria (Seção 17) fica 2 anos — é o que a política de privacidade
+ * promete. Apaga em lotes para não segurar a tabela travada.
+ */
+const MESES_DA_AUDITORIA = 24;
+async function limparAuditoria({ meses = MESES_DA_AUDITORIA, lote = 5000 } = {}) {
+  let apagadas = 0;
+  for (;;) {
+    const [r] = await pool.query('DELETE FROM auditoria WHERE criado_em < DATE_SUB(NOW(), INTERVAL ? MONTH) LIMIT ?', [meses, lote]);
+    apagadas += r.affectedRows;
+    if (r.affectedRows < lote) return { apagadas };
+  }
+}
+
+/** As limpezas, na ordem. É o que o worker chama uma vez por dia. */
 async function rodar(opcoes = {}) {
   const temporarios = await limparTemporarios(opcoes);
   const descartadas = await limparDescartadas(opcoes);
-  return { temporarios, descartadas };
+  const auditoria = await limparAuditoria();
+  return { temporarios, descartadas, auditoria };
 }
 
 function registrarNaFila() {
   fila.registrar('limpar_temporarios', () => rodar());
 }
 
-module.exports = { rodar, limparTemporarios, limparDescartadas, registrarNaFila, HORAS_DO_TMP, DIAS_DO_DESCARTE };
+module.exports = { rodar, limparTemporarios, limparDescartadas, limparAuditoria, registrarNaFila, MESES_DA_AUDITORIA, HORAS_DO_TMP, DIAS_DO_DESCARTE };

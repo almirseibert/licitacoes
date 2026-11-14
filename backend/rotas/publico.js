@@ -21,6 +21,12 @@ const CAMPOS_PUBLICOS = [
   'exige_garantia', 'etiquetas',
 ];
 
+// GET /api/publico/legal — termos de uso, política de privacidade e aviso da IA
+// (Seção 17). Abertos: o cadastro precisa mostrá-los antes de haver conta.
+rotas.get('/legal', (_req, res) => {
+  res.json(require('../config/dados/legal').documentos());
+});
+
 // GET /api/publico/radar/:token?pagina=1
 rotas.get('/radar/:token', async (req, res) => {
   const naoAchado = () => res.status(404).json({ erro: 'Este link não existe ou já expirou. Peça um novo a quem enviou.' });

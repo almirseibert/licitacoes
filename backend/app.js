@@ -31,6 +31,9 @@ app.get('/api/saude', (_req, res) => {
   res.json({ ok: true, servico: 'licitacoes-api', quando: new Date().toISOString() });
 });
 
+// Seção 17: a trilha de auditoria grava depois que a resposta sai (só o que deu certo).
+app.use('/api', require('./servicos/auditoria').middleware);
+
 app.use('/api/auth', require('./rotas/auth'));
 // Link de descadastro do e-mail do boletim (Seção 4): sem token, assinado por HMAC.
 app.use('/api/boletins/descadastro', require('./rotas/boletins').publico);
@@ -46,6 +49,15 @@ const modulo = (recurso) => [...protegida, exigirRecurso(recurso)];
 // Fora da `assinaturaValida`: quem venceu precisa ver o plano e pedir outro.
 app.use('/api/assinatura', ...comToken, leitorSoLe, require('./rotas/assinatura'));
 app.use('/api/admin', ...comToken, leitorSoLe, require('./rotas/admin'));
+
+// Seção 17: onboarding, ajuda e suporte, status, LGPD e termos ficam fora da
+// `assinaturaValida` (cada rota que escreve dado do negócio a repõe): quem tem o
+// teste vencido ainda precisa pedir ajuda, ver o status e baixar ou apagar os dados.
+app.use('/api/onboarding', ...comToken, require('./rotas/onboarding'));
+app.use('/api/suporte', ...comToken, require('./rotas/suporte'));
+app.use('/api/status', ...comToken, require('./rotas/status'));
+app.use('/api/lgpd', ...comToken, require('./rotas/lgpd'));
+app.use('/api/auditoria', ...comToken, require('./rotas/auditoria'));
 
 app.use('/api/licitacoes', ...protegida, require('./rotas/licitacoes'));
 app.use('/api/fontes', ...protegida, require('./rotas/fontes'));

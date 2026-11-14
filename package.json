@@ -35,7 +35,8 @@
     "notificar": "node backend/jobs/executar-notificar.js",
     "validades": "node backend/jobs/executar-validades.js",
     "mercado": "node backend/jobs/executar-mercado.js",
-    "webhooks": "node backend/jobs/executar-webhooks.js"
+    "webhooks": "node backend/jobs/executar-webhooks.js",
+    "lgpd": "node backend/jobs/executar-lgpd.js"
   },
   "engines": {
     "node": ">=20"
