@@ -8,10 +8,15 @@ const regras = require('../regras/servicos');
 
 const rotas = express.Router();
 
+const MSG_PARCEIRO_REPETIDO = 'Já existe um parceiro com esse nome neste serviço.';
+
+// Fila da operadora: o que pede ação primeiro (constante nossa, nunca entrada do usuário).
+const ORDEM_NA_FILA = ['solicitado', 'interesse', ...Object.keys(regras.STATUS).filter((s) => !['solicitado', 'interesse'].includes(s))];
+
 // GET /api/admin/parceiros
 rotas.get('/parceiros', async (_req, res) => {
   try {
-    const [linhas] = await pool.query('SELECT id, servico, nome, email_pedidos, site, ativo, criado_em FROM parceiros ORDER BY servico, id');
+    const [linhas] = await pool.query('SELECT id, servico, nome, email_pedidos, ativo FROM parceiros ORDER BY servico, id');
     res.json({ parceiros: linhas, servicos: Object.fromEntries(Object.entries(regras.SERVICOS).map(([k, s]) => [k, s.rotulo])) });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível listar os parceiros.', erro);
@@ -30,7 +35,7 @@ rotas.post('/parceiros', async (req, res) => {
     );
     res.status(201).json({ id: r.insertId });
   } catch (erro) {
-    if (erro.code === 'ER_DUP_ENTRY') return res.status(409).json({ erro: 'Já existe um parceiro com esse nome neste serviço.' });
+    if (erro.code === 'ER_DUP_ENTRY') return res.status(409).json({ erro: MSG_PARCEIRO_REPETIDO });
     responderErro(res, 500, 'Não foi possível cadastrar o parceiro.', erro);
   }
 });
@@ -53,7 +58,7 @@ rotas.patch('/parceiros/:id', async (req, res) => {
     if (!r.affectedRows) return res.status(404).json({ erro: 'Parceiro não encontrado.' });
     res.json({ ok: true });
   } catch (erro) {
-    if (erro.code === 'ER_DUP_ENTRY') return res.status(409).json({ erro: 'Já existe um parceiro com esse nome neste serviço.' });
+    if (erro.code === 'ER_DUP_ENTRY') return res.status(409).json({ erro: MSG_PARCEIRO_REPETIDO });
     responderErro(res, 500, 'Não foi possível alterar o parceiro.', erro);
   }
 });
@@ -64,17 +69,16 @@ rotas.get('/servicos/pedidos', async (req, res) => {
   if (status && !regras.STATUS[status]) return res.status(400).json({ erro: 'Status inválido.' });
   try {
     const [linhas] = await pool.query(
-      `SELECT p.id, p.organizacao_id, o.nome AS organizacao, p.servico, p.status, p.mensagem, p.criado_em, p.encaminhado_em,
-              p.valor_contratado, p.contratado_em, p.observacao, par.nome AS parceiro_nome
+      `SELECT p.id, o.nome AS organizacao, p.servico, p.status, p.criado_em, p.valor_contratado, par.nome AS parceiro_nome
          FROM servico_pedidos p
          JOIN organizacoes o ON o.id = p.organizacao_id
          LEFT JOIN parceiros par ON par.id = p.parceiro_id
         ${status ? 'WHERE p.status = ?' : ''}
-        ORDER BY FIELD(p.status, 'solicitado','interesse','encaminhado','em_atendimento','contratado','recusado','cancelado'), p.id DESC
+        ORDER BY FIELD(p.status, ${ORDEM_NA_FILA.map((x) => `'${x}'`).join(',')}), p.id DESC
         LIMIT 300`,
       status ? [status] : []
     );
-    res.json({ pedidos: linhas.map(regras.comProtocolo), status: regras.STATUS });
+    res.json({ pedidos: linhas.map(regras.comProtocolo) });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível listar os pedidos.', erro);
   }

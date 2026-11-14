@@ -30,7 +30,7 @@ cofre de senha de portal e a assinatura digital (ver a tabela de divergências n
 | **B — Paridade de captação** | 4 ✅, 7 ✅, 8 ✅, 9 ✅, 10 ✅ | Boletim diário, banco de licitações completo, gestão com tarefas, avisos por tipo, documentos | Substitui o uso diário do ConLicitação na captação |
 | **C — IA e inteligência** | 5 ✅, 11 (11b), 12 ✅ (12b), 13 ✅ (13b), 14 ✅ (14b), 15 ✅ (15b), 17 ✅ (17b) | Pergunte ao Edital, resumo com checklist, acompanhamentos, contratos e atas, concorrentes e mercado, API, onboarding | **Versão 1 vendável** — fim da Fase C |
 | **D — Estratégia e automação** | 6, 16 | Monitor de chat, alerta de deserta por segmento, consultor jurídico | Planos mais caros |
-| **E — Ecossistema** | 18 | Seguro garantia, assessoria cadastral, cursos por parceria | Receita complementar |
+| **E — Ecossistema** | 18 (código ✅; aceite 18b) | Seguro garantia, assessoria cadastral, cursos por parceria | Receita complementar |
 
 Ordem de dependência: **1b antes de tudo** (sem pontuação por organização o resto herda o
 defeito do catálogo único), 3 antes de 5/11/16 (limite de IA por plano), 8 antes de 9 (aviso por
@@ -992,14 +992,59 @@ teste; e-mail **real** (sem SMTP o boletim fica na tela e o painel diz isso); My
 
 ---
 
-## Seção 18 — Ecossistema (Fase E)
-- [ ] **Seguro garantia** como captação de lead para corretora parceira (a referência abre uma
-      cotação com termo de vínculo legal; aqui o painel só encaminha o lead, não emite apólice).
-- [ ] Assessoria cadastral (CRC), cursos, clipping e bolsa de empregos **por parceria**, vendidos
-      junto com o plano.
-- [ ] 🚫 Fora: assinatura digital e robô de lance (CLAUDE.md e seção 5.4).
+## Seção 18 — Ecossistema (Fase E) — código feito em 14/11/2026; aceite com parceiro e cliente reais pendente (18b)
+- [x] **Seguro garantia** como captação de lead para corretora parceira: o painel só encaminha o pedido (não emite
+      apólice nem entra na contratação). Pedido por organização com licitação opcional (lista dos editais lidos que
+      exigem garantia, ainda abertos; atalho "Cotar seguro garantia" na aba Exigências), **prévia exata** do que vai ao
+      parceiro (empresa, contato, licitação, garantias exigidas; sem CPF, cofre, pontuação ou funil; campo que falta =
+      `____________`) e **aceite do termo de vínculo** da versão vigente. Sem parceiro habilitado só se registra
+      interesse e **nada sai do painel**.
+- [x] Assessoria cadastral (CRC), cursos, clipping e bolsa de empregos **por parceria**: mesmo fluxo, por serviço.
+      Não há parceiro de fábrica — a operadora cadastra (tela **Parceiros**, só superadmin), reenvia o e-mail que não
+      saiu, marca o andamento e o **valor contratado** (obrigatório para "contratado") e vê as vendas por serviço.
+- [x] E-mail ao parceiro pelo SMTP do painel, com a resposta direto ao cliente; sem SMTP o pedido fica "aguardando
+      envio" (nunca "encaminhado" sem ter saído). Trilha de auditoria do cliente e da operadora; exportação e exclusão
+      LGPD já cobrem as tabelas (`organizacao_id` + `ON DELETE CASCADE`).
+- [x] 🚫 Fora: assinatura digital e robô de lance (CLAUDE.md e seção 5.4).
+- [ ] **Aceite: um serviço complementar vendido a um cliente ativo — NÃO verificado** (ver abaixo).
 
-**Aceite:** um serviço complementar vendido a um cliente ativo.
+**Aceite medido (14/11/2026, API real e navegador, MariaDB 10.11, banco zerado migra até a 035):** o que pôde ser
+medido sem parceiro e sem cliente de verdade. **Roteiro de 24 conferências pela API real** (duas organizações + a
+operadora) e **24 pelo navegador (Playwright, 1366 px e 390 px), 24/24**. Sem parceiro: interesse registrado, 201,
+nada enviado, sem exigir aceite. Com parceiro: sem aceite → 400, aceite de versão velha → 400, aceite da vigente → 201
+`solicitado` (sem SMTP, de propósito); o pedido repetido → 409; reenvio sem SMTP → 502 e o pedido **continua**
+`solicitado`; "contratado" sem valor → 400; interesse nunca avança (400); `solicitado → encaminhado → contratado
+R$ 4.200,50` → vendas por serviço mostra 1 pedido contratado e R$ 4.200,50; o cliente não cancela pedido contratado
+(409). Isolamento: a organização B recebe 404 ao pedir com a licitação que só A acompanha, 404 ao cancelar pedido da A
+e lista vazia dos pedidos da A; usuário comum em `/api/admin/parceiros` → 403; o parceiro não muda de nome nem de
+serviço (400). Prévia mostrou "Garantia contratual exigida ____________" quando o edital não foi decidido. Auditoria
+registrou `pediu_servico`, `cancelou_pedido_servico`, `cadastrou_parceiro`, `alterou_parceiro` e
+`atualizou_pedido_servico` sem valor nem mensagem. Lint limpo, **247/247 testes** (13 novos em
+`testes/servicos.test.js`). `code-review` (8 achados): corrigidos a mensagem fora da prévia, o pedido que ficava preso
+em "interesse", o select que não mostrava a licitação do atalho, a lista com editais encerrados, o pedido duplicado,
+o reenvio concorrente, o parceiro trocado com pedidos pendentes e a auditoria da operadora. `simplify` (4
+revisores): regras de status e ações vindas do backend (o front não repete mais), índices
+`(organizacao_id, id)` e `(organizacao_id, servico, status)`, colunas enxutas, cancelar com um `UPDATE`, consultas em
+paralelo, `EMAIL` reaproveitado de `regras/notificacoes.js`. A medição pegou um defeito que o teste de unidade não via:
+um interesse antigo barrava o pedido de verdade quando o parceiro aparecia (corrigido e remedido).
+
+**Não verificado:** **nenhum parceiro real e nenhum cliente que tenha contratado** (o aceite em si); e-mail **real**
+(sem SMTP o envio só foi exercitado pelo caminho de falha); MySQL 8 (o teste é MariaDB); `security-review` não
+rodou (conferência manual: rotas de escrita exigem papel admin, filtram por `organizacao_id`, nada do cofre nem CPF
+sai).
+
+**Seção 18b — pendente:**
+- [ ] Cadastrar o primeiro parceiro de verdade, configurar SMTP e fechar **uma venda a cliente ativo** (o aceite).
+- [ ] Revisão de advogado do termo de vínculo (`backend/config/dados/servicos.js`; mesma pendência da Seção 16) e
+      sobe `VERSAO_TERMO_PARCEIRO` se o texto mudar.
+- [ ] "Vendidos junto com o plano": hoje o parceiro cobra direto; cobrança no mesmo boleto/assinatura do painel fica
+      para depois de haver parceiro e preço.
+- [ ] Avisar quem registrou interesse quando surgir parceiro; rodízio entre parceiros do mesmo serviço (hoje o mais
+      antigo ativo atende).
+- [ ] Cursos, clipping e bolsa de empregos são encaminhamento genérico; falta o catálogo de cursos/vagas do parceiro.
+- [ ] Pequenas dívidas: `GET /admin/servicos/vendas` soma em JS a tabela inteira (passar a `GROUP BY` quando crescer),
+      `codigo.startsWith('garantia_')` no front (declarar o serviço no catálogo de exigências), protocolo comum com o
+      de suporte e `escopo.daOrganizacao` na consulta de licitações.
 
 ---
 

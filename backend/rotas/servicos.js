@@ -10,8 +10,8 @@ const regras = require('../regras/servicos');
 
 const rotas = express.Router();
 
-const COLUNAS_PEDIDO = `p.id, p.servico, p.status, p.mensagem, p.licitacao_id, p.criado_em, p.atualizado_em,
-  p.encaminhado_em, p.valor_contratado, p.termo_versao, par.nome AS parceiro_nome`;
+/** O que a organização vê de um parceiro (nunca o e-mail que recebe os pedidos). */
+const publico = (p) => (p ? { nome: p.nome, site: p.site } : null);
 
 /** Parceiro que atende o serviço agora (o cadastrado há mais tempo e ativo). */
 async function parceiroAtivo(servico) {
@@ -43,18 +43,15 @@ async function garantiasDaLicitacao(licitacaoId) {
 
 /** Monta o que iria ao parceiro; devolve `{ erro, status }` quando a licitação não é da organização. */
 async function prepararDados(req, v) {
-  const empresaPromessa = pool.query(
-    'SELECT razao_social, cnpj, natureza FROM empresa_perfis WHERE organizacao_id = ? ORDER BY padrao DESC, id ASC LIMIT 1',
-    [req.organizacaoId]
-  );
-  let licitacao = null;
-  let garantias = null;
-  if (v.licitacaoId) {
-    licitacao = await licitacaoDaOrganizacao(req.organizacaoId, v.licitacaoId);
-    if (!licitacao) { await empresaPromessa; return { erro: 'Licitação não encontrada.', status: 404 }; }
-    garantias = await garantiasDaLicitacao(licitacao.id);
-  }
-  const [[empresa]] = await empresaPromessa;
+  const [[[empresa]], licitacao, garantias] = await Promise.all([
+    pool.query(
+      'SELECT razao_social, cnpj, natureza FROM empresa_perfis WHERE organizacao_id = ? ORDER BY padrao DESC, id ASC LIMIT 1',
+      [req.organizacaoId]
+    ),
+    v.licitacaoId ? licitacaoDaOrganizacao(req.organizacaoId, v.licitacaoId) : null,
+    v.licitacaoId ? garantiasDaLicitacao(v.licitacaoId) : null,
+  ]);
+  if (v.licitacaoId && !licitacao) return { erro: 'Licitação não encontrada.', status: 404 };
   const dados = regras.montarDados({
     servico: v.servico, empresa, usuario: req.usuario, licitacao, garantias, mensagem: v.mensagem,
   });
@@ -82,7 +79,7 @@ rotas.get('/catalogo', async (req, res) => {
           descricao: s.descricao,
           usa_licitacao: s.usaLicitacao,
           disponivel: Boolean(parceiro),
-          parceiro: parceiro ? { nome: parceiro.nome, site: parceiro.site } : null,
+          parceiro: publico(parceiro),
           pedidos_abertos: abertos[chave] || 0,
         };
       }),
@@ -96,19 +93,16 @@ rotas.get('/catalogo', async (req, res) => {
 rotas.get('/licitacoes-com-garantia', async (req, res) => {
   try {
     const [linhas] = await pool.query(
-      `SELECT l.id, l.orgao_nome, l.numero_compra, l.objeto, l.uf, l.valor_estimado, l.abertura_propostas,
-              MAX(e.codigo = 'garantia_proposta') AS garantia_proposta, MAX(e.codigo = 'garantia_contrato') AS garantia_contrato
+      `SELECT l.id, l.orgao_nome, l.numero_compra
          FROM licitacoes l
          JOIN org_licitacoes o ON o.licitacao_id = l.id AND o.organizacao_id = ?
-         JOIN licitacao_exigencias e ON e.licitacao_id = l.id AND e.detectado = 'sim'
-              AND e.codigo IN ('garantia_proposta','garantia_contrato')
         WHERE o.descartada = 0 AND (l.abertura_propostas IS NULL OR l.abertura_propostas >= NOW())
-        GROUP BY l.id ORDER BY l.abertura_propostas IS NULL, l.abertura_propostas ASC LIMIT 50`,
+          AND EXISTS (SELECT 1 FROM licitacao_exigencias e WHERE e.licitacao_id = l.id AND e.detectado = 'sim'
+                       AND e.codigo IN ('garantia_proposta','garantia_contrato'))
+        ORDER BY l.abertura_propostas IS NULL, l.abertura_propostas ASC LIMIT 50`,
       [req.organizacaoId]
     );
-    res.json({
-      licitacoes: linhas.map((l) => ({ ...l, garantia_proposta: Boolean(l.garantia_proposta), garantia_contrato: Boolean(l.garantia_contrato) })),
-    });
+    res.json({ licitacoes: linhas });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível listar as licitações com garantia.', erro);
   }
@@ -123,7 +117,7 @@ rotas.get('/previa', exigirPapel('admin'), async (req, res) => {
     if (r.erro) return res.status(r.status).json({ erro: r.erro });
     res.json({
       disponivel: Boolean(parceiro),
-      parceiro: parceiro ? { nome: parceiro.nome, site: parceiro.site } : null,
+      parceiro: publico(parceiro),
       linhas: regras.linhasDosDados(r.dados),
       termo: regras.TERMO_VINCULO,
       termo_versao: regras.VERSAO_TERMO_PARCEIRO,
@@ -137,7 +131,8 @@ rotas.get('/previa', exigirPapel('admin'), async (req, res) => {
 rotas.get('/pedidos', async (req, res) => {
   try {
     const [linhas] = await pool.query(
-      `SELECT ${COLUNAS_PEDIDO} FROM servico_pedidos p LEFT JOIN parceiros par ON par.id = p.parceiro_id
+      `SELECT p.id, p.servico, p.status, p.valor_contratado, p.criado_em, par.nome AS parceiro_nome
+         FROM servico_pedidos p LEFT JOIN parceiros par ON par.id = p.parceiro_id
         WHERE p.organizacao_id = ? ORDER BY p.id DESC LIMIT 200`,
       [req.organizacaoId]
     );
@@ -161,10 +156,11 @@ rotas.post('/pedidos', exigirPapel('admin'), async (req, res) => {
     if (r.erro) return res.status(r.status).json({ erro: r.erro });
 
     // Mesmo serviço e mesma licitação já em aberto: duplo clique ou pedido repetido não manda o e-mail duas vezes.
+    // Com parceiro, um interesse antigo não conta: este pedido o substitui (vira "cancelado" mais abaixo).
     const [[repetido]] = await pool.query(
       `SELECT id FROM servico_pedidos WHERE organizacao_id = ? AND servico = ? AND licitacao_id <=> ?
-          AND status IN ('interesse','solicitado','encaminhado','em_atendimento') LIMIT 1`,
-      [req.organizacaoId, v.dados.servico, v.dados.licitacaoId]
+          AND status IN (?) LIMIT 1`,
+      [req.organizacaoId, v.dados.servico, v.dados.licitacaoId, regras.ABERTOS.filter((e) => !parceiro || e !== 'interesse')]
     );
     if (repetido) {
       return res.status(409).json({ erro: 'Já existe um pedido em aberto para este serviço e esta licitação. Veja em "Seus pedidos".' });
@@ -221,13 +217,15 @@ rotas.post('/pedidos', exigirPapel('admin'), async (req, res) => {
 rotas.post('/pedidos/:id/cancelar', exigirPapel('admin'), async (req, res) => {
   try {
     const id = Number(req.params.id) || 0;
+    const [r] = await pool.query(
+      "UPDATE servico_pedidos SET status = 'cancelado' WHERE id = ? AND organizacao_id = ? AND status IN (?)",
+      [id, req.organizacaoId, regras.ABERTOS]
+    );
+    if (r.affectedRows) return res.json({ ok: true });
+    // Nenhuma linha mudou: ou o pedido não é desta organização (404), ou já não dá para cancelar (409).
     const [[p]] = await pool.query('SELECT status FROM servico_pedidos WHERE id = ? AND organizacao_id = ?', [id, req.organizacaoId]);
     if (!p) return res.status(404).json({ erro: 'Pedido não encontrado.' });
-    if (!regras.CANCELAVEIS.has(p.status)) {
-      return res.status(409).json({ erro: `Um pedido "${regras.STATUS[p.status]}" não pode mais ser cancelado.` });
-    }
-    await pool.query("UPDATE servico_pedidos SET status = 'cancelado' WHERE id = ? AND organizacao_id = ?", [id, req.organizacaoId]);
-    res.json({ ok: true });
+    res.status(409).json({ erro: `Um pedido "${regras.STATUS[p.status]}" não pode mais ser cancelado.` });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível cancelar o pedido.', erro);
   }

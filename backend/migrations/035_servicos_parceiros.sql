@@ -44,7 +44,8 @@ CREATE TABLE IF NOT EXISTS servico_pedidos (
   observacao        VARCHAR(500) NULL,        -- nota interna da operadora (o cliente não vê)
   criado_em         DATETIME DEFAULT CURRENT_TIMESTAMP,
   atualizado_em     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_pedido_org (organizacao_id, criado_em),
+  INDEX idx_pedido_org (organizacao_id, id),
+  INDEX idx_pedido_org_servico (organizacao_id, servico, status),
   INDEX idx_pedido_status (status, servico),
   CONSTRAINT fk_pedido_org FOREIGN KEY (organizacao_id) REFERENCES organizacoes(id) ON DELETE CASCADE,
   CONSTRAINT fk_pedido_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE SET NULL,

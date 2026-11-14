@@ -3,18 +3,11 @@ import { Loader2, Plus, Send } from 'lucide-react';
 import { api } from '../servicos/api';
 import { dataHora, moedaExata } from '../servicos/formato';
 
-const PROXIMOS = {
-  solicitado: ['encaminhado', 'em_atendimento', 'contratado', 'recusado'],
-  encaminhado: ['em_atendimento', 'contratado', 'recusado'],
-  em_atendimento: ['contratado', 'recusado'],
-};
-
 /** Lado da operadora (Seção 18): parceiros, andamento dos pedidos e o que foi vendido. */
 export default function Parceiros() {
   const [parceiros, setParceiros] = useState(null);
   const [servicos, setServicos] = useState({});
   const [pedidos, setPedidos] = useState([]);
-  const [rotulos, setRotulos] = useState({});
   const [vendas, setVendas] = useState([]);
   const [erro, setErro] = useState(null);
   const [novo, setNovo] = useState({ servico: 'seguro_garantia', nome: '', email_pedidos: '', site: '' });
@@ -23,7 +16,7 @@ export default function Parceiros() {
     Promise.all([api.adminParceiros(), api.adminPedidosServico(), api.adminVendasServico()])
       .then(([p, ped, v]) => {
         setParceiros(p.parceiros); setServicos(p.servicos);
-        setPedidos(ped.pedidos); setRotulos(ped.status); setVendas(v.vendas); setErro(null);
+        setPedidos(ped.pedidos); setVendas(v.vendas); setErro(null);
       })
       .catch((e) => { setErro(e.message); setParceiros((a) => a || []); });
   }, []);
@@ -94,14 +87,14 @@ export default function Parceiros() {
             {pedidos.map((p) => (
               <tr key={p.id} className="border-t border-borda">
                 <td className="p-2 font-mono">{p.protocolo}</td><td className="p-2">{p.organizacao}</td><td className="p-2">{p.servico_rotulo}</td>
-                <td className="p-2">{rotulos[p.status]}{p.valor_contratado != null && ` · ${moedaExata(p.valor_contratado)}`}</td>
+                <td className="p-2">{p.status_rotulo}{p.valor_contratado != null && ` · ${moedaExata(p.valor_contratado)}`}</td>
                 <td className="p-2">{p.parceiro_nome || '—'}</td><td className="p-2">{dataHora(p.criado_em)}</td>
                 <td className="p-2 flex flex-wrap gap-2">
                   {p.status === 'solicitado' && (
                     <button className="underline flex items-center gap-0.5" onClick={() => agir(() => api.adminReenviarPedidoServico(p.id))}><Send size={10} /> reenviar</button>
                   )}
-                  {(PROXIMOS[p.status] || []).map((s) => (
-                    <button key={s} className="underline text-texto-suave hover:text-texto" onClick={() => mudar(p, s)}>{rotulos[s]}</button>
+                  {p.proximos.map((s) => (
+                    <button key={s.chave} className="underline text-texto-suave hover:text-texto" onClick={() => mudar(p, s.chave)}>{s.rotulo}</button>
                   ))}
                 </td>
               </tr>

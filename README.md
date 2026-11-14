@@ -417,7 +417,7 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
   operadora marca o andamento e o **valor contratado** (obrigatório para "contratado") e vê as vendas por serviço.
   Tela **Serviços** (atalho "Cotar seguro garantia" na aba Exigências). Rotas `/api/servicos/*` e
   `/api/admin/{parceiros,servicos/*}`. Regras puras em `backend/regras/servicos.js` (`testes/servicos.test.js`).
-  **Aceite medido**: ver o plano (Seção 18).
+  **Aceite medido**: ver o plano (Seção 18) — 24 conferências pela API real e 24 pelo navegador, 247/247 testes; **o aceite em si (serviço vendido a cliente ativo) não foi verificado**: falta parceiro real e SMTP.
 - `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
   ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
 

@@ -3,6 +3,7 @@
 // status, sem banco e sem rede.
 const { SERVICOS, VERSAO_TERMO_PARCEIRO, TERMO_VINCULO } = require('../config/dados/servicos');
 const { LACUNA } = require('../config/dados/legal');
+const { EMAIL } = require('./notificacoes');
 
 const STATUS = {
   interesse: 'Interesse registrado',
@@ -17,6 +18,9 @@ const STATUS = {
 /** Pedido que ainda pode ser cancelado pelo cliente. */
 const CANCELAVEIS = new Set(['interesse', 'solicitado', 'encaminhado', 'em_atendimento']);
 
+/** Pedido em andamento: conta como "em aberto" no catálogo e barra o pedido repetido. */
+const ABERTOS = [...CANCELAVEIS];
+
 /** Para onde a operadora pode mover um pedido (interesse nunca avança: não houve consentimento). */
 const TRANSICOES = {
   solicitado: ['encaminhado', 'em_atendimento', 'contratado', 'recusado'],
@@ -29,6 +33,7 @@ const TRANSICOES = {
 };
 
 const MAX_MENSAGEM = 1000;
+const MAX_OBSERVACAO = 500;
 
 /** SRV-2026-000123: o ano é o do pedido, o número é o id. */
 function protocolo(id, criadoEm) {
@@ -38,6 +43,9 @@ function protocolo(id, criadoEm) {
 
 const comProtocolo = (p) => ({
   ...p,
+  // O que a tela pode oferecer: a regra mora aqui, o front só desenha os botões.
+  proximos: (TRANSICOES[p.status] || []).map((chave) => ({ chave, rotulo: STATUS[chave] })),
+  cancelavel: CANCELAVEIS.has(p.status),
   protocolo: protocolo(p.id, p.criado_em),
   servico_rotulo: (SERVICOS[p.servico] || {}).rotulo || p.servico,
   status_rotulo: STATUS[p.status] || p.status,
@@ -174,7 +182,7 @@ function statusInicial({ temParceiro, emailEnviado }) {
   return emailEnviado ? 'encaminhado' : 'solicitado';
 }
 
-/** `{ status?, valor_contratado?, observacao?, parceiro_id? }` da operadora → dados ou `{ erro }`. */
+/** `{ status?, valor_contratado?, observacao? }` da operadora → dados ou `{ erro }`. */
 function validarAtualizacao(corpo, atual) {
   const c = corpo || {};
   const dados = {};
@@ -201,7 +209,7 @@ function validarAtualizacao(corpo, atual) {
   }
   if (c.observacao !== undefined) {
     const o = String(c.observacao || '').trim();
-    if (o.length > 500) return { erro: 'A observação passou de 500 letras.' };
+    if (o.length > MAX_OBSERVACAO) return { erro: `A observação passou de ${MAX_OBSERVACAO} letras.` };
     dados.observacao = o || null;
   }
   return { dados };
@@ -222,7 +230,7 @@ function validarParceiro(corpo, parcial = false) {
   }
   if (!parcial || c.email_pedidos !== undefined) {
     const email = String(c.email_pedidos || '').trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 255) return { erro: 'E-mail de pedidos inválido.' };
+    if (!EMAIL.test(email) || email.length > 255) return { erro: 'E-mail de pedidos inválido.' };
     dados.email_pedidos = email;
   }
   if (c.site !== undefined) {
@@ -257,7 +265,7 @@ function resumoDeVendas(linhas) {
 }
 
 module.exports = {
-  SERVICOS, STATUS, TRANSICOES, CANCELAVEIS, VERSAO_TERMO_PARCEIRO, TERMO_VINCULO, MAX_MENSAGEM,
+  SERVICOS, STATUS, CANCELAVEIS, ABERTOS, VERSAO_TERMO_PARCEIRO, TERMO_VINCULO,
   protocolo, comProtocolo, validarPedido, aceiteValido, montarDados, garantiasDasExigencias,
   linhasDosDados, montarEmail, statusInicial, validarAtualizacao, validarParceiro, resumoDeVendas,
 };

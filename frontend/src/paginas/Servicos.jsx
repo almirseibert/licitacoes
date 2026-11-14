@@ -12,7 +12,6 @@ const COR_STATUS = {
   recusado: 'text-texto-suave',
   cancelado: 'text-texto-suave',
 };
-const CANCELAVEL = ['interesse', 'solicitado', 'encaminhado', 'em_atendimento'];
 
 /**
  * Serviços complementares por parceria (Seção 18). O painel só encaminha o pedido:
@@ -105,7 +104,7 @@ export default function Servicos({ inicial = null }) {
                   <td className="p-2">{p.parceiro_nome || '—'}</td>
                   <td className="p-2">{dataHora(p.criado_em)}</td>
                   <td className="p-2 text-right">
-                    {CANCELAVEL.includes(p.status) && (
+                    {p.cancelavel && (
                       <button className="text-texto-suave hover:text-erro underline" onClick={() => cancelar(p)}>cancelar</button>
                     )}
                   </td>
