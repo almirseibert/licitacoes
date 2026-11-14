@@ -149,7 +149,7 @@ test('14b: sem CONFIAR_PROXY o teto de tokens inválidos por IP sobe (o IP visto
 });
 
 test('14b: webhooks em paralelo respeitam o teto e o resultado volta por posição', async () => {
-  const { emParalelo } = require('../backend/jobs/webhooks');
+  const { emParalelo } = require('../backend/servicos/paralelo');
   let ativos = 0;
   let pico = 0;
   const saida = [];

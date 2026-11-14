@@ -20,6 +20,7 @@ const MAX_CONSIDERACOES = 5000;
 async function obter(organizacaoId, licitacaoId) {
   const [[l]] = await pool.query(
     `SELECT l.id, l.numero_compra, l.modalidade, l.orgao_nome, l.objeto, l.ia_ficha, l.ia_ficha_em,
+            l.ia_ficha_situacao, l.ia_ficha_erro, TIMESTAMPDIFF(SECOND, l.ia_ficha_pedida_em, NOW()) AS idade_s,
             c.texto AS consideracoes, c.atualizado_em AS consideracoes_em
        FROM licitacoes l
        LEFT JOIN resumo_consideracoes c ON c.licitacao_id = l.id AND c.organizacao_id = ?
@@ -31,9 +32,45 @@ async function obter(organizacaoId, licitacaoId) {
     licitacao: { id: l.id, numero_compra: l.numero_compra, modalidade: l.modalidade, orgao_nome: l.orgao_nome, objeto: l.objeto },
     dados: lerJson(l.ia_ficha, null),
     em: l.ia_ficha_em,
+    geracao: estadoDaGeracao(l),
     consideracoes: l.consideracoes || '',
     consideracoes_em: l.consideracoes_em || null,
   });
+}
+
+/** Segundos depois dos quais uma geração pendente é dada como interrompida (API reiniciou, por exemplo). */
+const ESPERA_MAXIMA_S = Math.ceil(cfg.timeoutResumoMs / 1000) + 60;
+const INTERROMPIDA = 'A geração do resumo foi interrompida. Gere de novo.';
+
+/** O que a tela precisa saber da geração: `{ situacao: 'pendente'|'erro'|null, erro }`, calculado na leitura. */
+function estadoDaGeracao(l) {
+  if (l.ia_ficha_situacao === 'pendente') {
+    return Number(l.idade_s) > ESPERA_MAXIMA_S ? { situacao: 'erro', erro: INTERROMPIDA } : { situacao: 'pendente', erro: null };
+  }
+  if (l.ia_ficha_situacao === 'erro') return { situacao: 'erro', erro: l.ia_ficha_erro };
+  return { situacao: null, erro: null };
+}
+
+/**
+ * Reserva a geração desta licitação (UPDATE condicional, atômico): `false` se já há uma em andamento
+ * dentro do prazo. Pendente velha demais (processo caiu) pode ser retomada.
+ */
+async function reservarGeracao(licitacaoId) {
+  const [r] = await pool.query(
+    `UPDATE licitacoes SET ia_ficha_situacao = 'pendente', ia_ficha_erro = NULL, ia_ficha_pedida_em = NOW()
+      WHERE id = ? AND (ia_ficha_situacao IS NULL OR ia_ficha_situacao = 'erro'
+                        OR ia_ficha_pedida_em < NOW() - INTERVAL ? SECOND)`,
+    [licitacaoId, ESPERA_MAXIMA_S]
+  );
+  return r.affectedRows > 0;
+}
+
+/** Fecha a geração: sucesso limpa o estado; falha guarda a mensagem (a ficha anterior, se havia, fica). */
+async function concluirGeracao(licitacaoId, erro = null) {
+  await pool.query(
+    'UPDATE licitacoes SET ia_ficha_situacao = ?, ia_ficha_erro = ? WHERE id = ?',
+    [erro ? 'erro' : null, erro ? String(erro).slice(0, 500) : null, licitacaoId]
+  );
 }
 
 /**
@@ -125,4 +162,4 @@ function textoDoEmail(ficha) {
   });
 }
 
-module.exports = { obter, existe, comDados, gerar, salvarConsideracoes, gerarDocx, textoDoEmail, MAX_CONSIDERACOES };
+module.exports = { obter, existe, comDados, gerar, reservarGeracao, concluirGeracao, estadoDaGeracao, salvarConsideracoes, gerarDocx, textoDoEmail, MAX_CONSIDERACOES };

@@ -4,6 +4,7 @@ const pool = require('../config/db');
 const email = require('./email');
 const { urlPublica } = require('../config/ambiente');
 const regras = require('../regras/servicos');
+const { emParalelo } = require('./paralelo');
 
 /** Parceiros ativos (de um serviço ou de todos) com o último pedido recebido, para o rodízio. */
 async function parceirosAtivos(servico) {
@@ -27,6 +28,8 @@ async function parceiroAtivo(servico) {
  * repete depois). Não envia dado de ninguém ao parceiro: o interesse continua só registrado.
  * @returns {{ avisados:number, sem_envio:number }} pessoas avisadas e pessoas que ficaram pendentes
  */
+const AVISOS_EM_PARALELO = 5;
+
 async function avisarInteressados(servico) {
   if (!(await parceirosAtivos(servico)).length) return { avisados: 0, sem_envio: 0 };
   const [linhas] = await pool.query(
@@ -45,10 +48,12 @@ async function avisarInteressados(servico) {
   }
   let avisados = 0;
   let semEnvio = 0;
-  for (const { usuario, ids } of pessoas.values()) {
+  // Vários e-mails ao mesmo tempo (até 5): cem interessados não seguram a requisição da operadora
+  // por cem idas e voltas ao SMTP, uma depois da outra.
+  await emParalelo([...pessoas.values()], AVISOS_EM_PARALELO, async ({ usuario, ids }) => {
     // Reserva antes de enviar: dois cliques na operadora não mandam o aviso duas vezes.
     const [reserva] = await pool.query('UPDATE servico_pedidos SET avisado_em = NOW() WHERE id IN (?) AND avisado_em IS NULL', [ids]);
-    if (!reserva.affectedRows) continue;
+    if (!reserva.affectedRows) return;
     let enviado = false;
     try {
       ({ enviado } = await email.enviarTransacional(regras.montarAvisoInteresse({ servico, usuario, urlPublica })));
@@ -60,9 +65,9 @@ async function avisarInteressados(servico) {
     } else {
       // Sem envio a reserva é desfeita: a pessoa continua pendente e a operadora repete o aviso depois.
       semEnvio += 1;
-      await pool.query('UPDATE servico_pedidos SET avisado_em = NULL WHERE id IN (?)', [ids]);
+      await pool.query('UPDATE servico_pedidos SET avisado_em = NULL WHERE id IN (?)', [ids]).catch((erro) => console.error('Não desfez a reserva do aviso:', erro.message));
     }
-  }
+  });
   return { avisados, sem_envio: semEnvio };
 }
 

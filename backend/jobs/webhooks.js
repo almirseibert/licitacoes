@@ -15,6 +15,7 @@ const { jwt, urlPublica } = require('../config/ambiente');
 const regras = require('../regras/api');
 const regrasBoletim = require('../regras/boletim');
 const boletim = require('./boletim');
+const { emParalelo } = require('../servicos/paralelo');
 
 const DIAS_JANELA = 7;
 const MAX_FALHAS = 10;
@@ -160,19 +161,6 @@ async function rodar({ org = null, webhookId = null, simular = false } = {}) {
   });
   resultado.entregas = porPosicao.filter(Boolean);
   return resultado;
-}
-
-/** Roda `fn(item, posição)` com no máximo `limite` ao mesmo tempo; espera todos. */
-async function emParalelo(itens, limite, fn) {
-  let proximo = 0;
-  const trabalhador = async () => {
-    while (proximo < itens.length) {
-      const i = proximo;
-      proximo += 1;
-      await fn(itens[i], i);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limite, itens.length) }, trabalhador));
 }
 
 module.exports = { rodar, emParalelo, entregarUm, selecionarNovos, segredoDe, MAX_FALHAS };

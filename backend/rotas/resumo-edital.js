@@ -48,7 +48,24 @@ rotas.get('/', carregarFicha, (req, res) => {
   res.json({ disponivel: ia.disponivel(), motivo: ia.disponivel() ? null : DESLIGADA, ...req.ficha });
 });
 
-// POST — gera a ficha. Só refaz a pedido (`forcar`); a guardada não custa nada.
+// Gera a ficha fora da requisição (um proxy reverso corta em 60 s e o modelo leva até 240 s): o POST
+// devolve 202 e a tela consulta o GET até a geração sair de 'pendente'. Nunca lança — todo desfecho
+// vira ficha guardada ou erro gravado na licitação.
+async function gerarEmSegundoPlano({ organizacaoId, licitacaoId, forcar }) {
+  try {
+    const r = await resumo.gerar({ licitacaoId, forcar });
+    if (r.chamouModelo) await limites.registrarUso(organizacaoId, 'ia_resumos_mes');
+    if (r.ok) return await resumo.concluirGeracao(licitacaoId);
+    if (r.codigo !== 'sem_texto') console.error('Resumo do edital:', r.motivo);
+    return await resumo.concluirGeracao(licitacaoId, r.codigo === 'sem_texto' ? r.motivo : FALHAS[r.codigo] || FALHAS.http);
+  } catch (erro) {
+    console.error('Resumo do edital — falha ao gerar', licitacaoId, erro.message);
+    return resumo.concluirGeracao(licitacaoId, FALHAS.http).catch(() => {});
+  }
+}
+
+// POST — gera a ficha. Só refaz a pedido (`forcar`); a guardada não custa nada e sai na hora (200).
+// Gerar de verdade responde 202: a ficha aparece no GET quando o modelo terminar.
 rotas.post('/', carregarFicha, async (req, res) => {
   const forcar = Boolean(req.body && req.body.forcar === true);
   const { ficha } = req;
@@ -57,22 +74,20 @@ rotas.post('/', carregarFicha, async (req, res) => {
       return res.json({ ...ficha, cache: true, mensagem: 'Este edital já foi resumido. Use "gerar de novo" para refazer.' });
     }
     if (!ia.disponivel()) return res.status(409).json({ erro: DESLIGADA });
+    if (ficha.geracao.situacao === 'pendente') {
+      return res.status(202).json({ ...ficha, mensagem: 'O resumo deste edital já está sendo gerado. Ele aparece aqui quando terminar.' });
+    }
     const estouro = await limites.conferir(req.organizacaoId, 'ia_resumos_mes');
     if (estouro) return res.status(402).json(estouro);
-
-    const r = await resumo.gerar({ licitacaoId: idLicitacao(req), forcar });
-    if (r.chamouModelo) await limites.registrarUso(req.organizacaoId, 'ia_resumos_mes');
-    if (!r.ok) {
-      if (r.codigo === 'sem_texto') return res.status(422).json({ erro: r.motivo });
-      console.error('Resumo do edital:', r.motivo);
-      return res.status(['formato', 'cortada'].includes(r.codigo) ? 422 : 502).json({ erro: FALHAS[r.codigo] || FALHAS.http });
+    if (!(await resumo.reservarGeracao(idLicitacao(req)))) {
+      return res.status(202).json({ ...ficha, geracao: { situacao: 'pendente', erro: null }, mensagem: 'O resumo deste edital já está sendo gerado. Ele aparece aqui quando terminar.' });
     }
-    res.json({
-      ...resumo.comDados(ficha, r.dados),
-      cache: r.cache,
-      mensagem: r.cache
-        ? 'Ficha recuperada do cache, sem custo novo.'
-        : 'Edital resumido. Confira cada item no trecho citado: a IA pode errar.',
+    // `gerarEmSegundoPlano` não lança; o catch é só para nada escapar como unhandledRejection.
+    setImmediate(() => gerarEmSegundoPlano({ organizacaoId: req.organizacaoId, licitacaoId: idLicitacao(req), forcar }).catch(() => {}));
+    res.status(202).json({
+      ...ficha,
+      geracao: { situacao: 'pendente', erro: null },
+      mensagem: 'Resumo em andamento. Pode levar alguns minutos; a ficha aparece aqui quando terminar.',
     });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível resumir o edital.', erro);

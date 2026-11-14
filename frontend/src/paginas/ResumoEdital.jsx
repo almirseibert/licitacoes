@@ -32,6 +32,26 @@ export default function ResumoEdital({ id, aoQuestionar }) {
       .catch((e) => setErro(e.message));
   }, [id]);
 
+  // A geração é em segundo plano (o proxy corta a requisição longa): enquanto o servidor diz
+  // 'pendente', a tela consulta a cada 3 s. Falha de rede não para o relógio; o servidor dá por
+  // interrompida a que passar do teto do modelo.
+  const gerando = Boolean(estado && estado.geracao && estado.geracao.situacao === 'pendente');
+  useEffect(() => {
+    if (!gerando) return undefined;
+    const relogio = setInterval(() => {
+      api
+        .resumoEdital(id)
+        .then((r) => {
+          if (r.geracao && r.geracao.situacao === 'pendente') return;
+          aplicar(r, true);
+          setAviso(r.geracao && r.geracao.erro ? null : 'Edital resumido. Confira cada item no trecho citado: a IA pode errar.');
+          setErro(r.geracao && r.geracao.erro ? r.geracao.erro : null);
+        })
+        .catch(() => {});
+    }, 3000);
+    return () => clearInterval(relogio);
+  }, [gerando, id]);
+
   const fazer = async (chave, acao) => {
     setOcupado(chave);
     setErro(null);
@@ -50,6 +70,7 @@ export default function ResumoEdital({ id, aoQuestionar }) {
       const r = await api.gerarResumoEdital(id, forcar);
       aplicar(r, true);
       setAviso(r.mensagem);
+      if (r.geracao && r.geracao.erro) setErro(r.geracao.erro);
     });
 
   if (erro && !estado) return <p className="text-sm text-erro">{erro}</p>;
@@ -68,14 +89,15 @@ export default function ResumoEdital({ id, aoQuestionar }) {
           {NAO_INFORMADO}&quot;.
         </p>
         {estado.disponivel ? (
-          <button className="botao-primario flex items-center gap-1" onClick={() => gerar(false)} disabled={Boolean(ocupado)}>
-            {ocupado === 'gerar' ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+          <button className="botao-primario flex items-center gap-1" onClick={() => gerar(false)} disabled={Boolean(ocupado) || gerando}>
+            {ocupado === 'gerar' || gerando ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
             gerar o resumo
           </button>
         ) : (
           <p className="text-xs text-atencao">{estado.motivo}</p>
         )}
-        {ocupado === 'gerar' && <p className="text-xs text-texto-suave">Lendo o edital… pode levar alguns minutos.</p>}
+        {(ocupado === 'gerar' || gerando) && <p className="text-xs text-texto-suave">Lendo o edital… pode levar alguns minutos; você pode sair desta aba e voltar.</p>}
+        {!gerando && estado.geracao && estado.geracao.erro && !erro && <p className="text-xs text-erro">{estado.geracao.erro}</p>}
         {erro && <p className="text-xs text-erro">{erro}</p>}
       </div>
     );
@@ -108,8 +130,8 @@ export default function ResumoEdital({ id, aoQuestionar }) {
             <Printer size={11} /> imprimir
           </button>
           {estado.disponivel && (
-            <button className="botao flex items-center gap-1" onClick={() => gerar(true)} disabled={Boolean(ocupado)}>
-              {ocupado === 'gerar' ? <Loader2 size={11} className="animate-spin" /> : <RefreshCcw size={11} />} gerar de novo
+            <button className="botao flex items-center gap-1" onClick={() => gerar(true)} disabled={Boolean(ocupado) || gerando}>
+              {ocupado === 'gerar' || gerando ? <Loader2 size={11} className="animate-spin" /> : <RefreshCcw size={11} />} gerar de novo
             </button>
           )}
         </div>

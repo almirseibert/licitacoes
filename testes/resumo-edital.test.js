@@ -130,6 +130,18 @@ test('questionamento: a primeira lacuna vira o trecho citado, com arquivo e pág
   assert.match(saida, /Resta dúvida quanto ao seguinte ponto: a gradação da multa, uma vez que ____________\./);
 });
 
+test('questionamento (11b): na impugnação, que não tem a frase da dúvida, o ponto entra no texto depois do trecho', () => {
+  const modelo = '1. DA EXIGÊNCIA IMPUGNADA\n\nO item ____________ do edital exige ____________.\n\n2. DA RESTRIÇÃO\n\nA exigência combatida é desproporcional porque ____________.';
+  const saida = r.preencherQuestionamento(modelo, {
+    ponto: 'atestado com quantitativo de 100% do objeto.',
+    citacao: { texto: 'atestado de 100% do quantitativo', arquivo: 'Edital', pagina: 9 },
+  });
+  assert.match(saida, /O edital exige \(Edital · página 9\): "atestado de 100% do quantitativo"\. Ponto a ser examinado \(apontado pelo resumo do edital; confirme antes de enviar\): atestado com quantitativo de 100% do objeto\./);
+  assert.match(saida, /desproporcional porque ____________/, 'o argumento continua sendo de quem assina');
+  // Sem ponto, nada é acrescentado.
+  assert.doesNotMatch(r.preencherQuestionamento(modelo, { citacao: { texto: 'x'.repeat(30), arquivo: 'E', pagina: 1 } }), /Ponto a ser examinado/);
+});
+
 test('o prompt lista exatamente as chaves do catálogo', () => {
   process.env.GEMINI_API_KEY = '';
   const { INSTRUCAO_RESUMO } = require('../backend/servicos/ia');

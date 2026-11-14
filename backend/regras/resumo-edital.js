@@ -343,9 +343,17 @@ function preencherQuestionamento(texto, { ponto, citacao }) {
     [/O item ____________ do edital exige ____________\./, `O edital exige (${local}): "${citacao.texto}".`],
     [/O item ____________ do termo de referência especifica ____________\./, `O edital especifica (${local}): "${citacao.texto}".`],
   ];
+  const pontoLimpo = ponto ? ponto.replace(/\.$/, '') : '';
   let saida = texto;
   for (const [padrao, troca] of trocas) saida = saida.replace(padrao, troca);
-  if (ponto) saida = saida.replace(/Resta dúvida quanto a ____________/, `Resta dúvida quanto ao seguinte ponto: ${ponto.replace(/\.$/, '')}`);
+  if (pontoLimpo) {
+    // O ponto entra no TEXTO do pedido: no esclarecimento, na dúvida do item 2; na impugnação, que
+    // não tem essa frase, logo depois do trecho citado — antes só o trecho entrava e o ponto ficava
+    // numa nota da tela, que não vai ao órgão. É sugestão da IA: o texto diz isso, para quem assina conferir.
+    const dentroDaDuvida = /Resta dúvida quanto a ____________/;
+    if (dentroDaDuvida.test(saida)) saida = saida.replace(dentroDaDuvida, `Resta dúvida quanto ao seguinte ponto: ${pontoLimpo}`);
+    else saida = saida.replace(/(O edital (?:estabelece|exige|especifica) \([^)]*\): "[^"]*"\.)/, `$1 Ponto a ser examinado (apontado pelo resumo do edital; confirme antes de enviar): ${pontoLimpo}.`);
+  }
   return saida;
 }
 
