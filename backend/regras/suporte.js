@@ -1,5 +1,6 @@
 // "Solicitações" — o canal com o suporte (Seção 17 do PLANO_SAAS_CONLICITACAO.md).
 // Protocolo, categorias e a regra de status, sem banco.
+const { protocolo: protocoloComum } = require('./protocolo');
 
 const CATEGORIAS = {
   duvida: 'Dúvida de uso',
@@ -19,11 +20,8 @@ const STATUS = {
 const MAX_ASSUNTO = 160;
 const MAX_TEXTO = 5000;
 
-/** SOL-2026-000123: o ano é o da abertura, o número é o id (nunca repete). */
-function protocolo(id, criadaEm) {
-  const ano = new Date(criadaEm || Date.now()).getFullYear();
-  return `SOL-${ano}-${String(id).padStart(6, '0')}`;
-}
+/** SOL-2026-000123 (formato comum em regras/protocolo.js). */
+const protocolo = (id, criadaEm) => protocoloComum('SOL', id, criadaEm);
 
 /** A solicitação como a tela a mostra: com protocolo e os rótulos de categoria e status. */
 const comProtocolo = (s) => ({

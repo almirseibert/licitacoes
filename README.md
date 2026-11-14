@@ -418,6 +418,13 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
   Tela **Serviços** (atalho "Cotar seguro garantia" na aba Exigências). Rotas `/api/servicos/*` e
   `/api/admin/{parceiros,servicos/*}`. Regras puras em `backend/regras/servicos.js` (`testes/servicos.test.js`).
   **Aceite medido**: ver o plano (Seção 18) — 24 conferências pela API real e 24 pelo navegador, 247/247 testes; **o aceite em si (serviço vendido a cliente ativo) não foi verificado**: falta parceiro real e SMTP.
+  **18b (14/11/2026)**: migração `036_servicos_aviso_interesse.sql`. **Rodízio** entre parceiros do mesmo serviço
+  (quem está há mais tempo sem pedido; o pedido só vale para o parceiro que a prévia mostrou — `parceiro_id`, senão 409).
+  **Aviso de interesse**: ao cadastrar/reativar um parceiro, quem tinha registrado interesse recebe um e-mail (sem
+  nenhum dado enviado); sem SMTP fica pendente e a operadora repete em "avisar interessados". Vendas agregadas no
+  banco; a exigência declara o serviço (`servico` no catálogo); protocolo comum SRV/SOL (`regras/protocolo.js`);
+  regras/aviso em `backend/servicos/parceiros.js`. Medido: 31 conferências pela API real + 5 e-mails num SMTP local,
+  252/252 testes. Pendentes: parceiro real, SMTP real, revisão do termo por advogado.
 - `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
   ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
 

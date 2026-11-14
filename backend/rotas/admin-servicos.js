@@ -5,6 +5,7 @@ const pool = require('../config/db');
 const { responderErro } = require('../middlewares/responder-erro');
 const email = require('../servicos/email');
 const regras = require('../regras/servicos');
+const { avisarInteressados } = require('../servicos/parceiros');
 
 const rotas = express.Router();
 
@@ -12,6 +13,16 @@ const MSG_PARCEIRO_REPETIDO = 'Já existe um parceiro com esse nome neste servi�
 
 // Fila da operadora: o que pede ação primeiro (constante nossa, nunca entrada do usuário).
 const ORDEM_NA_FILA = ['solicitado', 'interesse', ...Object.keys(regras.STATUS).filter((s) => !['solicitado', 'interesse'].includes(s))];
+
+/** O parceiro já está salvo: falha no aviso (SMTP, banco) não desfaz o cadastro, só fica no log. */
+async function avisarSemFalhar(avisar) {
+  try {
+    return await avisar();
+  } catch (erro) {
+    console.error('Não foi possível avisar os interessados:', erro.message);
+    return null;
+  }
+}
 
 // GET /api/admin/parceiros
 rotas.get('/parceiros', async (_req, res) => {
@@ -33,7 +44,9 @@ rotas.post('/parceiros', async (req, res) => {
       'INSERT INTO parceiros (servico, nome, email_pedidos, site, ativo) VALUES (?, ?, ?, ?, ?)',
       [d.servico, d.nome, d.email_pedidos, d.site || null, d.ativo === undefined ? 1 : d.ativo]
     );
-    res.status(201).json({ id: r.insertId });
+    // Quem tinha registrado interesse neste serviço fica sabendo que agora há parceiro.
+    const avisos = (d.ativo === undefined || d.ativo) ? await avisarSemFalhar(() => avisarInteressados(d.servico)) : null;
+    res.status(201).json({ id: r.insertId, avisos });
   } catch (erro) {
     if (erro.code === 'ER_DUP_ENTRY') return res.status(409).json({ erro: MSG_PARCEIRO_REPETIDO });
     responderErro(res, 500, 'Não foi possível cadastrar o parceiro.', erro);
@@ -56,7 +69,12 @@ rotas.patch('/parceiros/:id', async (req, res) => {
       ...campos.map((c) => v.dados[c]), Number(req.params.id) || 0,
     ]);
     if (!r.affectedRows) return res.status(404).json({ erro: 'Parceiro não encontrado.' });
-    res.json({ ok: true });
+    // Ativou: quem esperava por este serviço é avisado (o parceiro já está salvo, o aviso não o desfaz).
+    const avisos = v.dados.ativo ? await avisarSemFalhar(async () => {
+      const [[p]] = await pool.query('SELECT servico FROM parceiros WHERE id = ?', [Number(req.params.id)]);
+      return avisarInteressados(p.servico);
+    }) : null;
+    res.json({ ok: true, avisos });
   } catch (erro) {
     if (erro.code === 'ER_DUP_ENTRY') return res.status(409).json({ erro: MSG_PARCEIRO_REPETIDO });
     responderErro(res, 500, 'Não foi possível alterar o parceiro.', erro);
@@ -143,10 +161,31 @@ rotas.post('/servicos/pedidos/:id/reenviar', async (req, res) => {
 // GET /api/admin/servicos/vendas — o que foi contratado, por serviço.
 rotas.get('/servicos/vendas', async (_req, res) => {
   try {
-    const [linhas] = await pool.query('SELECT servico, status, organizacao_id, valor_contratado FROM servico_pedidos');
+    // Interesse e cancelado não contam como pedido; o valor soma só o contratado.
+    const [linhas] = await pool.query(
+      `SELECT servico,
+              SUM(status = 'interesse') AS interesses,
+              SUM(status NOT IN ('interesse','cancelado')) AS pedidos,
+              SUM(status = 'contratado') AS contratados,
+              SUM(CASE WHEN status = 'contratado' THEN valor_contratado END) AS valor,
+              COUNT(DISTINCT CASE WHEN status = 'contratado' THEN organizacao_id END) AS organizacoes
+         FROM servico_pedidos GROUP BY servico`
+    );
     res.json({ vendas: regras.resumoDeVendas(linhas) });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível somar as vendas.', erro);
+  }
+});
+
+// POST /api/admin/servicos/avisar-interesses — { servico }: repete o aviso que não saiu (sem SMTP).
+rotas.post('/servicos/avisar-interesses', async (req, res) => {
+  const servico = String((req.body || {}).servico || '');
+  if (!regras.SERVICOS[servico]) return res.status(400).json({ erro: 'Serviço inválido.' });
+  try {
+    const avisos = await avisarInteressados(servico);
+    res.json({ ok: true, avisos });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível avisar os interessados.', erro);
   }
 });
 

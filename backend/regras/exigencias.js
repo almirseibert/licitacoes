@@ -177,7 +177,7 @@ const CATALOGO = [
     ],
   },
   {
-    codigo: 'garantia_proposta', grupo: 'Qualificação econômica', rotulo: 'Garantia de proposta',
+    codigo: 'garantia_proposta', grupo: 'Qualificação econômica', rotulo: 'Garantia de proposta', servico: 'seguro_garantia',
     positivos: [
       /(?:exigid|exigir|apresenta|prestar|recolh)[^.]{0,60}garantia\s+(?:de|da)\s+proposta/,
       /garantia\s+(?:de|da)\s+proposta[^.]{0,80}(?:ser[áa]|dever[áa]|corresponder|equivalente|1%|um\s+por\s+cento)/,
@@ -185,7 +185,7 @@ const CATALOGO = [
     ],
   },
   {
-    codigo: 'garantia_contrato', grupo: 'Qualificação econômica', rotulo: 'Garantia contratual',
+    codigo: 'garantia_contrato', grupo: 'Qualificação econômica', rotulo: 'Garantia contratual', servico: 'seguro_garantia',
     positivos: [/garantia\s+contratual/, /garantia\s+de\s+execu[çc][ãa]o/, /garantia\s+do\s+contrato/],
   },
 

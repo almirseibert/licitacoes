@@ -154,6 +154,7 @@ function Pedido({ servico, licitacaoInicial, aoFechar, aoEnviar }) {
         servico: servico.chave,
         licitacao_id: licitacaoId || undefined,
         mensagem: mensagem || undefined,
+        parceiro_id: (previa && previa.parceiro_id) || undefined,
         aceite_termo: previa && previa.disponivel && aceito ? previa.termo_versao : undefined,
       }));
     } catch (err) {

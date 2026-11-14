@@ -96,21 +96,60 @@ test('parceiro: e-mail e site precisam ser válidos', () => {
   assert.deepEqual(r.validarParceiro({ ativo: 0 }, true).dados, { ativo: 0 });
 });
 
-test('vendas: interesse e cancelado não contam como pedido; valor soma só o contratado', () => {
+test('vendas: uma linha por serviço vinda do banco; serviço sem pedido aparece zerado', () => {
   const v = r.resumoDeVendas([
-    { servico: 'seguro_garantia', status: 'interesse', organizacao_id: 1 },
-    { servico: 'seguro_garantia', status: 'cancelado', organizacao_id: 1 },
-    { servico: 'seguro_garantia', status: 'encaminhado', organizacao_id: 2 },
-    { servico: 'seguro_garantia', status: 'contratado', organizacao_id: 3, valor_contratado: '1500.10' },
-    { servico: 'seguro_garantia', status: 'contratado', organizacao_id: 3, valor_contratado: '500.20' },
-    { servico: 'cursos', status: 'contratado', organizacao_id: 4, valor_contratado: null },
+    { servico: 'seguro_garantia', interesses: '1', pedidos: '3', contratados: '2', valor: '2000.30', organizacoes: '1' },
   ]);
   const seguro = v.find((x) => x.servico === 'seguro_garantia');
   assert.deepEqual(
     { i: seguro.interesses, p: seguro.pedidos, c: seguro.contratados, o: seguro.organizacoes_contratantes, v: seguro.valor_contratado },
     { i: 1, p: 3, c: 2, o: 1, v: 2000.3 }
   );
-  assert.equal(v.find((x) => x.servico === 'cursos').valor_contratado, 0);
+  const cursos = v.find((x) => x.servico === 'cursos');
+  assert.deepEqual([cursos.interesses, cursos.pedidos, cursos.contratados, cursos.valor_contratado], [0, 0, 0, 0]);
+  assert.equal(v.length, Object.keys(r.SERVICOS).length);
+  assert.equal(r.resumoDeVendas(null).length, Object.keys(r.SERVICOS).length);
+});
+
+test('rodízio: quem nunca recebeu vem primeiro; depois, o mais antigo; empate pelo cadastro', () => {
+  const a = { id: 1, ultimo_pedido: '2026-11-10T10:00:00Z' };
+  const b = { id: 2, ultimo_pedido: '2026-11-01T10:00:00Z' };
+  const c = { id: 3, ultimo_pedido: null };
+  assert.equal(r.escolherParceiro([a, b, c]).id, 3);
+  assert.equal(r.escolherParceiro([a, b]).id, 2);
+  assert.equal(r.escolherParceiro([{ id: 5, ultimo_pedido: null }, { id: 4, ultimo_pedido: null }]).id, 4);
+  assert.equal(r.escolherParceiro([]), null);
+  assert.equal(r.escolherParceiro(undefined), null);
+});
+
+test('aviso de interesse: diz que nenhum dado foi enviado e leva ao pedido com aceite', () => {
+  const m = r.montarAvisoInteresse({
+    servico: 'seguro_garantia', usuario: { nome: 'Ana', email: 'ana@acme.com' }, urlPublica: 'https://painel.exemplo.com.br',
+  });
+  assert.equal(m.para, 'ana@acme.com');
+  assert.match(m.assunto, /Seguro garantia/);
+  assert.doesNotMatch(m.texto, /Corretora Boa/); // o nome do parceiro é o da prévia, não o do aviso
+  assert.match(m.texto, /nenhum dado seu foi enviado/);
+  assert.match(m.texto, /aceite o termo/);
+  assert.match(m.texto, /https:\/\/painel\.exemplo\.com\.br → Serviços/);
+  assert.doesNotMatch(r.montarAvisoInteresse({ servico: 'cursos', usuario: { email: 'a@b.co' } }).texto, /undefined|null/);
+});
+
+test('protocolo: SRV e SOL usam o mesmo formato', () => {
+  const sup = require('../backend/regras/suporte');
+  assert.equal(r.protocolo(123, '2026-03-01T12:00:00Z'), 'SRV-2026-000123');
+  assert.equal(sup.protocolo(7, '2026-03-01T12:00:00Z'), 'SOL-2026-000007');
+});
+
+test('exigências: só a garantia declara o serviço complementar (o front não adivinha pelo código)', () => {
+  const { CATALOGO } = require('../backend/regras/exigencias');
+  const com = CATALOGO.filter((x) => x.servico).map((x) => x.codigo);
+  assert.deepEqual(com.sort(), ['garantia_contrato', 'garantia_proposta']);
+  for (const x of CATALOGO.filter((i) => i.servico)) assert.ok(r.SERVICOS[x.servico], x.codigo);
+});
+
+test('auditoria: aviso aos interessados entra na trilha', () => {
+  assert.equal(aud.classificar('POST', '/admin/servicos/avisar-interesses', { servico: 'cursos' }, { id: 1 }).acao, 'avisou_interessados');
 });
 
 test('auditoria: pedir e cancelar serviço entram na trilha, sem a mensagem do cliente', () => {

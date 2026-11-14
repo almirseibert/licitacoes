@@ -3,6 +3,15 @@ import { Loader2, Plus, Send } from 'lucide-react';
 import { api } from '../servicos/api';
 import { dataHora, moedaExata } from '../servicos/formato';
 
+/** O que a operadora lê depois de cadastrar ou ativar um parceiro (ou de repetir o aviso). */
+function textoDosAvisos(a) {
+  if (!a || (!a.avisados && !a.sem_envio)) return null;
+  const partes = [];
+  if (a.avisados) partes.push(`${a.avisados} pessoa(s) com interesse registrado foram avisadas por e-mail.`);
+  if (a.sem_envio) partes.push(`${a.sem_envio} aviso(s) não saíram (confira o SMTP) e podem ser repetidos em "Vendas por serviço".`);
+  return partes.join(' ');
+}
+
 /** Lado da operadora (Seção 18): parceiros, andamento dos pedidos e o que foi vendido. */
 export default function Parceiros() {
   const [parceiros, setParceiros] = useState(null);
@@ -10,6 +19,7 @@ export default function Parceiros() {
   const [pedidos, setPedidos] = useState([]);
   const [vendas, setVendas] = useState([]);
   const [erro, setErro] = useState(null);
+  const [aviso, setAviso] = useState(null);
   const [novo, setNovo] = useState({ servico: 'seguro_garantia', nome: '', email_pedidos: '', site: '' });
 
   const carregar = useCallback(() => {
@@ -22,7 +32,15 @@ export default function Parceiros() {
   }, []);
   useEffect(carregar, [carregar]);
 
-  const agir = async (fn) => { try { await fn(); carregar(); } catch (e) { setErro(e.message); } };
+  const agir = async (fn) => {
+    setErro(null);
+    setAviso(null);
+    try {
+      const r = await fn();
+      setAviso(textoDosAvisos(r && r.avisos));
+      carregar();
+    } catch (e) { setErro(e.message); }
+  };
 
   const mudar = (p, status) => {
     const corpo = { status };
@@ -40,16 +58,22 @@ export default function Parceiros() {
     <div className="h-full overflow-y-auto p-4 md:p-6">
       <header className="mb-5"><h1 className="font-titulo text-xl">Parceiros e pedidos</h1></header>
       {erro && <p className="text-xs text-erro mb-3" role="alert">{erro}</p>}
+      {aviso && <p className="text-xs text-texto-suave mb-3" role="status">{aviso}</p>}
 
       <h2 className="text-xs uppercase tracking-wide text-texto-suave mb-2">Vendas por serviço</h2>
       <div className="overflow-x-auto max-w-4xl mb-6">
         <table className="w-full text-xs border border-borda rounded">
-          <thead className="text-left text-texto-suave"><tr><th className="p-2">Serviço</th><th className="p-2">Interesses</th><th className="p-2">Pedidos</th><th className="p-2">Contratados</th><th className="p-2">Clientes</th><th className="p-2">Valor fechado</th></tr></thead>
+          <thead className="text-left text-texto-suave"><tr><th className="p-2">Serviço</th><th className="p-2">Interesses</th><th className="p-2">Pedidos</th><th className="p-2">Contratados</th><th className="p-2">Clientes</th><th className="p-2">Valor fechado</th><th className="p-2"></th></tr></thead>
           <tbody>
             {vendas.map((v) => (
               <tr key={v.servico} className="border-t border-borda">
                 <td className="p-2">{v.rotulo}</td><td className="p-2">{v.interesses}</td><td className="p-2">{v.pedidos}</td>
                 <td className="p-2">{v.contratados}</td><td className="p-2">{v.organizacoes_contratantes}</td><td className="p-2">{moedaExata(v.valor_contratado)}</td>
+                <td className="p-2">
+                  {v.interesses > 0 && parceiros.some((p) => p.ativo && p.servico === v.servico) && (
+                    <button className="underline text-texto-suave hover:text-texto" onClick={() => agir(() => api.adminAvisarInteresses(v.servico))}>avisar interessados</button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -58,7 +82,7 @@ export default function Parceiros() {
 
       <h2 className="text-xs uppercase tracking-wide text-texto-suave mb-2">Parceiros</h2>
       <form className="flex flex-wrap gap-2 items-end mb-3 max-w-4xl"
-        onSubmit={(e) => { e.preventDefault(); agir(async () => { await api.adminNovoParceiro(novo); setNovo({ ...novo, nome: '', email_pedidos: '', site: '' }); }); }}>
+        onSubmit={(e) => { e.preventDefault(); agir(() => api.adminNovoParceiro(novo).then((r) => { setNovo({ ...novo, nome: '', email_pedidos: '', site: '' }); return r; })); }}>
         <select className="campo-caixa" aria-label="Serviço" value={novo.servico} onChange={(e) => setNovo({ ...novo, servico: e.target.value })}>
           {Object.entries(servicos).map(([k, r]) => <option key={k} value={k}>{r}</option>)}
         </select>

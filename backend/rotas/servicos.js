@@ -7,28 +7,24 @@ const { exigirPapel } = require('../middlewares/autenticar');
 const { responderErro } = require('../middlewares/responder-erro');
 const email = require('../servicos/email');
 const regras = require('../regras/servicos');
+const { CATALOGO } = require('../regras/exigencias');
+const escopo = require('../servicos/escopo');
+const { parceirosAtivos, parceiroAtivo } = require('../servicos/parceiros');
+
+// As exigências que ligam ao seguro garantia vêm do catálogo (campo `servico`), não de uma lista aqui.
+const CODIGOS_DE_GARANTIA = CATALOGO.filter((x) => x.servico === 'seguro_garantia').map((x) => x.codigo);
 
 const rotas = express.Router();
 
 /** O que a organização vê de um parceiro (nunca o e-mail que recebe os pedidos). */
 const publico = (p) => (p ? { nome: p.nome, site: p.site } : null);
 
-/** Parceiro que atende o serviço agora (o cadastrado há mais tempo e ativo). */
-async function parceiroAtivo(servico) {
-  const [[p]] = await pool.query(
-    'SELECT id, nome, email_pedidos, site FROM parceiros WHERE servico = ? AND ativo = 1 ORDER BY id LIMIT 1',
-    [servico]
-  );
-  return p || null;
-}
-
 /** A licitação precisa ser uma que a organização acompanha — o catálogo é compartilhado. */
 async function licitacaoDaOrganizacao(organizacaoId, id) {
   const [[l]] = await pool.query(
     `SELECT l.id, l.orgao_nome, l.modalidade, l.numero_compra, l.objeto, l.uf, l.valor_estimado, l.abertura_propostas
-       FROM licitacoes l JOIN org_licitacoes o ON o.licitacao_id = l.id AND o.organizacao_id = ?
-      WHERE l.id = ?`,
-    [organizacaoId, id]
+       FROM ${escopo.daOrganizacao(organizacaoId)} l WHERE l.id = ?`,
+    [id]
   );
   return l || null;
 }
@@ -61,8 +57,8 @@ async function prepararDados(req, v) {
 // GET /api/servicos/catalogo — os serviços, se há parceiro e quantos pedidos a organização tem.
 rotas.get('/catalogo', async (req, res) => {
   try {
-    const [[parceiros], [contagens]] = await Promise.all([
-      pool.query('SELECT servico, nome, site FROM parceiros WHERE ativo = 1 ORDER BY id'),
+    const [parceiros, [contagens]] = await Promise.all([
+      parceirosAtivos(),
       pool.query(
         `SELECT servico, COUNT(*) AS total FROM servico_pedidos
           WHERE organizacao_id = ? AND status NOT IN ('cancelado','recusado','contratado') GROUP BY servico`,
@@ -72,7 +68,7 @@ rotas.get('/catalogo', async (req, res) => {
     const abertos = Object.fromEntries(contagens.map((c) => [c.servico, Number(c.total)]));
     res.json({
       servicos: Object.entries(regras.SERVICOS).map(([chave, s]) => {
-        const parceiro = parceiros.find((p) => p.servico === chave);
+        const parceiro = regras.escolherParceiro(parceiros.filter((p) => p.servico === chave));
         return {
           chave,
           rotulo: s.rotulo,
@@ -94,13 +90,12 @@ rotas.get('/licitacoes-com-garantia', async (req, res) => {
   try {
     const [linhas] = await pool.query(
       `SELECT l.id, l.orgao_nome, l.numero_compra
-         FROM licitacoes l
-         JOIN org_licitacoes o ON o.licitacao_id = l.id AND o.organizacao_id = ?
-        WHERE o.descartada = 0 AND (l.abertura_propostas IS NULL OR l.abertura_propostas >= NOW())
+         FROM ${escopo.daOrganizacao(req.organizacaoId)} l
+        WHERE l.descartada = 0 AND (l.abertura_propostas IS NULL OR l.abertura_propostas >= NOW())
           AND EXISTS (SELECT 1 FROM licitacao_exigencias e WHERE e.licitacao_id = l.id AND e.detectado = 'sim'
-                       AND e.codigo IN ('garantia_proposta','garantia_contrato'))
+                       AND e.codigo IN (?))
         ORDER BY l.abertura_propostas IS NULL, l.abertura_propostas ASC LIMIT 50`,
-      [req.organizacaoId]
+      [CODIGOS_DE_GARANTIA]
     );
     res.json({ licitacoes: linhas });
   } catch (erro) {
@@ -118,6 +113,7 @@ rotas.get('/previa', exigirPapel('admin'), async (req, res) => {
     res.json({
       disponivel: Boolean(parceiro),
       parceiro: publico(parceiro),
+      parceiro_id: parceiro ? parceiro.id : null, // o que o cliente viu: o pedido só vale para ele
       linhas: regras.linhasDosDados(r.dados),
       termo: regras.TERMO_VINCULO,
       termo_versao: regras.VERSAO_TERMO_PARCEIRO,
@@ -148,7 +144,14 @@ rotas.post('/pedidos', exigirPapel('admin'), async (req, res) => {
   const v = regras.validarPedido(req.body);
   if (v.erro) return res.status(400).json({ erro: v.erro });
   try {
-    const parceiro = await parceiroAtivo(v.dados.servico);
+    const ativos = await parceirosAtivos(v.dados.servico);
+    const parceiroId = Number((req.body || {}).parceiro_id);
+    // O cliente aceitou o termo vendo o nome de UM parceiro (o da prévia): o pedido vai para ele, nunca
+    // para outro que o rodízio escolheria agora.
+    const parceiro = ativos.find((p) => p.id === parceiroId) || null;
+    if (ativos.length && !parceiro) {
+      return res.status(409).json({ erro: 'O parceiro da prévia mudou, surgiu agora ou não está mais disponível. Abra o pedido de novo para conferir os dados.' });
+    }
     if (parceiro && !regras.aceiteValido(v.dados.aceite)) {
       return res.status(400).json({ erro: 'Aceite o termo de vínculo para enviar o pedido ao parceiro.' });
     }

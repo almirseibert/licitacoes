@@ -199,6 +199,7 @@ export const api = {
   adminAtualizarPedidoServico: (id, corpo) =>
     requisitar(`/admin/servicos/pedidos/${id}`, { method: 'POST', body: JSON.stringify(corpo) }),
   adminReenviarPedidoServico: (id) => requisitar(`/admin/servicos/pedidos/${id}/reenviar`, { method: 'POST' }),
+  adminAvisarInteresses: (servico) => requisitar('/admin/servicos/avisar-interesses', { method: 'POST', body: JSON.stringify({ servico }) }),
   adminVendasServico: () => requisitar('/admin/servicos/vendas'),
   baixarMeusDados: () => salvarComo('/lgpd/exportar', 'meus-dados.json'),
   pedirExclusao: (confirmacao, senha) =>

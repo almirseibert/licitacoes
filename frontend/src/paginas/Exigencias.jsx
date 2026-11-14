@@ -143,7 +143,7 @@ export default function Exigencias({ id, aoCotarSeguro = null }) {
                     </td>
                     <td className="text-xs">
                       <Pedido detectado={d.detectado} pagina={d.pagina} arquivo={d.arquivo} />
-                      {aoCotarSeguro && d.detectado === 'sim' && d.codigo.startsWith('garantia_') && (
+                      {aoCotarSeguro && d.detectado === 'sim' && d.servico === 'seguro_garantia' && (
                         <button className="block text-[11px] underline text-texto-suave hover:text-texto" onClick={aoCotarSeguro}>
                           Cotar seguro garantia
                         </button>

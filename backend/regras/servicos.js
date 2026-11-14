@@ -4,6 +4,7 @@
 const { SERVICOS, VERSAO_TERMO_PARCEIRO, TERMO_VINCULO } = require('../config/dados/servicos');
 const { LACUNA } = require('../config/dados/legal');
 const { EMAIL } = require('./notificacoes');
+const { protocolo: protocoloComum } = require('./protocolo');
 
 const STATUS = {
   interesse: 'Interesse registrado',
@@ -35,11 +36,8 @@ const TRANSICOES = {
 const MAX_MENSAGEM = 1000;
 const MAX_OBSERVACAO = 500;
 
-/** SRV-2026-000123: o ano é o do pedido, o número é o id. */
-function protocolo(id, criadoEm) {
-  const ano = new Date(criadoEm || Date.now()).getFullYear();
-  return `SRV-${ano}-${String(id).padStart(6, '0')}`;
-}
+/** SRV-2026-000123 (formato comum em regras/protocolo.js). */
+const protocolo = (id, criadoEm) => protocoloComum('SRV', id, criadoEm);
 
 const comProtocolo = (p) => ({
   ...p,
@@ -242,30 +240,58 @@ function validarParceiro(corpo, parcial = false) {
   return { dados };
 }
 
-/** Vendas por serviço: pedidos, contratados e o valor fechado — o aceite da seção 18. */
+/**
+ * Vendas por serviço a partir de UMA linha por serviço, já agregada no banco
+ * (`servico, interesses, pedidos, contratados, valor, organizacoes`) — a tabela inteira não vem
+ * para o Node. Serviço sem nenhum pedido aparece zerado.
+ */
 function resumoDeVendas(linhas) {
-  const por = {};
-  for (const chave of Object.keys(SERVICOS)) {
-    por[chave] = { servico: chave, rotulo: SERVICOS[chave].rotulo, pedidos: 0, interesses: 0, contratados: 0, valor_contratado: 0, organizacoes_contratantes: 0 };
-  }
-  const contratantes = {};
-  for (const l of linhas || []) {
-    const r = por[l.servico];
-    if (!r) continue;
-    if (l.status === 'interesse') r.interesses += 1;
-    else if (l.status !== 'cancelado') r.pedidos += 1;
-    if (l.status === 'contratado') {
-      r.contratados += 1;
-      r.valor_contratado += Number(l.valor_contratado || 0);
-      (contratantes[l.servico] = contratantes[l.servico] || new Set()).add(l.organizacao_id);
-    }
-  }
-  for (const [servico, orgs] of Object.entries(contratantes)) por[servico].organizacoes_contratantes = orgs.size;
-  return Object.values(por).map((r) => ({ ...r, valor_contratado: Math.round(r.valor_contratado * 100) / 100 }));
+  const porServico = new Map((linhas || []).map((l) => [l.servico, l]));
+  return Object.entries(SERVICOS).map(([chave, s]) => {
+    const l = porServico.get(chave) || {};
+    return {
+      servico: chave,
+      rotulo: s.rotulo,
+      interesses: Number(l.interesses || 0),
+      pedidos: Number(l.pedidos || 0),
+      contratados: Number(l.contratados || 0),
+      valor_contratado: Math.round(Number(l.valor || 0) * 100) / 100,
+      organizacoes_contratantes: Number(l.organizacoes || 0),
+    };
+  });
+}
+
+/**
+ * Rodízio entre parceiros ativos do mesmo serviço: atende quem está há mais tempo sem
+ * receber pedido (quem nunca recebeu vem primeiro); empate pelo cadastro mais antigo.
+ * `candidatos`: `{ id, ultimo_pedido }` — o resto da linha é devolvido como veio.
+ */
+function escolherParceiro(candidatos) {
+  const tempo = (c) => (c.ultimo_pedido ? new Date(c.ultimo_pedido).getTime() : 0);
+  return [...(candidatos || [])].sort((a, b) => tempo(a) - tempo(b) || a.id - b.id)[0] || null;
+}
+
+/**
+ * Aviso a quem registrou interesse quando surge parceiro. Diz o que aconteceu e o que fazer —
+ * não manda dado a ninguém: o pedido de verdade só nasce com a prévia e o aceite do termo.
+ * Não nomeia o parceiro: com rodízio o nome muda, e quem vale é o que a prévia mostrar.
+ */
+function montarAvisoInteresse({ servico, usuario, urlPublica }) {
+  const rotulo = SERVICOS[servico].rotulo;
+  const link = urlPublica ? `\n\nPara pedir: ${urlPublica} → Serviços → ${rotulo}.` : '\n\nPara pedir: entre no painel, em Serviços.';
+  return {
+    para: usuario.email,
+    assunto: `[Painel de Licitações] Já há parceiro para ${rotulo}`,
+    texto:
+      `Olá, ${usuario.nome || 'tudo bem'}.\n\nVocê registrou interesse em "${rotulo}" e agora há parceiro habilitado.` +
+      '\n\nSeu interesse continua só registrado: nenhum dado seu foi enviado. ' +
+      'Para o pedido seguir, abra a tela de Serviços, confira a prévia do que será enviado e aceite o termo de vínculo.' + link,
+  };
 }
 
 module.exports = {
   SERVICOS, STATUS, CANCELAVEIS, ABERTOS, VERSAO_TERMO_PARCEIRO, TERMO_VINCULO,
   protocolo, comProtocolo, validarPedido, aceiteValido, montarDados, garantiasDasExigencias,
   linhasDosDados, montarEmail, statusInicial, validarAtualizacao, validarParceiro, resumoDeVendas,
+  escolherParceiro, montarAvisoInteresse,
 };

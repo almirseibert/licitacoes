@@ -992,7 +992,7 @@ teste; e-mail **real** (sem SMTP o boletim fica na tela e o painel diz isso); My
 
 ---
 
-## Seção 18 — Ecossistema (Fase E) — código feito em 14/11/2026; aceite com parceiro e cliente reais pendente (18b)
+## Seção 18 — Ecossistema (Fase E) — código feito em 14/11/2026 (18b: código ✅; aceite com parceiro e cliente reais pendente)
 - [x] **Seguro garantia** como captação de lead para corretora parceira: o painel só encaminha o pedido (não emite
       apólice nem entra na contratação). Pedido por organização com licitação opcional (lista dos editais lidos que
       exigem garantia, ainda abertos; atalho "Cotar seguro garantia" na aba Exigências), **prévia exata** do que vai ao
@@ -1033,18 +1033,53 @@ um interesse antigo barrava o pedido de verdade quando o parceiro aparecia (corr
 rodou (conferência manual: rotas de escrita exigem papel admin, filtram por `organizacao_id`, nada do cofre nem CPF
 sai).
 
-**Seção 18b — pendente:**
+**Seção 18b — código feito em 14/11/2026; o que depende de gente de fora continua pendente:**
 - [ ] Cadastrar o primeiro parceiro de verdade, configurar SMTP e fechar **uma venda a cliente ativo** (o aceite).
 - [ ] Revisão de advogado do termo de vínculo (`backend/config/dados/servicos.js`; mesma pendência da Seção 16) e
       sobe `VERSAO_TERMO_PARCEIRO` se o texto mudar.
 - [ ] "Vendidos junto com o plano": hoje o parceiro cobra direto; cobrança no mesmo boleto/assinatura do painel fica
       para depois de haver parceiro e preço.
-- [ ] Avisar quem registrou interesse quando surgir parceiro; rodízio entre parceiros do mesmo serviço (hoje o mais
-      antigo ativo atende).
+- [x] **Avisar quem registrou interesse quando surge parceiro** (14/11/2026): migração `036` (`avisado_em`); ao
+      cadastrar ou reativar um parceiro, cada pessoa com interesse no serviço recebe **um** e-mail dizendo que há
+      parceiro e que nenhum dado foi enviado (o pedido de verdade continua exigindo prévia e aceite). O aviso não
+      nomeia o parceiro (com rodízio o nome muda; vale o da prévia). Só marca `avisado_em` quando o e-mail saiu; sem
+      SMTP fica pendente e a operadora repete em "avisar interessados" (`POST /admin/servicos/avisar-interesses`,
+      auditado como `avisou_interessados`). Pessoa inativa, fora da organização ou organização suspensa não recebe.
+- [x] **Rodízio entre parceiros do mesmo serviço** (14/11/2026): atende quem está há mais tempo sem receber pedido
+      (quem nunca recebeu primeiro; empate pelo cadastro). A prévia devolve `parceiro_id` e **o pedido só vale para
+      o parceiro que o cliente viu ao aceitar o termo**: sem `parceiro_id`, desconhecido ou desativado depois da
+      prévia → 409 pedindo para abrir o pedido de novo. O rodízio é aproximado sob concorrência, de propósito.
 - [ ] Cursos, clipping e bolsa de empregos são encaminhamento genérico; falta o catálogo de cursos/vagas do parceiro.
-- [ ] Pequenas dívidas: `GET /admin/servicos/vendas` soma em JS a tabela inteira (passar a `GROUP BY` quando crescer),
-      `codigo.startsWith('garantia_')` no front (declarar o serviço no catálogo de exigências), protocolo comum com o
-      de suporte e `escopo.daOrganizacao` na consulta de licitações.
+- [x] **Pequenas dívidas** (14/11/2026): `GET /admin/servicos/vendas` agora agrega no banco (uma linha por serviço,
+      `SUM`/`COUNT(DISTINCT)`); a exigência declara o serviço que liga (`servico: 'seguro_garantia'` no catálogo — o
+      front não adivinha mais por `startsWith('garantia_')` e a rota não repete a lista de códigos); protocolo comum
+      (`regras/protocolo.js`, SRV e SOL); consultas de licitação via `escopo.daOrganizacao`.
+- [ ] Ideias dos revisores, adiadas por serem de volume que ainda não existe: enviar os avisos com concorrência ou em
+      job (hoje um a um, dentro da requisição); a reserva `avisado_em` é desfeita no erro, mas uma queda do processo
+      entre a reserva e o envio deixaria a pessoa marcada sem e-mail (repetir o aviso não a pega — limpar à mão).
+
+**Aceite medido (14/11/2026, API real, MariaDB 10.11, banco zerado migra até a 036, duas organizações + a operadora,
+SMTP local que grava o e-mail):** **31/31 conferências**. Sem SMTP: 3 interesses registrados (201, nada enviado);
+cadastrar o parceiro de "cursos" deixa **2 avisos pendentes** (0 enviados, 2 sem envio; `avisado_em` fica nulo);
+serviço inválido em "avisar" → 400; usuário comum → 403. Com SMTP: repetir o aviso envia a **2 pessoas** e repetir de
+novo envia **0**; cadastrar o 1º parceiro de "seguro garantia" avisa a 1 pessoa e o 2º avisa ninguém. Rodízio: a
+prévia 1 mostra a Corretora 1; depois de A pedir, a prévia seguinte mostra a Corretora 2; pedido sem `parceiro_id` →
+409, com id inexistente → 409, com parceiro desativado depois da prévia → 409; pedidos encaminhados com `Reply-To` no
+cliente. Vendas por GROUP BY: 1 contratado, R$ 4.200,50, 1 cliente, 2 pedidos, interesse zerado depois do pedido
+real. Isolamento pelo `escopo.daOrganizacao`: B não vê a licitação da A na lista de garantias e recebe 404 na prévia
+com ela. Só as 2 exigências de garantia trazem `servico`. **5 e-mails recebidos pelo sorvedouro SMTP** (3 avisos + 2
+pedidos). Lint limpo, **252/252 testes** (5 novos em `testes/servicos.test.js`; o de vendas foi reescrito para o
+formato agregado). `code-review` (7 achados): corrigidos a reserva presa quando o envio lança, o 400 enganoso quando
+o parceiro surge entre a prévia e o pedido (agora 409 com a mensagem certa), o nome do parceiro no aviso, o `SELECT`
+fora da proteção no PATCH, a lista de códigos duplicada e o feedback da tela. `simplify` (4 revisores): índice
+`(parceiro_id, criado_em)` para o rodízio, vendas 100% em SQL, `String().replace` removido, `escolherParceiro` e
+ternários simplificados.
+
+**Não verificado:** nenhum parceiro real e nenhum cliente que tenha contratado (o aceite em si); SMTP **real**
+(o teste usou um sorvedouro local, sem entrega de verdade nem spam/DKIM); MySQL 8 (o teste é MariaDB); a tela
+(Parceiros e Serviços) não foi exercitada no navegador nesta seção — só o build do front; `security-review` não
+rodou (conferência manual: rotas novas exigem superadmin, o aviso não leva dado de ninguém e a consulta dos
+interessados filtra usuário ativo, membro da organização e organização não suspensa).
 
 ---
 

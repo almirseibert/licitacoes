@@ -36,6 +36,7 @@ const REGRAS = [
   ['PATCH', `^/admin/parceiros/${ID}$`, 'alterou_parceiro', 'parceiro', ['ativo']],
   ['POST', `^/admin/servicos/pedidos/${ID}$`, 'atualizou_pedido_servico', 'servico', ['status']],
   ['POST', `^/admin/servicos/pedidos/${ID}/reenviar$`, 'reenviou_pedido_servico', 'servico', []],
+  ['POST', '^/admin/servicos/avisar-interesses$', 'avisou_interessados', 'servico', ['servico']],
 
   ['POST', '^/integracoes/tokens$', 'criou_token_api', 'integracao', []],
   ['DELETE', `^/integracoes/tokens/${ID}$`, 'revogou_token_api', 'integracao', []],

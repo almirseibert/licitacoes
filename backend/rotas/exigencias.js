@@ -84,6 +84,7 @@ rotas.get('/', async (req, res) => {
         codigo: item.codigo,
         rotulo: item.rotulo,
         grupo: item.grupo,
+        servico: item.servico || null, // serviço complementar que esta exigência pode ligar (Seção 18)
         detectado: achado.detectado,
         trecho: achado.trecho || null,
         pagina: achado.pagina || null,
