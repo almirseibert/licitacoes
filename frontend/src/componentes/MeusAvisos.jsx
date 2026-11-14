@@ -64,79 +64,62 @@ export default function MeusAvisos({ aoErro, aoAvisar }) {
   // A caixa da organização não tem navegador: push é de cada pessoa.
   const canais = daOrganizacao ? dados.canais.filter((c) => c.chave !== 'push') : dados.canais;
 
-  const alternar = async (tipo, canal, ativo) => {
-    setOcupado(`${tipo}:${canal}`);
+  // Todo botão daqui: marca ocupado, limpa ou mostra o erro, desmarca.
+  const agir = (chave, fazer) => async () => {
+    setOcupado(chave);
     try {
+      await fazer();
+      aoErro(null);
+    } catch (e) {
+      aoErro(e.message);
+    } finally {
+      setOcupado(null);
+    }
+  };
+
+  const alternar = (tipo, canal, ativo) =>
+    agir(`${tipo}:${canal}`, async () => {
       const r = await api.salvarPreferenciasAviso(escopo, [{ tipo, canal, ativo }]);
       setDados((d) =>
         daOrganizacao ? { ...d, organizacao: { ...d.organizacao, matriz: r.matriz } } : { ...d, minhas: r.matriz }
       );
-      aoErro(null);
-    } catch (e) {
-      aoErro(e.message);
-    } finally {
-      setOcupado(null);
-    }
-  };
+    })();
 
-  const salvarDestinos = async () => {
-    setOcupado('destinos');
-    try {
-      await api.salvarDestinosAviso(destinos);
-      aoAvisar('Destinos dos seus avisos salvos.');
-      aoErro(null);
-      await carregar();
-    } catch (e) {
-      aoErro(e.message);
-    } finally {
-      setOcupado(null);
-    }
-  };
+  const salvarDestinos = agir('destinos', async () => {
+    await api.salvarDestinosAviso(destinos);
+    aoAvisar('Destinos dos seus avisos salvos.');
+    await carregar();
+  });
 
-  const testar = async (canal) => {
-    setOcupado(`teste:${canal}`);
-    try {
+  const testar = (canal) =>
+    agir(`teste:${canal}`, async () => {
       const r = await api.testarAviso(canal);
       aoAvisar(r.mensagem);
-      aoErro(null);
-    } catch (e) {
-      aoErro(e.message);
-    } finally {
-      setOcupado(null);
-    }
-  };
+    })();
 
-  const alternarPush = async () => {
-    setOcupado('push');
-    try {
-      const reg = await navigator.serviceWorker.register('/sw.js');
-      const atual = await reg.pushManager.getSubscription();
-      if (atual && ativoAqui) {
-        await api.desinscreverPush(atual.endpoint);
-        await atual.unsubscribe();
-        setInscricaoLocal(null);
-        aoAvisar('Aviso no navegador desligado neste aparelho.');
-      } else {
-        const permissao = await Notification.requestPermission();
-        if (permissao !== 'granted') throw new Error('O navegador não deu permissão para mostrar avisos.');
-        // Se o navegador já tem inscrição (o servidor a perdeu, ou é outra
-        // organização), `subscribe` devolve a mesma e ela volta a ser registrada.
-        const inscricao = await reg.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: base64ParaBytes(dados.push_chave_publica),
-        });
-        await api.inscreverPush(inscricao.toJSON());
-        setInscricaoLocal(inscricao);
-        aoAvisar('Aviso no navegador ligado neste aparelho.');
-      }
-      aoErro(null);
-      await carregar();
-    } catch (e) {
-      aoErro(e.message);
-    } finally {
-      setOcupado(null);
+  const alternarPush = agir('push', async () => {
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    const atual = await reg.pushManager.getSubscription();
+    if (atual && ativoAqui) {
+      await api.desinscreverPush(atual.endpoint);
+      await atual.unsubscribe();
+      setInscricaoLocal(null);
+      aoAvisar('Aviso no navegador desligado neste aparelho.');
+    } else {
+      const permissao = await Notification.requestPermission();
+      if (permissao !== 'granted') throw new Error('O navegador não deu permissão para mostrar avisos.');
+      // Se o navegador já tem inscrição (o servidor a perdeu, ou é outra
+      // organização), `subscribe` devolve a mesma e ela volta a ser registrada.
+      const inscricao = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: base64ParaBytes(dados.push_chave_publica),
+      });
+      await api.inscreverPush(inscricao.toJSON());
+      setInscricaoLocal(inscricao);
+      aoAvisar('Aviso no navegador ligado neste aparelho.');
     }
-  };
+    await carregar();
+  });
 
   const desligadoNoServidor = dados.canais.filter((c) => !dados.servico[c.chave]).map((c) => c.rotulo);
   const destinosMudaram =

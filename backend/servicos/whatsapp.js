@@ -42,7 +42,7 @@ function montarTexto(avisos) {
     const quando = a.quando
       ? new Date(a.quando).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
       : null;
-    return `• ${a.mensagem}${quando ? `\n  Fim das propostas: ${quando}` : ''}`;
+    return `• ${a.mensagem}${quando ? `\n  ${a.rotulo_quando || 'Fim das propostas'}: ${quando}` : ''}`;
   });
 
   const cabecalho =
@@ -119,8 +119,8 @@ async function enviarAvisos(numero, avisos) {
     return { enviado: true };
   } catch (erro) {
     console.error('Não foi possível enviar o WhatsApp de alerta:', erro.message);
-    return { enviado: false, motivo: erro.message };
+    return { enviado: false, motivo: erro.message, externo: true };
   }
 }
 
-module.exports = { enviarAvisos, servicoLigado, montarCorpoApi, configurado, destinatario, montarTexto, numeroLimpo };
+module.exports = { enviarAvisos, servicoLigado, configurado, destinatario, montarTexto, numeroLimpo };

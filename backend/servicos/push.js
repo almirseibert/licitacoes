@@ -4,7 +4,6 @@
 // DESLIGADO, sem erro na fila. A inscrição que o serviço de push diz que morreu
 // (404/410: a pessoa limpou o navegador ou revogou a permissão) é apagada aqui,
 // para não tentar de novo a cada rodada.
-const crypto = require('crypto');
 const pool = require('../config/db');
 const { push: cfg, urlPublica } = require('../config/ambiente');
 
@@ -23,7 +22,8 @@ function webPush() {
   return wp;
 }
 
-const hashDo = (endpoint) => crypto.createHash('sha256').update(String(endpoint)).digest('hex');
+// sha256 em hex, o mesmo do token do link público.
+const { hash: hashDo } = require('./link-publico');
 
 // Os serviços de push dos navegadores. Qualquer outro host seria o servidor
 // fazendo POST para onde um usuário mandou (SSRF): rede interna, metadados da nuvem.
@@ -84,7 +84,7 @@ async function enviarAvisos(inscricao, avisos) {
       return { enviado: false, motivo: 'inscrição expirada (apagada)' };
     }
     console.error('Não foi possível enviar o push:', erro.message);
-    return { enviado: false, motivo: erro.message };
+    return { enviado: false, motivo: erro.message, externo: true };
   }
 }
 

@@ -145,7 +145,11 @@ async function avisarTarefasAtrasadas({ hoje = diaNoFuso() } = {}) {
     `SELECT t.id, t.organizacao_id, t.responsavel_id, t.titulo, t.licitacao_id,
             DATE_FORMAT(t.prazo, '%Y-%m-%d') AS prazo
        FROM org_tarefas t
-      WHERE t.status = 'aberta' AND t.responsavel_id IS NOT NULL AND t.prazo < ?`,
+       -- Só as que ainda não viraram aviso: a de ontem não volta a cada 30 min.
+       LEFT JOIN alertas a
+              ON a.organizacao_id = t.organizacao_id
+             AND a.chave = CONCAT('tarefa_atrasada:', t.id, ':', DATE_FORMAT(t.prazo, '%Y-%m-%d'))
+      WHERE t.status = 'aberta' AND t.responsavel_id IS NOT NULL AND t.prazo < ? AND a.id IS NULL`,
     [hoje]
   );
   let criados = 0;

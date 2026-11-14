@@ -41,7 +41,7 @@ function obterTransporte() {
 function montarCorpo(avisos) {
   const linhas = avisos.map((a) => {
     const quando = a.quando ? new Date(a.quando).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : null;
-    return `• ${a.mensagem}${quando ? `\n  Fim das propostas: ${quando}` : ''}`;
+    return `• ${a.mensagem}${quando ? `\n  ${a.rotulo_quando || 'Fim das propostas'}: ${quando}` : ''}`;
   });
 
   return [
@@ -96,7 +96,7 @@ async function enviarAvisos(para, avisos) {
   } catch (erro) {
     // Falha de e-mail nunca derruba o job: o alerta já está no painel.
     console.error('Não foi possível enviar o e-mail de alerta:', erro.message);
-    return { enviado: false, motivo: erro.message };
+    return { enviado: false, motivo: erro.message, externo: true };
   }
 }
 
@@ -108,7 +108,7 @@ async function enviarAvisos(para, avisos) {
  * @returns {{enviado:boolean, motivo?:string}}
  */
 async function enviarTransacional({ para, assunto, texto }) {
-  if (!smtp.host || !smtp.de) {
+  if (!servicoLigado()) {
     return { enviado: false, motivo: 'smtp não configurado' };
   }
   try {

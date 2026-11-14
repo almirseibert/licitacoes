@@ -457,7 +457,14 @@ inválidos → 400; sem token → 401. Migração em banco zerado. Lint limpo, *
 1366 e 390, sem rolagem lateral, sem erro no console; desligar "Impugnação por WhatsApp" pela
 tela gravou). `code-review` (10 achados, 8 corrigidos; ficaram: marcar antes de mandar — tentar
 de novo duplicaria para quem já recebeu — e envio em série, que o WhatsApp faz de propósito pelo
-espaçamento da 5.4).
+espaçamento da 5.4). `simplify` (4 revisores, 32 achados): aplicados — consultas do
+despacho e da tela em paralelo e agrupadas por pessoa, preferências gravadas num INSERT só,
+tarefa atrasada que já virou aviso fica fora da consulta, rodada única `rodadaDeAvisos` para
+worker e CLI, erro de provedor marcado `externo` (sem casar texto), rótulo da data por tipo
+("Limite para questionar"), hash e papel reaproveitados (`link-publico.hash`, `NIVEL_PAPEL`),
+exportações mortas removidas; medido de novo depois, igual. Ficaram: categoria declarada por quem
+cria o alerta (hoje `tipoDoAlerta` traduz), lido por pessoa no sino, `resumir` único, envio por
+canal em paralelo.
 
 **Seção 9b — pendente:**
 - [ ] Aceite com **SMTP e WhatsApp reais de teste** (número da Meta + conta de e-mail de
@@ -465,6 +472,10 @@ espaçamento da 5.4).
 - [ ] Submeter à Meta os modelos de `docs/whatsapp-modelos.md` e configurar `WHATSAPP_MODELO`.
 - [ ] Resposta "favoritar" / "criar tarefa" pelo WhatsApp (webhook da Meta).
 - [ ] Registro por envio (`notificacoes_envios`) para reenviar só o canal que falhou.
+- [ ] "Lido" por pessoa no sino (`alertas_leituras`): hoje marcar um alerta compartilhado
+      como lido vale para a equipe toda.
+- [ ] Categoria do aviso declarada em `alertas.criar` por quem cria (coluna própria), no lugar da
+      tradução `tipoDoAlerta`.
 - [ ] Push conferido num navegador real com FCM (aqui: servidor https local com o protocolo
       Web Push).
 

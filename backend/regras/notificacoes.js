@@ -62,6 +62,10 @@ function tipoDoAlerta(tipoInterno) {
   return 'aviso';
 }
 
+// Que data o `quando` do alerta é, para o texto do e-mail/WhatsApp.
+const ROTULO_QUANDO = { prazo_48h: 'Fim das propostas', prazo_2h: 'Fim das propostas', prazo_questionamento: 'Limite para questionar' };
+const rotuloQuando = (tipoInterno) => ROTULO_QUANDO[tipoInterno] || 'Data';
+
 const chavePref = (canal, tipo) => `${canal}:${tipo}`;
 
 // O padrão, para quem nunca mexeu. Antes da Seção 9 só o prazo saía do painel;
@@ -134,10 +138,9 @@ function lerDestinos(corpo = {}) {
   }
   if ('whatsapp' in corpo) {
     const bruto = String(corpo.whatsapp || '').trim();
-    if (bruto && !whatsappValido(bruto)) {
-      return { erro: 'WhatsApp inválido: use o número com DDI e DDD, ex.: 55 51 99999-9999.' };
-    }
-    campos.whatsapp = bruto ? whatsappValido(bruto) : null;
+    const numero = bruto ? whatsappValido(bruto) : null;
+    if (bruto && !numero) return { erro: 'WhatsApp inválido: use o número com DDI e DDD, ex.: 55 51 99999-9999.' };
+    campos.whatsapp = numero;
   }
   if (!Object.keys(campos).length) return { erro: 'Nada para salvar: mande email e/ou whatsapp.' };
   return { campos };
@@ -175,7 +178,12 @@ function planejarEnvios(alertas, destinatarios) {
     const envio = envios.get(chave);
     if (envio.ids.has(alerta.id)) return;
     envio.ids.add(alerta.id);
-    envio.avisos.push({ id: alerta.id, mensagem: alerta.mensagem, quando: alerta.quando || null });
+    envio.avisos.push({
+      id: alerta.id,
+      mensagem: alerta.mensagem,
+      quando: alerta.quando || null,
+      rotulo_quando: rotuloQuando(alerta.tipo),
+    });
   };
 
   for (const alerta of alertas) {
@@ -220,7 +228,6 @@ module.exports = {
   prefsDeLinhas,
   lerPreferencias,
   lerDestinos,
-  whatsappValido,
   planejarEnvios,
   textoDeModelo,
 };

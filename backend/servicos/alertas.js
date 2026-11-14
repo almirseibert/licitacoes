@@ -37,10 +37,12 @@ async function criar({
 }
 
 // Aviso pessoal (Seção 9: tarefa atrasada) só aparece no sino de quem é.
-const SO_MEU = '(usuario_id IS NULL OR usuario_id = ?)';
+// `a` é o apelido quando há JOIN (a licitação também tem colunas com esse nome).
+const soMeu = (a = '') => `(${a}usuario_id IS NULL OR ${a}usuario_id = ?)`;
+const SO_MEU = soMeu();
 
 async function listar({ organizacaoId, usuarioId = null, lido = null, limite = 60 } = {}) {
-  const condicoes = ['a.organizacao_id = ?', '(a.usuario_id IS NULL OR a.usuario_id = ?)'];
+  const condicoes = ['a.organizacao_id = ?', soMeu('a.')];
   const valores = [organizacaoId, usuarioId];
   if (lido !== null) {
     condicoes.push('a.lido = ?');

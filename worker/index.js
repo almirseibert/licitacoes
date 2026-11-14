@@ -155,21 +155,11 @@ async function rodarFrequente() {
 
   // Seção 9: tarefa atrasada vira aviso ao responsável, e todo alerta novo
   // (deste relógio, do horário e das rotas) sai por e-mail/WhatsApp/push para
-  // quem quer aquele tipo naquele canal. Try próprio para cada um: falha de um
-  // job não segura os avisos que já nasceram.
-  try {
-    await prazos.avisarTarefasAtrasadas({});
-  } catch (erro) {
-    console.error('Falha nos avisos de tarefa atrasada:', erro.message);
-  }
-  try {
-    const despacho = await notificar.despachar({});
-    if (despacho.envios) {
-      console.log(`Avisos: ${despacho.alertas} alerta(s) em ${despacho.envios} envio(s), ${despacho.enviados} entregues.`);
-    }
-  } catch (erro) {
-    console.error('Falha no despacho de avisos:', erro.message);
-  }
+  // quem quer aquele tipo naquele canal. `rodadaDeAvisos` não lança: cada passo
+  // tem seu try lá dentro.
+  const avisos = await notificar.rodadaDeAvisos();
+  if (avisos.despacho && avisos.despacho.envios) console.log(notificar.descrever(avisos));
+  for (const e of avisos.erros) console.error('Falha nos avisos:', e);
 }
 
 // ---------------------------------------------------------------------------

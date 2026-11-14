@@ -16,18 +16,11 @@ const regras = require('../regras/notificacoes');
 const notificar = require('../servicos/notificar');
 const push = require('../servicos/push');
 const { push: cfgPush } = require('../config/ambiente');
+const { NIVEL_PAPEL } = require('../middlewares/autenticar');
 
 const rotas = express.Router();
-const MOTIVOS_DA_TELA = new Set([
-  'sem destino cadastrado',
-  'nenhum navegador inscrito',
-  'smtp não configurado',
-  'whatsapp não configurado',
-  'push não configurado',
-  'sem cadastro nesta organização',
-]);
 const quem = (req) => req.usuario.id;
-const ehAdmin = (req) => ['dono', 'admin'].includes(req.papel);
+const ehAdmin = (req) => (NIVEL_PAPEL[req.papel] ?? -1) >= NIVEL_PAPEL.admin;
 
 async function prefsDe(organizacaoId, usuarioId) {
   const [linhas] = await pool.query(
@@ -41,21 +34,20 @@ async function prefsDe(organizacaoId, usuarioId) {
 rotas.get('/', async (req, res) => {
   try {
     const org = req.organizacaoId;
-    const [[destino]] = await pool.query(
-      `SELECT u.email AS email_login, d.email, d.whatsapp
-         FROM usuarios u
-         LEFT JOIN notificacoes_destinos d ON d.usuario_id = u.id AND d.organizacao_id = ?
-        WHERE u.id = ?`,
-      [org, quem(req)]
-    );
-    const [[{ navegadores }]] = await pool.query(
-      'SELECT COUNT(*) AS navegadores FROM notificacoes_push WHERE organizacao_id = ? AND usuario_id = ?',
-      [org, quem(req)]
-    );
-    const [minhas, daOrganizacao, canais] = await Promise.all([
+    const [[[destino]], [[{ navegadores }]], minhas, daOrganizacao] = await Promise.all([
+      pool.query(
+        `SELECT u.email AS email_login, d.email, d.whatsapp
+           FROM usuarios u
+           LEFT JOIN notificacoes_destinos d ON d.usuario_id = u.id AND d.organizacao_id = ?
+          WHERE u.id = ?`,
+        [org, quem(req)]
+      ),
+      pool.query('SELECT COUNT(*) AS navegadores FROM notificacoes_push WHERE organizacao_id = ? AND usuario_id = ?', [
+        org,
+        quem(req),
+      ]),
       prefsDe(org, quem(req)),
       prefsDe(org, null),
-      notificar.canais(org),
     ]);
     res.json({
       tipos: regras.TIPOS,
@@ -67,7 +59,7 @@ rotas.get('/', async (req, res) => {
         whatsapp: (destino && destino.whatsapp) || null,
         navegadores,
       },
-      organizacao: { matriz: regras.matriz(daOrganizacao), editavel: ehAdmin(req), canais },
+      organizacao: { matriz: regras.matriz(daOrganizacao), editavel: ehAdmin(req) },
       // O que o servidor tem: sem SMTP, por exemplo, ligar "e-mail" não faz chegar nada.
       servico: notificar.servico(),
       push_chave_publica: cfgPush.chavePublica || null,
@@ -88,13 +80,11 @@ rotas.put('/preferencias', async (req, res) => {
   if (erro) return res.status(400).json({ erro });
   try {
     const usuarioId = escopo === 'eu' ? quem(req) : null;
-    for (const p of itens) {
-      await pool.query(
-        `INSERT INTO notificacoes_config (organizacao_id, usuario_id, canal, tipo, ativo) VALUES (?, ?, ?, ?, ?)
-         ON DUPLICATE KEY UPDATE ativo = VALUES(ativo)`,
-        [req.organizacaoId, usuarioId, p.canal, p.tipo, p.ativo ? 1 : 0]
-      );
-    }
+    await pool.query(
+      `INSERT INTO notificacoes_config (organizacao_id, usuario_id, canal, tipo, ativo) VALUES ?
+       ON DUPLICATE KEY UPDATE ativo = VALUES(ativo)`,
+      [itens.map((p) => [req.organizacaoId, usuarioId, p.canal, p.tipo, p.ativo ? 1 : 0])]
+    );
     res.json({ ok: true, matriz: regras.matriz(await prefsDe(req.organizacaoId, usuarioId)) });
   } catch (e) {
     responderErro(res, 500, 'Não foi possível salvar as preferências de aviso.', e);
@@ -166,11 +156,11 @@ rotas.post('/teste', async (req, res) => {
   try {
     const r = await notificar.enviarTeste(req.organizacaoId, quem(req), canal);
     if (!r.enviado) {
-      // Motivo nosso ("sem destino cadastrado") vai para a tela; erro do SMTP ou da Meta, só para o log.
-      const nosso = MOTIVOS_DA_TELA.has(r.motivo);
-      if (!nosso) console.error(`Teste de aviso por ${canal} falhou:`, r.motivo);
+      // Motivo nosso ("sem destino cadastrado") vai para a tela; erro do SMTP,
+      // da Meta ou do push (`externo`) só para o log.
+      if (r.externo) console.error(`Teste de aviso por ${canal} falhou:`, r.motivo);
       return res.status(422).json({
-        erro: nosso ? `O teste não saiu: ${r.motivo}.` : 'O teste não saiu: o serviço do canal recusou o envio. Veja o log do servidor.',
+        erro: r.externo ? 'O teste não saiu: o serviço do canal recusou o envio. Veja o log do servidor.' : `O teste não saiu: ${r.motivo}.`,
       });
     }
     res.json({ ok: true, mensagem: 'Teste enviado. Confira se chegou.' });
