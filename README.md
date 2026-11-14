@@ -275,6 +275,28 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
   - Declarações: 13 modelos (+ renúncia de vistoria e carta de credenciamento). O seed não
     duplica mais os modelos do sistema (a 025 apaga as cópias que ele fazia desde a 017).
   - **Aceite medido**: ver o plano (Seção 10). Testes em `testes/documentos.test.js`.
+- **Seção 5 — Pergunte ao Edital, entregue em 14/11/2026 (aceite com o Gemini real pendente).**
+  Migração `027_ia_perguntas.sql`; aba **Pergunte ao edital** no detalhe da licitação
+  (`frontend/src/paginas/PerguntarEdital.jsx`); rotas `/api/licitacoes/:id/perguntas` (GET
+  histórico + biblioteca, POST → **202 com o id**, GET `/:pid` para a tela consultar, PATCH
+  `{salva}`), atrás do recurso `ia` do plano e do limite `ia_perguntas_mes`.
+  - Busca por trecho sem banco vetorial (`backend/regras/busca-edital.js`): palavra da pergunta
+    pesada pela raridade no próprio edital; o job de leitura agora grava as páginas separadas
+    por `\f`, e a **página vem do nosso texto, nunca do modelo** (.docx/.txt: "página não
+    identificada"). Sem trecho que trate do assunto, responde que o edital não fala disso e
+    não gasta modelo.
+  - Schema da resposta (`validarResposta` em `regras/ia-schema.js`): citação só de trecho
+    enviado, frase conferida letra a letra no trecho (mínimo de 20 caracteres), "encontrado"
+    só com citação literal, confiança fora de 0–1 descartada, campo extra descartado. Trecho
+    do edital com texto dirigido à IA ("ignore as instruções…") é sinalizado na tela.
+  - Biblioteca própria de **52 perguntas** em seis categorias
+    (`backend/config/dados/perguntas-edital.js`), escrita sobre a Lei 14.133 e o catálogo de
+    exigências, com dicas de busca por pergunta.
+  - Assíncrona: no máximo 3 em andamento por organização (429); erro do modelo vira mensagem
+    na pergunta; pendente além do timeout aparece como interrompida. Conta no limite só o que
+    chamou o modelo (cache e "não encontrei" não contam).
+  - `IA_URL_BASE` (opcional, `.env.example`) só serve para testar com um servidor que imita o
+    Gemini. **Aceite medido**: ver o plano (Seção 5). Testes em `testes/perguntas-edital.test.js`.
 - `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
   ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
 

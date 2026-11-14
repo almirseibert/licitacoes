@@ -24,12 +24,7 @@ const PALAVRAS_VAZIAS = new Set(
   ).split(' ')
 );
 
-const textoBase = require('./texto');
-
-/** O `normalizar` de regras/texto.js, e pontuação também vira espaço. */
-function normalizar(valor) {
-  return textoBase.normalizar(valor).replace(/[^a-z0-9]+/g, ' ').trim();
-}
+const { normalizarPalavras: normalizar } = require('./texto');
 
 /**
  * Raiz curta para casar flexão ("garantia", "garantias", "garantir"): a palavra
@@ -103,52 +98,43 @@ function blocosDaPagina(pagina, tamanho = TAMANHO_TRECHO) {
  *   na ordem do documento, com id T1..Tn (é o id que o modelo cita).
  */
 function buscarTrechos(paginas, pergunta, { dicas = [], max = MAX_TRECHOS } = {}) {
-  const termos = termosDe(pergunta, dicas);
-  if (!termos.length) return [];
+  const termos = new Set(termosDe(pergunta, dicas));
+  if (!termos.size) return [];
 
-  const blocos = paginas.flatMap((p) => blocosDaPagina(p)).map((b, ordem) => {
-    const palavras = normalizar(b.texto).split(' ');
+  // Uma passada por palavra: o termo é a palavra inteira (até 5 letras) ou o
+  // prefixo de 5 — basta olhar os prefixos de 3, 4 e 5 letras no Set.
+  const df = new Map();
+  const blocos = [];
+  let total = 0;
+  for (const bloco of paginas.flatMap((p) => blocosDaPagina(p))) {
+    const ordem = total++;
     const contagem = new Map();
-    for (const termo of termos) {
-      let n = 0;
-      for (const palavra of palavras) if (palavra.startsWith(termo)) n += 1;
-      if (n) contagem.set(termo, n);
+    for (const palavra of normalizar(bloco.texto).split(' ')) {
+      for (let n = 3; n <= Math.min(5, palavra.length); n += 1) {
+        const prefixo = palavra.slice(0, n);
+        // Termo curto (< 5) só casa a palavra inteira ou o começo dela, como antes.
+        if (termos.has(prefixo)) contagem.set(prefixo, (contagem.get(prefixo) || 0) + 1);
+      }
     }
-    return { ...b, ordem, contagem };
-  });
+    if (!contagem.size) continue;
+    for (const termo of contagem.keys()) df.set(termo, (df.get(termo) || 0) + 1);
+    blocos.push({ bloco, ordem, contagem });
+  }
 
   // Peso pela raridade no próprio edital (idf): termo que aparece em todo
-  // bloco não diferencia nada.
-  const total = blocos.length || 1;
-  const peso = new Map(
-    termos.map((t) => {
-      const df = blocos.filter((b) => b.contagem.has(t)).length;
-      return [t, df ? Math.log(1 + total / df) : 0];
-    })
-  );
+  // bloco não diferencia nada. Bloco que junta mais termos diferentes da
+  // pergunta vale mais que um que repete o mesmo dez vezes.
+  for (const b of blocos) {
+    let pontos = 0;
+    for (const [termo, n] of b.contagem) pontos += Math.log(1 + total / df.get(termo)) * (1 + Math.log(n));
+    b.pontos = pontos * (1 + 0.5 * (b.contagem.size - 1));
+  }
 
-  const pontuados = blocos
-    .map((b) => {
-      let pontos = 0;
-      for (const [termo, n] of b.contagem) pontos += peso.get(termo) * (1 + Math.log(n));
-      // Bloco que junta mais termos diferentes da pergunta vale mais que um
-      // que repete o mesmo dez vezes.
-      pontos *= 1 + 0.5 * (b.contagem.size - 1);
-      return { ...b, pontos };
-    })
-    .filter((b) => b.pontos > 0)
+  return blocos
     .sort((a, b) => b.pontos - a.pontos || a.ordem - b.ordem)
     .slice(0, max)
-    .sort((a, b) => a.ordem - b.ordem);
-
-  return pontuados.map((b, i) => ({
-    id: `T${i + 1}`,
-    arquivoId: b.arquivoId,
-    arquivo: b.arquivo,
-    pagina: b.pagina,
-    texto: b.texto,
-    pontos: Math.round(b.pontos * 100) / 100,
-  }));
+    .sort((a, b) => a.ordem - b.ordem)
+    .map(({ bloco }, i) => ({ id: `T${i + 1}`, ...bloco }));
 }
 
 /**
@@ -171,11 +157,8 @@ function pareceInstrucao(texto) {
 }
 
 module.exports = {
-  SEPARADOR_PAGINA,
   TAMANHO_TRECHO,
   MAX_TRECHOS,
-  normalizar,
-  termosDe,
   paginasDoArquivo,
   blocosDaPagina,
   buscarTrechos,

@@ -10,6 +10,7 @@
 // jogado fora, e o que sobra vai para a tela marcado como sugestão.
 
 const exigencias = require('./exigencias');
+const { normalizarPalavras: normalizar } = require('./texto');
 
 const GRAVIDADES = ['alta', 'media', 'baixa'];
 const RESPOSTAS = ['Sim', 'Não', 'Depende'];
@@ -185,7 +186,6 @@ function validarPalavras(bruto) {
  * @param {Array<{id,arquivoId,arquivo,pagina,texto}>} trechos  os enviados
  */
 function validarResposta(bruto, trechos = []) {
-  const { normalizar } = require('./busca-edital');
   const descartados = [];
   if (!bruto || typeof bruto !== 'object' || Array.isArray(bruto)) {
     return { ok: false, dados: null, descartados, motivo: 'a resposta não é um objeto JSON' };

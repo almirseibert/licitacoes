@@ -4,12 +4,13 @@
 // roda em seguida, fora da requisição, e a tela consulta até a linha mudar
 // para 'respondida' ou 'erro'. Falha do modelo vira mensagem gravada — a tela
 // nunca fica "digitando" para sempre: pendente mais velha que o timeout do
-// modelo é dada como interrompida na próxima consulta.
+// modelo é mostrada como interrompida (calculado na leitura, sem UPDATE).
 const pool = require('../config/db');
 const { ia: cfg } = require('../config/ambiente');
 const ia = require('./ia');
 const limites = require('./limites');
 const busca = require('../regras/busca-edital');
+const { MINIMO_DE_TEXTO } = require('./texto-documento');
 const biblioteca = require('../config/dados/perguntas-edital');
 
 // Perguntas em andamento por organização: acima disso, 429. Segura o gasto de
@@ -22,16 +23,20 @@ const MAXIMO = 500;
 /** Segundos depois dos quais uma pendente é dada como interrompida. */
 const ESPERA_MAXIMA_S = Math.ceil(cfg.timeoutMs / 1000) + 60;
 
-/** O que quem perguntou lê quando o modelo falha (o motivo técnico fica no log). */
-function mensagemDeFalha(r) {
-  if (r.desligada) return 'O Pergunte ao Edital está desligado neste servidor.';
-  if (/formato esperado/.test(r.motivo)) return 'A IA respondeu fora do formato esperado e a resposta foi descartada. Pergunte de novo.';
-  if (/não respondeu em/.test(r.motivo)) return 'A IA demorou demais para responder. Tente de novo em instantes.';
-  return 'A IA não respondeu agora. Tente de novo em instantes.';
-}
+/** O que quem perguntou lê quando o modelo falha, pelo `codigo` de ia.perguntar (o técnico fica no log). */
+const FALHAS = {
+  formato: 'A IA respondeu fora do formato esperado e a resposta foi descartada. Pergunte de novo.',
+  timeout: 'A IA demorou demais para responder. Tente de novo em instantes.',
+};
+const FALHA_PADRAO = 'A IA não respondeu agora. Tente de novo em instantes.';
+const INTERROMPIDA = 'A resposta foi interrompida. Pergunte de novo.';
 
-/** Páginas de todos os arquivos atuais da licitação (a versão mais recente de cada um). */
-async function paginasDaLicitacao(licitacaoId) {
+/**
+ * Arquivos atuais da licitação com texto — só a versão mais recente de cada
+ * um (Fase 10: edital substituído não entra junto com o que o substituiu).
+ * Também é a fonte do texto do resumo por IA (jobs/ia-resumos.js).
+ */
+async function arquivosComTexto(licitacaoId) {
   const [arquivos] = await pool.query(
     `SELECT a.id, COALESCE(a.titulo, a.nome_arquivo) AS nome, a.extensao, a.paginas, a.texto_extraido AS texto
        FROM licitacao_arquivos a
@@ -43,24 +48,21 @@ async function paginasDaLicitacao(licitacaoId) {
       ORDER BY a.sequencial`,
     [licitacaoId, licitacaoId]
   );
-  return arquivos.flatMap((a) => busca.paginasDoArquivo(a));
-}
-
-function lerJsonColuna(valor) {
-  if (valor == null) return null;
-  return typeof valor === 'string' ? JSON.parse(valor) : valor;
+  return arquivos;
 }
 
 /** Linha do banco → o que a tela recebe. */
 function formatar(linha) {
+  // Pendente além do teto do modelo (API reiniciou no meio, por exemplo).
+  const interrompida = linha.situacao === 'pendente' && Number(linha.idade_s) > ESPERA_MAXIMA_S;
   return {
     id: linha.id,
     licitacao_id: linha.licitacao_id,
     pergunta: linha.pergunta,
     pronta_codigo: linha.pronta_codigo,
-    situacao: linha.situacao,
-    resposta: lerJsonColuna(linha.resposta),
-    erro: linha.erro,
+    situacao: interrompida ? 'erro' : linha.situacao,
+    resposta: limites.lerJson(linha.resposta, null),
+    erro: interrompida ? INTERROMPIDA : linha.erro,
     cache: Boolean(linha.cache),
     salva: Boolean(linha.salva),
     autor: linha.autor || null,
@@ -120,9 +122,9 @@ async function processar({ organizacaoId, id, dicas = [] }) {
     const [[linha]] = await pool.query('SELECT * FROM ia_perguntas WHERE id = ? AND organizacao_id = ?', [id, organizacaoId]);
     if (!linha || linha.situacao !== 'pendente') return;
 
-    const paginas = await paginasDaLicitacao(linha.licitacao_id);
+    const paginas = (await arquivosComTexto(linha.licitacao_id)).flatMap((a) => busca.paginasDoArquivo(a));
     const caracteres = paginas.reduce((s, p) => s + p.texto.length, 0);
-    if (caracteres < 200) {
+    if (caracteres < MINIMO_DE_TEXTO) {
       return await concluir(organizacaoId, id, {
         erro: 'Este edital ainda não tem texto lido: baixe os arquivos e rode a leitura (ou o PDF é escaneado, sem texto).',
       });
@@ -143,12 +145,12 @@ async function processar({ organizacaoId, id, dicas = [] }) {
     }
 
     const r = await ia.perguntar({ licitacaoId: linha.licitacao_id, pergunta: linha.pergunta, trechos });
-    // Contou o que custou: resposta nova do modelo, válida ou fora do schema.
-    if ((r.ok && !r.cache) || r.cobrar) await limites.registrarUso(organizacaoId, 'ia_perguntas_mes');
+    // Contou o que custou: o modelo foi chamado (resposta válida ou fora do schema).
+    if (r.chamouModelo) await limites.registrarUso(organizacaoId, 'ia_perguntas_mes');
     if (!r.ok) {
       // O técnico (corpo da API, status) vai para o log; a tela recebe português.
       console.error('Pergunte ao Edital — o modelo falhou na pergunta', id, '—', r.motivo);
-      return await concluir(organizacaoId, id, { erro: mensagemDeFalha(r) });
+      return await concluir(organizacaoId, id, { erro: FALHAS[r.codigo] || FALHA_PADRAO });
     }
 
     return await concluir(organizacaoId, id, {
@@ -166,24 +168,14 @@ async function processar({ organizacaoId, id, dicas = [] }) {
     });
   } catch (erro) {
     console.error('Pergunte ao Edital — falha ao processar', id, erro.message);
-    await concluir(organizacaoId, id, { erro: 'Não foi possível responder agora. Tente de novo em instantes.' }).catch(() => {});
+    await concluir(organizacaoId, id, { erro: FALHA_PADRAO }).catch(() => {});
   }
 }
 
-/** Pendente velha demais (API reiniciou no meio, por exemplo) vira erro com mensagem. */
-async function encerrarInterrompidas(organizacaoId) {
-  await pool.query(
-    `UPDATE ia_perguntas
-        SET situacao = 'erro', erro = 'A resposta foi interrompida. Pergunte de novo.', respondida_em = NOW()
-      WHERE organizacao_id = ? AND situacao = 'pendente' AND criado_em < NOW() - INTERVAL ? SECOND`,
-    [organizacaoId, ESPERA_MAXIMA_S]
-  );
-}
-
-const SELECAO = `SELECT p.*, u.nome AS autor FROM ia_perguntas p LEFT JOIN usuarios u ON u.id = p.usuario_id`;
+const SELECAO = `SELECT p.*, u.nome AS autor, TIMESTAMPDIFF(SECOND, p.criado_em, NOW()) AS idade_s
+                   FROM ia_perguntas p LEFT JOIN usuarios u ON u.id = p.usuario_id`;
 
 async function listar(organizacaoId, licitacaoId) {
-  await encerrarInterrompidas(organizacaoId);
   const [linhas] = await pool.query(
     `${SELECAO} WHERE p.organizacao_id = ? AND p.licitacao_id = ? ORDER BY p.criado_em DESC, p.id DESC LIMIT 100`,
     [organizacaoId, licitacaoId]
@@ -192,7 +184,6 @@ async function listar(organizacaoId, licitacaoId) {
 }
 
 async function obter(organizacaoId, licitacaoId, id) {
-  await encerrarInterrompidas(organizacaoId);
   const [[linha]] = await pool.query(`${SELECAO} WHERE p.id = ? AND p.organizacao_id = ? AND p.licitacao_id = ?`, [
     id,
     organizacaoId,
@@ -211,7 +202,6 @@ async function marcarSalva(organizacaoId, licitacaoId, id, salva) {
 
 module.exports = {
   MAX_PENDENTES,
-  ESPERA_MAXIMA_S,
   lerPedido,
   pendentes,
   criar,
@@ -219,5 +209,5 @@ module.exports = {
   listar,
   obter,
   marcarSalva,
-  paginasDaLicitacao,
+  arquivosComTexto,
 };

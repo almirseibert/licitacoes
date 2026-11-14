@@ -32,6 +32,10 @@ export default function PerguntarEdital({ id }) {
       })
       .catch((e) => setErro(e.message));
 
+  // Troca as perguntas dadas (pelo id) no estado, sem ir ao servidor de novo.
+  const trocar = (novas) =>
+    setEstado((atual) => atual && { ...atual, dados: atual.dados.map((p) => novas.find((n) => n.id === p.id) || p) });
+
   useEffect(() => {
     carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -47,12 +51,9 @@ export default function PerguntarEdital({ id }) {
     const ids = chavePendentes.split(',').map(Number);
     const relogio = setInterval(async () => {
       const novas = await Promise.all(ids.map((pid) => api.perguntaEdital(id, pid).catch(() => null)));
-      setEstado((atual) =>
-        atual && {
-          ...atual,
-          dados: atual.dados.map((p) => novas.find((n) => n && n.id === p.id) || p),
-        }
-      );
+      const prontas = novas.filter((n) => n && n.situacao !== 'pendente');
+      // Nada terminou: não troca o estado, e a conversa não é desenhada de novo.
+      if (prontas.length) trocar(prontas);
     }, INTERVALO_MS);
     return () => clearInterval(relogio);
   }, [id, chavePendentes]);
@@ -74,7 +75,7 @@ export default function PerguntarEdital({ id }) {
   const salvar = async (p) => {
     try {
       await api.salvarPerguntaEdital(id, p.id, !p.salva);
-      await carregar();
+      trocar([{ ...p, salva: !p.salva }]);
     } catch (e) {
       setErro(e.message);
     }

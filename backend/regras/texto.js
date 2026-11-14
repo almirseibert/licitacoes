@@ -17,4 +17,9 @@ function contem(texto, termo) {
   return t.includes(p);
 }
 
-module.exports = { normalizar, contem };
+/** `normalizar` com pontuação virando espaço: só palavras (busca por trecho, citação literal). */
+function normalizarPalavras(valor) {
+  return normalizar(valor).replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+module.exports = { normalizar, normalizarPalavras, contem };

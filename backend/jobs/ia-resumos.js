@@ -8,26 +8,16 @@ const pool = require('../config/db');
 const escopo = require('../servicos/escopo');
 const fila = require('../servicos/fila');
 const ia = require('../servicos/ia');
+const { arquivosComTexto } = require('../servicos/perguntas-edital');
 const { ia: cfg } = require('../config/ambiente');
 
 /** O texto já extraído dos arquivos da licitação (Fase 4), na ordem do edital. */
 async function textoDaLicitacao(licitacaoId) {
-  // Só a versão mais recente de cada arquivo, pelo mesmo motivo da Fase 10:
-  // edital substituído não pode entrar junto com o que ele substituiu.
-  const [linhas] = await pool.query(
-    `SELECT a.texto_extraido
-       FROM licitacao_arquivos a
-       JOIN (SELECT sequencial, MAX(versao) AS versao
-               FROM licitacao_arquivos WHERE licitacao_id = ? AND status = 'ok'
-              GROUP BY sequencial) u
-         ON u.sequencial = a.sequencial AND u.versao = a.versao
-      WHERE a.licitacao_id = ? AND a.status = 'ok' AND a.texto_extraido IS NOT NULL
-      ORDER BY a.sequencial`,
-    [licitacaoId, licitacaoId]
-  );
+  // A consulta (só a versão mais recente de cada arquivo) é uma só, com o Pergunte ao Edital.
   // \f separa páginas (Seção 5); para o resumo vira quebra de linha, como era —
   // assim o hash do recorte não muda e o cache das leituras antigas continua valendo.
-  return linhas.map((l) => String(l.texto_extraido).replace(/\f/g, '\n')).join('\n\n');
+  const arquivos = await arquivosComTexto(licitacaoId);
+  return arquivos.map((a) => String(a.texto).replace(/\f/g, '\n')).join('\n\n');
 }
 
 /**

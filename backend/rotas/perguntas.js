@@ -14,6 +14,9 @@ const biblioteca = require('../config/dados/perguntas-edital');
 
 const rotas = express.Router({ mergeParams: true });
 
+// A biblioteca é fixa: a projeção para a tela sai uma vez, no carregamento.
+const PRONTAS = biblioteca.PERGUNTAS.map(({ codigo, categoria, subtipo, pergunta }) => ({ codigo, categoria, subtipo, pergunta }));
+
 const idLicitacao = (req) => Number(req.params.id);
 
 async function licitacaoExiste(id) {
@@ -32,7 +35,7 @@ rotas.get('/', async (req, res) => {
         ? null
         : 'O Pergunte ao Edital está desligado: o servidor não tem GEMINI_API_KEY configurada. O resto do painel funciona sem ela.',
       categorias: biblioteca.CATEGORIAS,
-      prontas: biblioteca.PERGUNTAS.map(({ codigo, categoria, subtipo, pergunta }) => ({ codigo, categoria, subtipo, pergunta })),
+      prontas: PRONTAS,
       dados,
     });
   } catch (erro) {
@@ -50,14 +53,17 @@ rotas.post('/', async (req, res) => {
 
   try {
     const licitacaoId = idLicitacao(req);
-    if (!(await licitacaoExiste(licitacaoId))) return res.status(404).json({ erro: 'Licitação não encontrada.' });
-
     // Conferência e INSERT não são atômicas: pedidos simultâneos da mesma
     // organização podem passar juntos. O estouro fica limitado ao número de
     // pedidos no mesmo instante — aceito em troca de não travar a tabela.
-    const estouro = await limites.conferir(req.organizacaoId, 'ia_perguntas_mes');
+    const [existe, estouro, emAndamento] = await Promise.all([
+      licitacaoExiste(licitacaoId),
+      limites.conferir(req.organizacaoId, 'ia_perguntas_mes'),
+      perguntas.pendentes(req.organizacaoId),
+    ]);
+    if (!existe) return res.status(404).json({ erro: 'Licitação não encontrada.' });
     if (estouro) return res.status(402).json(estouro);
-    if ((await perguntas.pendentes(req.organizacaoId)) >= perguntas.MAX_PENDENTES) {
+    if (emAndamento >= perguntas.MAX_PENDENTES) {
       return res.status(429).json({ erro: `Já há ${perguntas.MAX_PENDENTES} perguntas sendo respondidas. Espere uma terminar.` });
     }
 
