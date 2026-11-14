@@ -32,7 +32,8 @@
     "limpar": "node backend/jobs/executar-limpeza.js",
     "sancoes": "node backend/jobs/executar-sancoes.js",
     "boletim": "node backend/jobs/executar-boletim.js",
-    "notificar": "node backend/jobs/executar-notificar.js"
+    "notificar": "node backend/jobs/executar-notificar.js",
+    "validades": "node backend/jobs/executar-validades.js"
   },
   "engines": {
     "node": ">=20"

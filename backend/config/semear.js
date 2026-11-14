@@ -259,12 +259,17 @@ async function semearKits() {
 async function semearModelos() {
   let criados = 0;
   for (const modelo of modelosDeclaracao) {
+    // Sem ON DUPLICATE KEY: desde a 017 o índice único leva `organizacao_id`, que
+    // é NULL no modelo do sistema — e NULL nunca colide, então cada seed duplicava
+    // os onze (achado na Seção 10; a 025 apaga as cópias).
     const [r] = await pool.query(
       `INSERT INTO modelos_declaracao (codigo, titulo, corpo, padrao_sistema, ativo)
-       VALUES (?, ?, ?, 1, 1) ON DUPLICATE KEY UPDATE id = id`,
-      [modelo.codigo, modelo.titulo, modelo.corpo]
+       SELECT ?, ?, ?, 1, 1 FROM DUAL
+        WHERE NOT EXISTS (SELECT 1 FROM modelos_declaracao
+                           WHERE organizacao_id IS NULL AND padrao_sistema = 1 AND codigo = ?)`,
+      [modelo.codigo, modelo.titulo, modelo.corpo, modelo.codigo]
     );
-    if (r.insertId) criados += 1;
+    criados += r.affectedRows;
   }
   return criados;
 }

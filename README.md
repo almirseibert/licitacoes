@@ -259,6 +259,22 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
     apaga a inscrição.
   - **Aceite medido**: ver o plano (Seção 9) — SMTP real local e simulador da Meta; o aceite
     com WhatsApp real da Meta ficou na 9b. Testes em `testes/notificacoes.test.js`.
+- **Seção 10 — Documentos, declarações e agenda de portais, entregue em 14/11/2026.** Migração
+  `025_documentos_portais.sql`: `empresa_documentos.revisado_em` e a tabela `org_portais` (nome,
+  URL, tipo, vencimento do cadastro, observação — **sem login e sem senha**). Regras puras em
+  `backend/regras/documentos.js` (grupo pelo catálogo de exigências, situação disponível /
+  vencendo / pendente, revisão de 90 dias) e `backend/regras/portais.js`; rotas
+  `/api/empresa/documentos?grupo=&situacao=`, `.../lote/baixar?ids=` (ZIP, leitor também baixa),
+  `.../lote/email` (até 5 destinatários, 15 MB, 20 envios/hora por organização, resposta para
+  quem mandou), `.../:id/revisado` e `/api/portais`; telas em Documentos (abas "Documentos" e
+  "Agenda de portais") e aviso de portal no Dashboard.
+  - Documento sem validade formal volta para revisão aos 90 dias (alerta, não bloqueio);
+    portal perto de vencer avisa em 30/15/3 dias, pelo marco já cruzado. Ambos no job diário de
+    validades (`npm run validades`) e com tipo "documento vencendo" nos avisos da Seção 9.
+  - Certidão não é emitida pelo painel (CAPTCHA/gov.br): o botão "emitir" abre a página oficial.
+  - Declarações: 13 modelos (+ renúncia de vistoria e carta de credenciamento). O seed não
+    duplica mais os modelos do sistema (a 025 apaga as cópias que ele fazia desde a 017).
+  - **Aceite medido**: ver o plano (Seção 10). Testes em `testes/documentos.test.js`.
 - `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
   ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
 

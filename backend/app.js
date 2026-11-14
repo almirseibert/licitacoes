@@ -51,6 +51,7 @@ app.use('/api/painel', ...protegida, require('./rotas/painel'));
 app.use('/api/configuracoes', ...protegida, require('./rotas/configuracoes'));
 app.use('/api/empresa', ...protegida, require('./rotas/empresa'));
 app.use('/api/kits', ...protegida, require('./rotas/kits'));
+app.use('/api/portais', ...protegida, require('./rotas/portais'));
 app.use('/api/modelos-declaracao', ...protegida, require('./rotas/modelos'));
 app.use('/api/alertas', ...protegida, require('./rotas/alertas'));
 // Sem `leitorSoLe`: quem só lê a organização ainda escolhe como quer ser avisado.

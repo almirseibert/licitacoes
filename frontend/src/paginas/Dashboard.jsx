@@ -26,7 +26,9 @@ export default function Dashboard({ aoIr }) {
     },
     {
       chave: 'cofre', icone: FolderLock, rotulo: 'Documentos vencendo', valor: c.documentos_vencendo,
-      nota: c.documentos_vencidos ? `em 30 dias · ${c.documentos_vencidos} já vencido(s)` : 'em 30 dias',
+      nota:
+        (c.documentos_vencidos ? `em 30 dias · ${c.documentos_vencidos} já vencido(s)` : 'em 30 dias') +
+        (c.documentos_revisar ? ` · ${c.documentos_revisar} para revisar` : ''),
       alerta: c.documentos_vencidos ? 'erro' : c.documentos_vencendo ? 'atencao' : null,
     },
     {
@@ -47,6 +49,20 @@ export default function Dashboard({ aoIr }) {
       </div>
 
       <div className="p-4 space-y-6 max-w-6xl">
+        {c.portais_vencendo + c.portais_vencidos > 0 && (
+          <button
+            onClick={() => {
+              window.location.hash = 'portais';
+              aoIr('cofre');
+            }}
+            className={`w-full text-left text-xs px-3 py-2 rounded border ${
+              c.portais_vencidos ? 'border-erro/40 text-erro bg-erro/5' : 'border-atencao/40 text-atencao bg-atencao/5'
+            }`}
+          >
+            Cadastro em portal: {c.portais_vencendo} vencendo em 30 dias
+            {c.portais_vencidos ? ` · ${c.portais_vencidos} vencido(s)` : ''} — abrir a agenda de portais.
+          </button>
+        )}
         <section aria-label="O que pede atenção" className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {cartoes.map(({ chave, icone: Icone, rotulo, valor, nota, alerta }) => (
             <button

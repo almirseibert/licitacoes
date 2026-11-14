@@ -27,7 +27,7 @@ cofre de senha de portal e a assinatura digital (ver a tabela de divergências n
 | Fase | Seções | O que o cliente ganha | Marco |
 |---|---|---|---|
 | **A — Fundação SaaS** | 0 ✅, 1 (1a ✅, 1b ✅, 1c), 2 ✅, 3 ✅ | Conta própria, equipe, dados isolados, tema claro/escuro, plano e cobrança | Dá para cobrar e isolar clientes |
-| **B — Paridade de captação** | 4 ✅, 7 ✅, 8 ✅, 9 ✅, 10 | Boletim diário, banco de licitações completo, gestão com tarefas, avisos por tipo, documentos | Substitui o uso diário do ConLicitação na captação |
+| **B — Paridade de captação** | 4 ✅, 7 ✅, 8 ✅, 9 ✅, 10 ✅ | Boletim diário, banco de licitações completo, gestão com tarefas, avisos por tipo, documentos | Substitui o uso diário do ConLicitação na captação |
 | **C — IA e inteligência** | 5, 11, 12, 13, 14, 15, 17 | Pergunte ao Edital, resumo com checklist, acompanhamentos, contratos e atas, concorrentes e mercado, API, onboarding | **Versão 1 vendável** — fim da Fase C |
 | **D — Estratégia e automação** | 6, 16 | Monitor de chat, alerta de deserta por segmento, consultor jurídico | Planos mais caros |
 | **E — Ecossistema** | 18 | Seguro garantia, assessoria cadastral, cursos por parceria | Receita complementar |
@@ -481,24 +481,54 @@ canal em paralelo.
 
 ---
 
-## Seção 10 — Documentos, declarações e agenda de portais (Fase B)
-- [ ] Cofre com **grupos** (habilitação jurídica, regularidade fiscal/social/trabalhista,
-      qualificação técnica, econômico-financeira, outros) e **situação** (disponível / pendente /
-      vencendo); filtros por grupo e situação.
-- [ ] Regra de produto da referência: documento **sem validade formal é revisado a cada 90 dias**
-      (alerta, não bloqueio).
-- [ ] Download em lote e **enviar por e-mail**.
-- [ ] Declarações: o painel tem 11 modelos; **faltam "renúncia de vistoria" e "carta de
-      credenciamento"** (`backend/config/dados/modelos-declaracao.js`). Cada modelo mantém o aviso
-      "confira o texto do edital".
-- [ ] 🚫 **Certidão automática ("coletando")**: não se faz — a emissão exige CAPTCHA ou gov.br. No
-      lugar: lembrete de vencimento e um botão que abre a página oficial de emissão.
-- [ ] 🚫 **Cofre de login e senha de portal**: não se faz (CLAUDE.md). No lugar, uma **agenda de
-      portais**: nome, URL, tipo, **vencimento do login**, observação — sem login e sem senha — com
-      alerta no dashboard quando o cadastro no portal está para vencer.
+## Seção 10 — Documentos, declarações e agenda de portais (Fase B) — ✅ feito em 14/11/2026
+- [x] Cofre com **grupos** (habilitação jurídica, regularidade fiscal/social/trabalhista,
+      qualificação técnica, econômico-financeira, outros — tirados do catálogo de exigências, sem
+      coluna nova) e **situação** (disponível / vencendo / pendente); filtros por grupo e situação
+      (`regras/documentos.js`).
+- [x] Documento **sem validade formal é revisado a cada 90 dias** (alerta, não bloqueio):
+      `empresa_documentos.revisado_em` (migração `025_documentos_portais.sql`), botão "conferi",
+      alerta `validade_revisao` uma vez por ciclo (`chave`), contagem no dashboard.
+- [x] Download em lote (ZIP, GET — leitor também baixa) e **enviar por e-mail** (até 5
+      destinatários, 15 MB de anexo, 20 envios/hora por organização, `replyTo` de quem mandou).
+- [x] Declarações: **renúncia de vistoria** e **carta de credenciamento** (13 modelos). O aviso
+      "confira o texto do edital" segue na tela de modelos. O seed não duplica mais os modelos
+      do sistema (índice único com `organizacao_id` NULL não colidia); a 025 apaga as cópias.
+- [x] 🚫 Certidão automática: não se faz. Lembrete de vencimento (já existia) + botão "emitir"
+      que abre a página oficial (só link https).
+- [x] 🚫 Cofre de senha de portal: não se faz. **Agenda de portais** (`org_portais`, `/api/portais`):
+      nome, URL, tipo, vencimento do cadastro, observação; corpo com campo de login/senha → 400;
+      alerta `validade_portal` aos 30/15/3/0 dias pelo marco já cruzado; aviso no dashboard.
 
-**Aceite:** documento sem validade aparece para revisão aos 90 dias; nenhuma coluna do banco guarda
-senha de portal (conferido por `SHOW COLUMNS`).
+**Aceite (medido):** MariaDB 10.11, API real, SMTP real local (`smtp-server` + nodemailer). Duas
+organizações novas. Organização A com 6 documentos: situação **3 disponível / 2 vencendo / 1
+pendente**; grupos jurídica 1, regularidade 3, técnica 1, econômica 1; filtro
+regularidade+vencendo → só o FGTS. **Atestado sem validade, entrado há 91 dias, aparece para
+revisão** ("revisar: conferido há 91 dias"); o balanço com 89 dias, não. Job: **1 alerta** de
+revisão; rodado de novo, continua 1; no sino de A e não no de B. "Conferi" → sai da revisão
+(faltam 90) e o dashboard volta de 1 para 0. ZIP com um id da B no meio → **3 arquivos, só de A**;
+B pede ZIP/e-mail/revisão de documento de A → **404**. E-mail: 2 anexos para 2 destinatários,
+`replyTo` de quem mandou; 6 destinatários e e-mail inválido → 400; 21º envio na hora → **429**.
+Leitor: ZIP 200, e-mail/revisão/portal → 403. Portais: campo `senha` ou `login` no corpo → **400**;
+portal a 15 dias → 1 vencendo na agenda e no dashboard; job 2× → **1 alerta** (marco 15); vence
+hoje conta como vencido no dashboard e na agenda; B altera/apaga portal de A → 404, vê 0; URL
+`javascript:` → 400; sem token → 401. **`SHOW COLUMNS FROM org_portais`**: id, organizacao_id,
+nome, url, tipo, login_vence_em, observacao, criado_por, criado_em, atualizado_em — nenhuma de
+senha. Modelos: seed 2× → 13 do sistema, 0 duplicados. Total do roteiro **41/41**. Migração em
+banco zerado. Lint limpo, **112/112** testes (`testes/documentos.test.js`, 8 novos). Tela com
+Playwright (1366 e 390, sem rolagem lateral, 0 erro no console): filtro, marcar todos, e-mail
+enviado pela tela, ZIP baixado, portal adicionado. `code-review` (10 achados, 9 corrigidos:
+ZIP por GET para o leitor, marcação limpa ao filtrar, teto de 15 MB pelo base64, limite por
+hora, contagem de portal igual à agenda, revisão no dia de Brasília também no SQL,
+`alertas.criar` no lugar de INSERT IGNORE, aviso do dashboard abre a agenda, vencido antigo fora
+da consulta; o botão passou a "Vencendo/revisar").
+
+**Seção 10b — pendente:**
+- [ ] Limite de envios por hora guardado no banco (hoje em memória do processo: reinício zera e
+      duas réplicas da API somam o dobro).
+- [ ] Revisão de 90 dias também para versão antiga que volta a ser a atual (hoje conta da nova
+      entrada no cofre).
+- [ ] Link de emissão por UF para certidão estadual/municipal (hoje fica o texto "site da Sefaz").
 
 ---
 

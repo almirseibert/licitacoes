@@ -310,7 +310,23 @@ export const api = {
     requisitar(`/empresa/perfis/${id}`, { method: 'PATCH', body: JSON.stringify(campos) }),
 
   // ------------------------------------------------- cofre de documentos
-  cofre: (historico = false) => requisitar(`/empresa/documentos${historico ? '?historico=1' : ''}`),
+  cofre: (filtros = {}) => {
+    const q = new URLSearchParams(Object.entries(filtros).filter(([, v]) => v)).toString();
+    return requisitar(`/empresa/documentos${q ? `?${q}` : ''}`);
+  },
+
+  revisarDocumento: (id) => requisitar(`/empresa/documentos/${id}/revisado`, { method: 'POST' }),
+
+  baixarLote: (ids) => salvarComo(`/empresa/documentos/lote/baixar?ids=${ids.join(',')}`, 'documentos.zip'),
+
+  enviarLote: (corpo) =>
+    requisitar('/empresa/documentos/lote/email', { method: 'POST', body: JSON.stringify(corpo) }),
+
+  // ------------------------------------------- agenda de portais (Seção 10)
+  portais: () => requisitar('/portais'),
+  criarPortal: (campos) => requisitar('/portais', { method: 'POST', body: JSON.stringify(campos) }),
+  salvarPortal: (id, campos) => requisitar(`/portais/${id}`, { method: 'PATCH', body: JSON.stringify(campos) }),
+  apagarPortal: (id) => requisitar(`/portais/${id}`, { method: 'DELETE' }),
 
   guardarDocumento: (campos, arquivo) => {
     const forma = new FormData();

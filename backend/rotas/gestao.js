@@ -22,6 +22,8 @@ const escopo = require('../servicos/escopo');
 const gestao = require('../regras/gestao');
 const alertas = require('../servicos/alertas');
 const { LISTAS, sqlPorMim } = require('../regras/filtros-radar');
+const { REVISAO_DIAS, SQL_BASE_REVISAO } = require('../regras/documentos');
+const { AVISO_DIAS: PORTAL_AVISO_DIAS } = require('../regras/portais');
 
 const rotas = express.Router();
 
@@ -372,7 +374,7 @@ rotas.get('/dashboard', async (req, res) => {
   const eu = quem(req);
   const hoje = gestao.diaNoFuso();
   try {
-    const [[[boletins]], [[documentos]], [[tarefas]], [[andamentos]], [ufs]] = await Promise.all([
+    const [[[boletins]], [[documentos]], [[portais]], [[tarefas]], [[andamentos]], [ufs]] = await Promise.all([
       pool.query(
         `SELECT COUNT(*) AS nao_lidos FROM boletins b
           WHERE b.organizacao_id = ? AND b.total_itens > 0
@@ -381,9 +383,17 @@ rotas.get('/dashboard', async (req, res) => {
       ),
       pool.query(
         `SELECT SUM(valido_ate < ?) AS vencidos,
-                SUM(valido_ate BETWEEN ? AND DATE_ADD(?, INTERVAL 30 DAY)) AS vencendo
-           FROM empresa_documentos WHERE organizacao_id = ? AND ativo = 1 AND valido_ate IS NOT NULL`,
-        [hoje, hoje, hoje, org]
+                SUM(valido_ate BETWEEN ? AND DATE_ADD(?, INTERVAL 30 DAY)) AS vencendo,
+                SUM(valido_ate IS NULL AND ${SQL_BASE_REVISAO()} <= DATE_SUB(?, INTERVAL ? DAY)) AS revisar
+           FROM empresa_documentos WHERE organizacao_id = ? AND ativo = 1`,
+        [hoje, hoje, hoje, hoje, REVISAO_DIAS, org]
+      ),
+      // Seção 10: cadastro em portal a 30 dias de vencer, e o já vencido —
+      // "vence hoje" conta como vencido, igual à agenda (regras/portais.situacao).
+      pool.query(
+        `SELECT SUM(login_vence_em > ?) AS vencendo, SUM(login_vence_em <= ?) AS vencidos FROM org_portais
+          WHERE organizacao_id = ? AND login_vence_em <= DATE_ADD(?, INTERVAL ? DAY)`,
+        [hoje, hoje, org, hoje, PORTAL_AVISO_DIAS]
       ),
       pool.query(
         `SELECT ${['atrasadas', 'hoje', 'futuras'].map((v) => `SUM(${gestao.sqlVisao(v, hoje)}) AS ${v}`).join(', ')},
@@ -423,6 +433,9 @@ rotas.get('/dashboard', async (req, res) => {
         boletins_nao_lidos: n(boletins.nao_lidos),
         documentos_vencendo: n(documentos.vencendo),
         documentos_vencidos: n(documentos.vencidos),
+        documentos_revisar: n(documentos.revisar),
+        portais_vencendo: n(portais.vencendo),
+        portais_vencidos: n(portais.vencidos),
         tarefas_atrasadas: n(tarefas.atrasadas),
         minhas_tarefas_atrasadas: n(tarefas.minhas_atrasadas),
         tarefas_hoje: n(tarefas.hoje),

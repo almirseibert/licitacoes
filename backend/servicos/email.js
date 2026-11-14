@@ -107,12 +107,20 @@ async function enviarAvisos(para, avisos) {
  * do convite na resposta da API, para o admin copiar e mandar à mão).
  * @returns {{enviado:boolean, motivo?:string}}
  */
-async function enviarTransacional({ para, assunto, texto }) {
+async function enviarTransacional({ para, assunto, texto, anexos, responderPara }) {
   if (!servicoLigado()) {
     return { enviado: false, motivo: 'smtp não configurado' };
   }
   try {
-    await obterTransporte().sendMail({ from: smtp.de, to: para, subject: assunto, text: texto });
+    await obterTransporte().sendMail({
+      from: smtp.de,
+      to: para,
+      subject: assunto,
+      text: texto,
+      // Seção 10: o lote de documentos sai do SMTP do painel, mas a resposta vai a quem mandou.
+      ...(responderPara ? { replyTo: responderPara } : {}),
+      ...(anexos && anexos.length ? { attachments: anexos } : {}),
+    });
     return { enviado: true };
   } catch (erro) {
     console.error('Não foi possível enviar o e-mail transacional:', erro.message);
