@@ -896,8 +896,7 @@ rotas.post('/:id/questionamentos/montar', async (req, res) => {
       organizacaoId: req.organizacaoId,
       licitacaoId: Number(req.params.id),
       codigo: (req.body && req.body.codigo) || '',
-      // Seção 11: o possível questionamento do Resumo do Edital (índice na ficha).
-      questionamento: req.body && req.body.questionamento,
+      // Seção 11: o possível questionamento do Resumo do Edital (pelo texto do ponto).
       ponto: req.body && req.body.ponto,
     });
     res.json(r);

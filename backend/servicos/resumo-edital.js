@@ -11,6 +11,7 @@ const { paginasDoArquivo } = require('../regras/busca-edital');
 const { arquivosComTexto } = require('./perguntas-edital');
 const { ia: cfg } = require('../config/ambiente');
 const { lerJson } = require('./limites');
+const { formatarData } = require('../regras/boletim');
 
 const MINIMO_DE_TEXTO = 400;
 const MAX_CONSIDERACOES = 5000;
@@ -26,13 +27,32 @@ async function obter(organizacaoId, licitacaoId) {
     [organizacaoId, licitacaoId]
   );
   if (!l) return null;
-  return {
+  return comSaidas({
     licitacao: { id: l.id, numero_compra: l.numero_compra, modalidade: l.modalidade, orgao_nome: l.orgao_nome, objeto: l.objeto },
     dados: lerJson(l.ia_ficha, null),
     em: l.ia_ficha_em,
     consideracoes: l.consideracoes || '',
     consideracoes_em: l.consideracoes_em || null,
-  };
+  });
+}
+
+/**
+ * Título e linhas do checklist prontos para a tela imprimir — a mesma fonte do
+ * .docx e do e-mail. As considerações ficam de fora: a tela soma o rascunho.
+ */
+function comSaidas(ficha) {
+  return { ...ficha, titulo: tituloDe(ficha), linhas: ficha.dados ? regras.linhasDoChecklist(ficha.dados) : [] };
+}
+
+/** A ficha depois de gerar, sem reler o banco. */
+function comDados(ficha, dados) {
+  return comSaidas({ ...ficha, dados, em: new Date() });
+}
+
+/** A licitação existe? (para rota que não precisa da ficha) */
+async function existe(licitacaoId) {
+  const [[l]] = await pool.query('SELECT 1 AS sim FROM licitacoes WHERE id = ?', [licitacaoId]);
+  return Boolean(l);
 }
 
 /**
@@ -57,21 +77,14 @@ async function gerar({ licitacaoId, forcar = false }) {
 
   const dados = {
     ...r.dados,
-    _meta: {
-      modelo: cfg.modelo,
-      trechos: trechos.length,
-      caracteres: trechos.reduce((s, t) => s + t.texto.length, 0),
-      arquivos: arquivos.length,
-      descartados: r.descartados,
-      em: new Date().toISOString(),
-    },
+    _meta: { modelo: cfg.modelo, trechos: trechos.length, arquivos: arquivos.length, descartados: r.descartados },
   };
   await pool.query('UPDATE licitacoes SET ia_ficha = ?, ia_ficha_em = NOW() WHERE id = ?', [JSON.stringify(dados), licitacaoId]);
   return { ...r, dados };
 }
 
 async function salvarConsideracoes({ organizacaoId, licitacaoId, usuarioId, texto }) {
-  const limpo = String(texto || '').slice(0, MAX_CONSIDERACOES);
+  const limpo = String(texto || '');
   if (!limpo.trim()) {
     await pool.query('DELETE FROM resumo_consideracoes WHERE organizacao_id = ? AND licitacao_id = ?', [organizacaoId, licitacaoId]);
     return;
@@ -83,10 +96,6 @@ async function salvarConsideracoes({ organizacaoId, licitacaoId, usuarioId, text
   );
 }
 
-function dataBr(valor) {
-  return new Date(valor).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' });
-}
-
 function tituloDe(ficha) {
   const l = ficha.licitacao;
   return `Resumo do edital — ${[l.modalidade, l.numero_compra].filter(Boolean).join(' ') || `licitação ${l.id}`}${l.orgao_nome ? ` · ${l.orgao_nome}` : ''}`;
@@ -96,7 +105,7 @@ function tituloDe(ficha) {
 function gerarDocx(ficha) {
   return docx.gerar({
     titulo: tituloDe(ficha),
-    subtitulo: `Gerado pela IA em ${dataBr(ficha.em)}. A IA pode errar: confira cada item no trecho citado do edital.`,
+    subtitulo: `Gerado pela IA em ${formatarData(ficha.em)}. A IA pode errar: confira cada item no trecho citado do edital.`,
     colunas: [
       { titulo: 'Seção', largura: 14 },
       { titulo: 'Item', largura: 16 },
@@ -110,10 +119,10 @@ function gerarDocx(ficha) {
 function textoDoEmail(ficha) {
   return regras.textoDoEmail({
     titulo: tituloDe(ficha),
-    geradoEm: dataBr(ficha.em),
+    geradoEm: formatarData(ficha.em),
     dados: ficha.dados,
     consideracoes: ficha.consideracoes,
   });
 }
 
-module.exports = { obter, gerar, salvarConsideracoes, gerarDocx, textoDoEmail, tituloDe, MAX_CONSIDERACOES };
+module.exports = { obter, existe, comDados, gerar, salvarConsideracoes, gerarDocx, textoDoEmail, MAX_CONSIDERACOES };

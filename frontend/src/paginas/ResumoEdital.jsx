@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Loader2, Sparkles, AlertTriangle, RefreshCcw, FileDown, Mail, Printer, FileQuestion, Save } from 'lucide-react';
 import { api } from '../servicos/api';
-import { dataHora } from '../servicos/formato';
+import { dataHora, ondeCitacao as onde } from '../servicos/formato';
 
 /**
  * Aba "Resumo do edital" (Seção 11 do plano SaaS) — a ficha completa.
@@ -11,11 +11,6 @@ import { dataHora } from '../servicos/formato';
  * como "Não informado", nunca como palpite. Gera uma vez: refazer é a pedido.
  */
 const NAO_INFORMADO = 'Não informado';
-
-function onde(c) {
-  if (!c) return '';
-  return `${c.arquivo || 'edital'} · ${c.pagina ? `página ${c.pagina}` : 'página não identificada'}`;
-}
 
 export default function ResumoEdital({ id, aoQuestionar }) {
   const [estado, setEstado] = useState(null);
@@ -61,6 +56,7 @@ export default function ResumoEdital({ id, aoQuestionar }) {
   if (!estado) return <Loader2 size={16} className="animate-spin text-texto-suave" />;
 
   const d = estado.dados;
+  const campos = d ? d.grupos.flatMap((g) => g.campos) : [];
 
   if (!d) {
     return (
@@ -94,7 +90,7 @@ export default function ResumoEdital({ id, aoQuestionar }) {
           Gerado pela IA em <span className="font-mono">{dataHora(estado.em)}</span>.{' '}
           <strong className="text-atencao">A IA pode errar:</strong> confira cada item no trecho citado.{' '}
           <span className="text-texto-suave">
-            {d.preenchidos} de {d.total} campos sustentados por citação literal.
+            {campos.filter((c) => c.valor).length} de {campos.length} campos sustentados por citação literal.
           </span>
         </p>
         <div className="flex items-center gap-2 flex-wrap">
@@ -171,7 +167,7 @@ export default function ResumoEdital({ id, aoQuestionar }) {
                   className="botao mt-2 flex items-center gap-1"
                   onClick={() =>
                     aoQuestionar &&
-                    aoQuestionar({ codigo: q.tipo === 'impugnacao' ? 'impugnacao_restritiva' : 'esclarecimento', questionamento: i, ponto: q.ponto })
+                    aoQuestionar({ codigo: q.tipo === 'impugnacao' ? 'impugnacao_restritiva' : 'esclarecimento', ponto: q.ponto })
                   }
                 >
                   <FileQuestion size={11} /> abrir {q.tipo === 'impugnacao' ? 'impugnação' : 'pedido de esclarecimento'}
@@ -253,34 +249,30 @@ function escapar(texto) {
   return String(texto ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
-/** Impressão: uma página limpa, com data e aviso no topo, montada dos mesmos dados. */
+/**
+ * Impressão: as mesmas linhas do .docx e do e-mail (vêm do servidor), com o
+ * rascunho das considerações somado aqui, e data e aviso no topo.
+ */
 function imprimir(estado, consideracoes) {
-  const d = estado.dados;
-  const linha = (rotulo, valor, citacao) =>
-    `<tr><th>${escapar(rotulo)}</th><td>${valor ? `${escapar(valor)}${citacao ? `<div class="c">“${escapar(citacao.texto)}” — ${escapar(onde(citacao))}</div>` : ''}` : `<span class="n">${NAO_INFORMADO}</span>`}</td></tr>`;
-  const secoes = [
-    ...d.grupos.map((g) => `<h2>${escapar(g.titulo)}</h2><table>${g.campos.map((c) => linha(c.rotulo, c.valor, c.citacao)).join('')}</table>`),
-    ...d.listas.map(
-      (l) =>
-        `<h2>${escapar(l.titulo)}</h2><table>${l.itens.length ? l.itens.map((a, i) => linha(String(i + 1), a.valor, a.citacao)).join('') : linha('—', null)}</table>`
-    ),
-    `<h2>Possíveis questionamentos</h2><table>${
-      d.questionamentos.length
-        ? d.questionamentos.map((q, i) => linha(String(i + 1), q.lei ? `${q.ponto} — ${q.lei} (sugestão da IA)` : q.ponto, q.citacao)).join('')
-        : linha('—', null)
-    }</table>`,
-    consideracoes && consideracoes.trim() ? `<h2>Considerações do licitante</h2><p>${escapar(consideracoes)}</p>` : '',
-  ];
-  const l = estado.licitacao || {};
-  const titulo = `Resumo do edital — ${[l.modalidade, l.numero_compra].filter(Boolean).join(' ')}${l.orgao_nome ? ` · ${l.orgao_nome}` : ''}`;
+  const linhas = [...estado.linhas];
+  if (consideracoes && consideracoes.trim()) linhas.push(['Considerações do licitante', '—', consideracoes.trim(), '']);
+  let secao = null;
+  const corpo = linhas
+    .map(([s, item, valor, de]) => {
+      const cabeca = s !== secao ? `${secao ? '</table>' : ''}<h2>${escapar(s)}</h2><table>` : '';
+      secao = s;
+      const classe = valor === NAO_INFORMADO ? ' class="n"' : '';
+      return `${cabeca}<tr><th>${escapar(item)}</th><td${classe}>${escapar(valor)}${de ? `<div class="c">${escapar(de)}</div>` : ''}</td></tr>`;
+    })
+    .join('');
   const janela = window.open('', '_blank');
   if (!janela) return;
-  janela.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${escapar(titulo)}</title>
+  janela.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><title>${escapar(estado.titulo)}</title>
 <style>body{font:12px/1.4 system-ui,sans-serif;color:#111;margin:24px}h1{font-size:16px}h2{font-size:13px;margin:16px 0 4px}
 table{width:100%;border-collapse:collapse}th{width:28%;text-align:left;vertical-align:top;font-weight:600}
 th,td{border-bottom:1px solid #ddd;padding:4px}.c{color:#555;font-size:11px}.n{color:#777}.aviso{border:1px solid #c80;padding:6px}</style>
-</head><body><h1>${escapar(titulo)}</h1><p class="aviso">Gerado pela IA em ${escapar(dataHora(estado.em))}. A IA pode errar: confira cada item no trecho citado do edital.</p>
-${secoes.join('')}</body></html>`);
+</head><body><h1>${escapar(estado.titulo)}</h1><p class="aviso">Gerado pela IA em ${escapar(dataHora(estado.em))}. A IA pode errar: confira cada item no trecho citado do edital.</p>
+${corpo}${secao ? '</table>' : ''}</body></html>`);
   janela.document.close();
   janela.focus();
   janela.print();

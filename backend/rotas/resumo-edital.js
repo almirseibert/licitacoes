@@ -25,29 +25,34 @@ const FALHAS = {
   vazia: 'A IA devolveu uma resposta vazia. Tente gerar de novo.',
 };
 
-async function carregar(req, res) {
-  const ficha = await resumo.obter(req.organizacaoId, idLicitacao(req));
-  if (!ficha) res.status(404).json({ erro: 'Licitação não encontrada.' });
-  return ficha;
+// GET, POST, /docx e /email trabalham sobre a ficha: carregada uma vez aqui.
+async function carregarFicha(req, res, next) {
+  try {
+    // `req` é desta requisição só; nada mais escreve nele entre o await e aqui.
+    // eslint-disable-next-line require-atomic-updates
+    req.ficha = await resumo.obter(req.organizacaoId, idLicitacao(req));
+    if (!req.ficha) return res.status(404).json({ erro: 'Licitação não encontrada.' });
+    return next();
+  } catch (erro) {
+    return responderErro(res, 500, 'Não foi possível carregar o resumo do edital.', erro);
+  }
+}
+
+function exigirFicha(req, res, next) {
+  if (!req.ficha.dados) return res.status(409).json({ erro: 'Gere o resumo do edital antes.' });
+  return next();
 }
 
 // GET — a ficha guardada (ou nada), se a IA está ligada e as considerações.
-rotas.get('/', async (req, res) => {
-  try {
-    const ficha = await carregar(req, res);
-    if (!ficha) return;
-    res.json({ disponivel: ia.disponivel(), motivo: ia.disponivel() ? null : DESLIGADA, ...ficha });
-  } catch (erro) {
-    responderErro(res, 500, 'Não foi possível carregar o resumo do edital.', erro);
-  }
+rotas.get('/', carregarFicha, (req, res) => {
+  res.json({ disponivel: ia.disponivel(), motivo: ia.disponivel() ? null : DESLIGADA, ...req.ficha });
 });
 
 // POST — gera a ficha. Só refaz a pedido (`forcar`); a guardada não custa nada.
-rotas.post('/', async (req, res) => {
+rotas.post('/', carregarFicha, async (req, res) => {
   const forcar = Boolean(req.body && req.body.forcar === true);
+  const { ficha } = req;
   try {
-    const ficha = await carregar(req, res);
-    if (!ficha) return;
     if (ficha.dados && !forcar) {
       return res.json({ ...ficha, cache: true, mensagem: 'Este edital já foi resumido. Use "gerar de novo" para refazer.' });
     }
@@ -63,7 +68,7 @@ rotas.post('/', async (req, res) => {
       return res.status(['formato', 'cortada'].includes(r.codigo) ? 422 : 502).json({ erro: FALHAS[r.codigo] || FALHAS.http });
     }
     res.json({
-      ...(await resumo.obter(req.organizacaoId, idLicitacao(req))),
+      ...resumo.comDados(ficha, r.dados),
       cache: r.cache,
       mensagem: r.cache
         ? 'Ficha recuperada do cache, sem custo novo.'
@@ -82,8 +87,7 @@ rotas.put('/consideracoes', async (req, res) => {
     return res.status(400).json({ erro: `As considerações passam de ${resumo.MAX_CONSIDERACOES} caracteres.` });
   }
   try {
-    const ficha = await carregar(req, res);
-    if (!ficha) return;
+    if (!(await resumo.existe(idLicitacao(req)))) return res.status(404).json({ erro: 'Licitação não encontrada.' });
     await resumo.salvarConsideracoes({
       organizacaoId: req.organizacaoId,
       licitacaoId: idLicitacao(req),
@@ -96,24 +100,12 @@ rotas.put('/consideracoes', async (req, res) => {
   }
 });
 
-async function fichaPronta(req, res) {
-  const ficha = await carregar(req, res);
-  if (!ficha) return null;
-  if (!ficha.dados) {
-    res.status(409).json({ erro: 'Gere o resumo do edital antes.' });
-    return null;
-  }
-  return ficha;
-}
-
 // GET /docx — o checklist em Word.
-rotas.get('/docx', async (req, res) => {
+rotas.get('/docx', carregarFicha, exigirFicha, (req, res) => {
   try {
-    const ficha = await fichaPronta(req, res);
-    if (!ficha) return;
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-    res.setHeader('Content-Disposition', `attachment; filename="resumo_edital_${ficha.licitacao.id}.docx"`);
-    res.send(resumo.gerarDocx(ficha));
+    res.setHeader('Content-Disposition', `attachment; filename="resumo_edital_${req.ficha.licitacao.id}.docx"`);
+    res.send(resumo.gerarDocx(req.ficha));
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível gerar o .docx.', erro);
   }
@@ -121,15 +113,14 @@ rotas.get('/docx', async (req, res) => {
 
 // POST /email — o checklist para o e-mail de quem pediu (só para si: não vira
 // canal de envio para terceiros), com o .docx anexo.
-rotas.post('/email', async (req, res) => {
+rotas.post('/email', carregarFicha, exigirFicha, async (req, res) => {
+  const { ficha } = req;
   try {
-    const ficha = await fichaPronta(req, res);
-    if (!ficha) return;
     const para = req.usuario && req.usuario.email;
     if (!para) return res.status(400).json({ erro: 'Sua conta não tem e-mail cadastrado.' });
     const r = await email.enviarTransacional({
       para,
-      assunto: resumo.tituloDe(ficha),
+      assunto: ficha.titulo,
       texto: resumo.textoDoEmail(ficha),
       anexos: [{ filename: `resumo_edital_${ficha.licitacao.id}.docx`, content: resumo.gerarDocx(ficha) }],
     });

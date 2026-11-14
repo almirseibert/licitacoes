@@ -173,6 +173,7 @@ Regras:
 - Português do Brasil, direto, sem adjetivo de propaganda. "confianca" de 0 a 1.`;
 
 const resumoEdital = require('../regras/resumo-edital');
+const { rotularTrechos } = require('../regras/busca-edital');
 
 // Seção 11: o catálogo vai no prompt a partir de regras/resumo-edital.js, para
 // o prompt e o schema nunca divergirem.
@@ -213,9 +214,13 @@ Regras de conteúdo:
   resumoEdital.GRUPOS.map((g) => `${g.titulo}: ${g.campos.map(([chave, rotulo]) => `${chave} (${rotulo})`).join(', ')}`).join('\n')
 );
 
-/** Erro do modelo com `codigo` ('http' | 'timeout' | 'rede'): quem chama decide pelo código, não pelo texto. */
+/**
+ * Erro do modelo com `codigo` ('http' | 'timeout' | 'rede' | 'vazia' | 'cortada'):
+ * quem chama decide pelo código, não pelo texto. `cobrada` diz se o modelo
+ * gerou (e o provedor cobrou) a resposta — é o que conta no limite do plano.
+ */
 function erroIa(codigo, mensagem) {
-  return Object.assign(new Error(mensagem), { codigo });
+  return Object.assign(new Error(mensagem), { codigo, cobrada: codigo === 'vazia' || codigo === 'cortada' });
 }
 
 /**
@@ -259,7 +264,7 @@ async function chamar({ instrucao, conteudo, marca, preambulo = '', maxTokens = 
     clearTimeout(relogio);
   }
 
-  const { texto, fim, pensou, tokensEntrada, tokensSaida } = pedido.ler(dados || {});
+  const { texto, fim, cortada, pensou, tokensEntrada, tokensSaida } = pedido.ler(dados || {});
   if (!texto.trim()) {
     // 'vazia' e 'cortada' são respostas cobradas: quem chama conta no limite.
     throw erroIa('vazia', `o modelo não devolveu conteúdo (${fim || 'sem texto'})`);
@@ -267,12 +272,12 @@ async function chamar({ instrucao, conteudo, marca, preambulo = '', maxTokens = 
   // Resposta cortada no teto devolve JSON pela metade, que falharia depois
   // como "fora do schema" e mandaria procurar o erro no lugar errado. Aqui o
   // diagnóstico é o certo, com o número para ajustar.
-  if (fim === 'MAX_TOKENS' || fim === 'length') {
+  if (cortada) {
     throw erroIa(
       'cortada',
       `a resposta foi cortada no teto de ${maxTokens} tokens` +
         (pensou ? ` (${pensou} gastos em raciocínio)` : '') +
-        ' — aumente o teto (IA_MAX_TOKENS_SAIDA / IA_MAX_TOKENS_RESUMO) ou reduza IA_ORCAMENTO_RACIOCINIO'
+        ' — aumente o teto da tarefa (IA_MAX_TOKENS_SAIDA ou IA_MAX_TOKENS_RESUMO) ou reduza IA_ORCAMENTO_RACIOCINIO'
     );
   }
   return { texto, tokensEntrada, tokensSaida };
@@ -308,6 +313,7 @@ function pedidoGemini(instrucao, mensagem, maxTokens) {
       return {
         texto: partes.map((p) => p.text || '').join(''),
         fim: candidato.finishReason || null,
+        cortada: candidato.finishReason === 'MAX_TOKENS',
         pensou: Number(uso.thoughtsTokenCount) || 0,
         tokensEntrada: Number(uso.promptTokenCount) || null,
         tokensSaida: Number(uso.candidatesTokenCount) || null,
@@ -340,6 +346,7 @@ function pedidoOpenai(instrucao, mensagem, maxTokens) {
       return {
         texto: String((escolha.message && escolha.message.content) || ''),
         fim: escolha.finish_reason || null,
+        cortada: escolha.finish_reason === 'length',
         pensou: 0,
         tokensEntrada: Number(uso.prompt_tokens) || null,
         tokensSaida: Number(uso.completion_tokens) || null,
@@ -400,7 +407,7 @@ async function registrar({ licitacaoId, tipo, hash, tokensEntrada, tokensSaida, 
      ON DUPLICATE KEY UPDATE
        modelo = VALUES(modelo), tokens_entrada = VALUES(tokens_entrada),
        tokens_saida = VALUES(tokens_saida), custo_estimado = VALUES(custo_estimado),
-       resposta = COALESCE(VALUES(resposta), resposta), erro = VALUES(erro)`,
+       resposta = VALUES(resposta), erro = VALUES(erro)`,
     [
       licitacaoId || null,
       tipo,
@@ -523,9 +530,7 @@ async function lerEdital({ licitacaoId, texto, forcar = false }) {
  *   diz se houve gasto (é o que conta no limite do plano).
  */
 async function perguntar({ licitacaoId, pergunta, trechos }) {
-  const conteudo = trechos
-    .map((t) => `[${t.id}] (${t.arquivo || 'arquivo'}, ${t.pagina ? `página ${t.pagina}` : 'página não identificada'})\n${t.texto}`)
-    .join('\n\n');
+  const conteudo = rotularTrechos(trechos);
   const hash = sha256(`${cfg.modelo}|p1|${pergunta.trim().toLowerCase()}|${conteudo}`);
   const tipo = 'pergunta_edital';
 
@@ -547,7 +552,7 @@ async function perguntar({ licitacaoId, pergunta, trechos }) {
     });
   } catch (erro) {
     // Falha de rede/modelo não vai para o cache: a próxima pergunta tenta de novo.
-    return { ok: false, codigo: erro.codigo || 'rede', motivo: erro.message, chamouModelo: false };
+    return { ok: false, codigo: erro.codigo || 'rede', motivo: erro.message, chamouModelo: Boolean(erro.cobrada) };
   }
 
   const json = lerJson(bruto.texto);
@@ -581,17 +586,17 @@ async function perguntar({ licitacaoId, pergunta, trechos }) {
  * @returns {{ok, dados?, descartados?, cache?, codigo?, motivo?, chamouModelo:boolean}}
  */
 async function resumirEdital({ licitacaoId, trechos, forcar = false }) {
-  const conteudo = resumoEdital.conteudoParaModelo(trechos);
+  const conteudo = rotularTrechos(trechos);
   const hash = sha256(`${cfg.modelo}|r2|${conteudo}`);
   const tipo = 'resumo_edital';
 
-  if (!forcar) {
-    const guardado = await doCache(tipo, hash);
-    if (guardado && guardado.resposta) {
-      const v = resumoEdital.validarResumo(guardado.resposta.bruto, trechos);
-      if (v.ok) return { ok: true, dados: v.dados, descartados: v.descartados, cache: true, chamouModelo: false };
-    }
+  const guardado = await doCache(tipo, hash);
+  if (!forcar && guardado && guardado.resposta) {
+    const v = resumoEdital.validarResumo(guardado.resposta.bruto, trechos);
+    if (v.ok) return { ok: true, dados: v.dados, descartados: v.descartados, cache: true, chamouModelo: false };
   }
+  // Falha ao refazer não apaga a resposta boa já guardada para o mesmo texto.
+  const anotarFalha = (dados) => (guardado && guardado.resposta ? null : registrar(dados));
 
   let bruto;
   try {
@@ -603,18 +608,16 @@ async function resumirEdital({ licitacaoId, trechos, forcar = false }) {
       timeoutMs: cfg.timeoutResumoMs,
     });
   } catch (erro) {
-    const codigo = erro.codigo || 'rede';
     // Resposta cortada ou vazia foi gerada (e cobrada): conta no limite e fica no livro-caixa.
-    const cobrada = codigo === 'cortada' || codigo === 'vazia';
-    if (cobrada) await registrar({ licitacaoId, tipo, hash, erro: erro.message });
-    return { ok: false, codigo, motivo: erro.message, chamouModelo: cobrada };
+    if (erro.cobrada) await anotarFalha({ licitacaoId, tipo, hash, erro: erro.message });
+    return { ok: false, codigo: erro.codigo || 'rede', motivo: erro.message, chamouModelo: Boolean(erro.cobrada) };
   }
 
   const json = lerJson(bruto.texto);
   const validado = resumoEdital.validarResumo(json, trechos);
   const base = { licitacaoId, tipo, hash, tokensEntrada: bruto.tokensEntrada, tokensSaida: bruto.tokensSaida };
   if (!validado.ok) {
-    await registrar({ ...base, erro: `resposta fora do schema: ${validado.motivo}` });
+    await anotarFalha({ ...base, erro: `resposta fora do schema: ${validado.motivo}` });
     return { ok: false, codigo: 'formato', motivo: `resposta fora do schema: ${validado.motivo}`, chamouModelo: true };
   }
   // O bruto fica no livro-caixa para revalidar no cache; a tela só vê o validado.

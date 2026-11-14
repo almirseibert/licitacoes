@@ -39,16 +39,16 @@ export default function Questionamentos({ id, inicial = null, aoUsarInicial }) {
   // rascunho já abre com o trecho citado no lugar da primeira lacuna.
   useEffect(() => {
     if (!inicial) return;
-    montar(inicial.codigo, inicial.questionamento, inicial.ponto);
+    montar(inicial.codigo, inicial.ponto);
     if (aoUsarInicial) aoUsarInicial();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inicial]);
 
-  const montar = async (codigo, questionamento, ponto) => {
+  const montar = async (codigo, ponto) => {
     setOcupado(codigo);
     setErro(null);
     try {
-      setRascunho(await api.montarQuestionamento(id, codigo, questionamento, ponto));
+      setRascunho(await api.montarQuestionamento(id, codigo, ponto));
     } catch (e) {
       setErro(e.message);
     } finally {

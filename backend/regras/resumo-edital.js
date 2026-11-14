@@ -10,7 +10,8 @@
 //
 // Testado em testes/resumo-edital.test.js.
 
-const { blocosDaPagina, buscarTrechos, pareceInstrucao } = require('./busca-edital');
+const { indexarBlocos, pontuarBlocos, pareceInstrucao } = require('./busca-edital');
+const { textoLimpo, citacaoLiteral, confiancaValida } = require('./ia-schema');
 const { normalizarPalavras: normalizar } = require('./texto');
 
 const NAO_INFORMADO = 'Não informado';
@@ -145,10 +146,9 @@ const TIPOS_QUESTIONAMENTO = ['esclarecimento', 'impugnacao'];
 
 const CHAVES_CAMPO = new Map(GRUPOS.flatMap((g) => g.campos.map(([chave, rotulo]) => [chave, rotulo])));
 
+// Citação: limites de `ia-schema` (os mesmos do Pergunte ao Edital).
 const LIMITES = {
   valor: 400,
-  citacao: 400,
-  citacaoMinima: 20, // abaixo disso "de" ou "0" passaria por citação literal
   porLista: 15,
   questionamentos: 8,
   ponto: 400,
@@ -157,79 +157,38 @@ const LIMITES = {
   abertura: 3, // os primeiros blocos sempre vão: é onde estão número, órgão e objeto
 };
 
-function textoLimpo(valor, limite) {
-  if (typeof valor !== 'string') return null;
-  const limpo = valor.replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
-  return limpo ? limpo.slice(0, limite) : null;
-}
-
-function chaveDoBloco(b) {
-  return `${b.arquivoId}|${b.pagina}|${b.texto}`;
-}
-
 /**
  * Os blocos do edital que vão ao modelo: os primeiros (cabeçalho) e os que
  * mais falam de cada grupo, sem repetir, na ordem do documento e dentro do
- * teto de caracteres. Rotulados T1..Tn — é o rótulo que o modelo cita.
+ * teto de caracteres. Rotulados T1..Tn — é o rótulo que o modelo cita. O
+ * edital é cortado e normalizado uma vez só; cada grupo só pontua o índice.
  *
  * @param {Array} paginas  saída de `paginasDoArquivo`, de todos os arquivos
  * @param {number} maxCaracteres
  */
 function selecionarTrechos(paginas, maxCaracteres) {
-  const todos = paginas.flatMap((p) => blocosDaPagina(p));
-  const ordem = new Map();
-  todos.forEach((b, i) => {
-    const chave = chaveDoBloco(b);
-    if (!ordem.has(chave)) ordem.set(chave, i);
-  });
+  const indice = indexarBlocos(paginas);
 
   // A prioridade é a ordem desta lista: se o teto cortar, corta o que veio por último.
-  const escolhidos = new Map();
-  const incluir = (b) => {
-    const chave = chaveDoBloco(b);
-    if (!escolhidos.has(chave)) escolhidos.set(chave, b);
+  const escolhidos = new Map(); // ordem no documento -> bloco
+  const incluir = ({ bloco, ordem }) => {
+    if (!escolhidos.has(ordem)) escolhidos.set(ordem, bloco);
   };
-  todos.slice(0, LIMITES.abertura).forEach(incluir);
+  indice.slice(0, LIMITES.abertura).forEach(incluir);
   for (const fonte of [...GRUPOS, ...LISTAS, QUESTIONAMENTOS]) {
-    buscarTrechos(paginas, fonte.busca, { max: LIMITES.trechosPorGrupo }).forEach(incluir);
+    pontuarBlocos(indice, fonte.busca, { max: LIMITES.trechosPorGrupo }).forEach(incluir);
   }
 
   const dentro = [];
   let total = 0;
-  for (const b of escolhidos.values()) {
+  for (const [ordem, b] of escolhidos) {
     if (total + b.texto.length > maxCaracteres) continue;
     total += b.texto.length;
-    dentro.push(b);
+    dentro.push([ordem, b]);
   }
   return dentro
-    .sort((a, b) => ordem.get(chaveDoBloco(a)) - ordem.get(chaveDoBloco(b)))
-    .map((b, i) => ({ id: `T${i + 1}`, arquivoId: b.arquivoId, arquivo: b.arquivo, pagina: b.pagina, texto: b.texto }));
-}
-
-/** O conteúdo enviado ao modelo: cada bloco com rótulo, arquivo e página. */
-function conteudoParaModelo(trechos) {
-  return trechos
-    .map((t) => `[${t.id}] (${t.arquivo || 'arquivo'}, ${t.pagina ? `página ${t.pagina}` : 'página não identificada'})\n${t.texto}`)
-    .join('\n\n');
-}
-
-/**
- * A citação de uma afirmação, se for literal; senão null.
- * @returns {{trecho, arquivo_id, arquivo, pagina, texto}|null}
- */
-function citacaoValida(item, porId, normalizados) {
-  // "[T7]" é o rótulo como o modelo o viu no conteúdo: vale o mesmo que "T7".
-  const id = item && typeof item.trecho === 'string' ? item.trecho.replace(/[[\]\s]/g, '').toUpperCase() : '';
-  const trecho = porId.get(id);
-  if (!trecho) return { erro: `trecho fora dos enviados (${id || 'vazio'})` };
-  const frase = textoLimpo(item.citacao, LIMITES.citacao);
-  const alvo = normalizar(frase);
-  if (alvo.length < LIMITES.citacaoMinima || !normalizados.get(id).includes(alvo)) {
-    return { erro: `a frase citada não está em ${id}` };
-  }
-  return {
-    citacao: { trecho: id, arquivo_id: trecho.arquivoId || null, arquivo: trecho.arquivo || null, pagina: trecho.pagina || null, texto: frase },
-  };
+    .sort((a, b) => a[0] - b[0])
+    .map(([, b], i) => ({ id: `T${i + 1}`, arquivoId: b.arquivoId, arquivo: b.arquivo, pagina: b.pagina, texto: b.texto }));
 }
 
 /** Afirmação = valor + citação literal. Sem as duas, não entra. */
@@ -240,12 +199,13 @@ function afirmacao(item, onde, ctx, limite = LIMITES.valor) {
   }
   const valor = textoLimpo(item.valor, limite);
   if (!valor) return null; // o modelo disse que o edital não trata disso
-  const c = citacaoValida(item, ctx.porId, ctx.normalizados);
-  if (c.erro) {
-    ctx.descartados.push(`${onde}: ${c.erro}`);
+  const c = citacaoLiteral(item, ctx.porId, ctx.normalizados);
+  if (c.erro || !c.literal) {
+    ctx.descartados.push(`${onde}: ${c.erro || `a frase citada não está em ${c.id}`}`);
     return null;
   }
-  return { valor, citacao: c.citacao };
+  const { id, trecho, frase } = c;
+  return { valor, citacao: { trecho: id, arquivo_id: trecho.arquivoId || null, arquivo: trecho.arquivo || null, pagina: trecho.pagina || null, texto: frase } };
 }
 
 /**
@@ -307,12 +267,8 @@ function validarResumo(bruto, trechos = []) {
     questionamentos.push({ ponto: ponto.valor, tipo, lei: leiValida, citacao: ponto.citacao });
   }
 
-  const n = Number(bruto.confianca);
-  const confianca = bruto.confianca != null && Number.isFinite(n) && n >= 0 && n <= 1 ? n : null;
-  if (bruto.confianca != null && confianca === null) descartados.push('confianca: não é número entre 0 e 1');
+  const confianca = confiancaValida(bruto.confianca, descartados);
 
-  const preenchidos = grupos.reduce((s, g) => s + g.campos.filter((c) => c.valor).length, 0);
-  const total = grupos.reduce((s, g) => s + g.campos.length, 0);
 
   return {
     ok: true,
@@ -323,8 +279,6 @@ function validarResumo(bruto, trechos = []) {
       listas,
       questionamentos,
       confianca,
-      preenchidos,
-      total,
       // Bloco com texto dirigido à IA: a tela avisa (o schema já é a defesa).
       suspeitos: trechos.filter((t) => pareceInstrucao(t.texto)).map((t) => ({ trecho: t.id, arquivo: t.arquivo, pagina: t.pagina })),
     },
@@ -397,15 +351,10 @@ function preencherQuestionamento(texto, { ponto, citacao }) {
 
 module.exports = {
   GRUPOS,
-  LISTAS,
-  LIMITES,
   NAO_INFORMADO,
-  TIPOS_QUESTIONAMENTO,
   selecionarTrechos,
-  conteudoParaModelo,
   validarResumo,
   linhasDoChecklist,
   textoDoEmail,
   preencherQuestionamento,
-  onde,
 };

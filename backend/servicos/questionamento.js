@@ -167,7 +167,7 @@ async function calcular(organizacaoId, licitacaoId, { gravar = true } = {}) {
 }
 
 /** O texto do modelo, já com as variáveis da licitação trocadas. */
-async function montarTexto({ organizacaoId, licitacaoId, codigo, questionamento, ponto: pontoPedido }) {
+async function montarTexto({ organizacaoId, licitacaoId, codigo, ponto: pontoPedido }) {
   const modelo = POR_CODIGO.get(codigo);
   if (!modelo) throw new Error(`Modelo desconhecido: ${codigo}.`);
 
@@ -179,17 +179,14 @@ async function montarTexto({ organizacaoId, licitacaoId, codigo, questionamento,
   let { texto } = preenchido;
 
   // Seção 11: vindo de um "possível questionamento" do Resumo do Edital, a
-  // primeira lacuna vira o trecho citado. O ponto sai da ficha guardada (não
-  // do pedido), e o resto das lacunas fica para quem assina.
+  // primeira lacuna vira o trecho citado. Trecho e lei saem da ficha guardada
+  // (o pedido só diz qual ponto), e o resto das lacunas fica para quem assina.
   let origem = null;
-  if (Number.isInteger(questionamento) && questionamento >= 0) {
+  if (typeof pontoPedido === 'string' && pontoPedido) {
     const ficha = lerJson(licitacao.ia_ficha, null);
-    const ponto = ficha && Array.isArray(ficha.questionamentos) ? ficha.questionamentos[questionamento] : null;
-    // A ficha é do edital e pode ter sido gerada de novo depois que a tela abriu:
-    // o texto do ponto confirma que o índice ainda é o mesmo item.
-    if (!ponto || (typeof pontoPedido === 'string' && pontoPedido !== ponto.ponto)) {
-      throw new Error('O resumo do edital mudou desde que a tela abriu. Recarregue a aba e escolha o ponto de novo.');
-    }
+    const ponto = ficha && Array.isArray(ficha.questionamentos) ? ficha.questionamentos.find((q) => q.ponto === pontoPedido) : null;
+    // A ficha é do edital e pode ter sido gerada de novo depois que a tela abriu.
+    if (!ponto) throw new Error('O resumo do edital mudou desde que a tela abriu. Recarregue a aba e escolha o ponto de novo.');
     texto = resumoEdital.preencherQuestionamento(texto, ponto);
     origem = { ponto: ponto.ponto, lei: ponto.lei, citacao: ponto.citacao };
   }

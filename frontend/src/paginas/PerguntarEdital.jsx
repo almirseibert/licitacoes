@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Loader2, MessageSquareText, Send, Star, AlertTriangle, Quote } from 'lucide-react';
 import { api } from '../servicos/api';
-import { dataHora } from '../servicos/formato';
+import { dataHora, ondeCitacao } from '../servicos/formato';
 
 /**
  * Pergunte ao Edital (Seção 5 do plano SaaS), aba do detalhe da licitação.
@@ -234,7 +234,7 @@ function Pergunta({ p, aoSalvar }) {
                   <li key={c.trecho} className="text-xs border-l-2 border-borda pl-2">
                     <span className="text-texto-suave flex items-center gap-1">
                       <Quote size={11} />
-                      {c.arquivo || 'arquivo'} · {c.pagina ? `página ${c.pagina}` : 'página não identificada'}
+                      {ondeCitacao(c)}
                       {!c.literal && ' · trecho (a IA não citou literalmente)'}
                     </span>
                     <span className="italic">“{c.citacao}”</span>

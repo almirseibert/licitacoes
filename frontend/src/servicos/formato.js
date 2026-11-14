@@ -69,3 +69,9 @@ export function resumir(texto, tamanho = 160) {
   const limpo = String(texto).replace(/\s+/g, ' ').trim();
   return limpo.length > tamanho ? `${limpo.slice(0, tamanho)}…` : limpo;
 }
+
+/** "arquivo · página N" de uma citação do edital (Pergunte ao Edital e Resumo do Edital). */
+export function ondeCitacao(c) {
+  if (!c) return '';
+  return `${c.arquivo || 'arquivo'} · ${c.pagina ? `página ${c.pagina}` : 'página não identificada'}`;
+}

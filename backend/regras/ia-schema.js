@@ -172,6 +172,39 @@ function validarPalavras(bruto) {
 }
 
 /**
+ * A citação de um trecho enviado ao modelo (Seção 5 e Seção 11): o rótulo tem
+ * de ser um dos enviados ("[T7]" vale como "T7", é como o modelo o viu) e a
+ * frase tem de estar, letra a letra (sem acento, caixa e espaço), dentro dele.
+ *
+ * @param {{trecho?:string, citacao?:string}} item  o que o modelo devolveu
+ * @param {Map<string, object>} porId   trechos enviados, por rótulo
+ * @param {Map<string, string>} [normalizados]  texto normalizado por rótulo (cache)
+ * @returns {{id?:string, trecho?:object, frase?:string|null, literal?:boolean, erro?:string}}
+ *   `erro` quando o rótulo não é de um trecho enviado.
+ */
+function citacaoLiteral(item, porId, normalizados) {
+  const id = item && typeof item.trecho === 'string' ? item.trecho.replace(/[[\]\s]/g, '').toUpperCase() : '';
+  const trecho = porId.get(id);
+  if (!trecho) return { erro: `trecho fora dos enviados (${id || 'vazio'})` };
+  const frase = textoLimpo(item.citacao, LIMITES.citacao);
+  const alvo = normalizar(frase);
+  const texto = normalizados ? normalizados.get(id) : normalizar(trecho.texto);
+  return { id, trecho, frase, literal: alvo.length >= LIMITES.citacaoMinima && texto.includes(alvo) };
+}
+
+/**
+ * Confiança do modelo: fora de 0..1 é descartada, não arredondada — "confiança
+ * 7" vinda de um modelo manipulado não pode virar "confiança máxima".
+ */
+function confiancaValida(valor, descartados) {
+  if (valor == null) return null;
+  const n = Number(valor);
+  if (Number.isFinite(n) && n >= 0 && n <= 1) return n;
+  descartados.push('confianca: não é número entre 0 e 1');
+  return null;
+}
+
+/**
  * Valida a resposta do "Pergunte ao Edital" (Seção 5 do plano SaaS).
  *
  * A citação é o que dá valor à resposta, e é também onde o modelo mais
@@ -200,17 +233,13 @@ function validarResposta(bruto, trechos = []) {
   const citacoes = [];
   const usados = new Set();
   for (const item of Array.isArray(bruto.citacoes) ? bruto.citacoes.slice(0, LIMITES.lista) : []) {
-    const id = item && typeof item.trecho === 'string' ? item.trecho.trim().toUpperCase() : '';
-    const trecho = porId.get(id);
-    if (!trecho) {
-      descartados.push(`citacoes: trecho fora dos enviados (${id || 'vazio'})`);
+    const { id, trecho, frase, literal, erro } = citacaoLiteral(item, porId);
+    if (erro) {
+      descartados.push(`citacoes: ${erro}`);
       continue;
     }
     if (usados.has(id)) continue;
     usados.add(id);
-    const frase = textoLimpo(item.citacao, LIMITES.citacao);
-    const alvo = normalizar(frase);
-    const literal = alvo.length >= LIMITES.citacaoMinima && normalizar(trecho.texto).includes(alvo);
     if (frase && !literal) descartados.push(`citacoes: frase de ${id} não está no trecho`);
     citacoes.push({
       trecho: id,
@@ -231,15 +260,18 @@ function validarResposta(bruto, trechos = []) {
     descartados.push('encontrado: sem nenhuma citação literal do edital');
   }
 
-  // Fora de 0..1 é descartado, não arredondado: "confiança 7" vinda de um
-  // modelo manipulado não pode virar "confiança máxima".
-  const n = Number(bruto.confianca);
-  const confianca = bruto.confianca != null && Number.isFinite(n) && n >= 0 && n <= 1 ? n : null;
-  if (bruto.confianca != null && confianca === null) {
-    descartados.push('confianca: não é número entre 0 e 1');
-  }
-
+  const confianca = confiancaValida(bruto.confianca, descartados);
   return { ok: true, motivo: null, descartados, dados: { resposta, encontrado, citacoes, confianca } };
 }
 
-module.exports = { validarLeitura, validarPalavras, validarResposta, LIMITES, GRAVIDADES, RESPOSTAS };
+module.exports = {
+  validarLeitura,
+  validarPalavras,
+  validarResposta,
+  textoLimpo,
+  citacaoLiteral,
+  confiancaValida,
+  LIMITES,
+  GRAVIDADES,
+  RESPOSTAS,
+};

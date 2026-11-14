@@ -644,7 +644,18 @@ página N): …". `code-review` (10 achados, 9 corrigidos: código de falha para
 contada no limite, ponto conferido contra a ficha, rascunho das considerações preservado ao
 refazer, "[T7]" aceito como T7, `reasoning_effort` pelo orçamento, erro não apaga cache bom, consulta
 duplicada e `lerJson` repetido, mensagem de IA desligada sem culpar só a chave; o timeout síncrono
-ficou na 11b).
+ficou na 11b). `simplify` (4 revisores): edital cortado e normalizado **uma vez** (`indexarBlocos` +
+`pontuarBlocos`; antes eram 16 passadas por pedido) e blocos deduplicados por posição; citação literal,
+`textoLimpo` e confiança num lugar só (`ia-schema`: `citacaoLiteral`, `confiancaValida` — o Pergunte ao
+Edital também passa a aceitar "[T7]"); rótulo dos trechos num formato só (`rotularTrechos`);
+`cobrada` no erro do modelo (resposta cortada também conta no Pergunte); `ler()` diz `cortada` por
+protocolo; falha ao refazer não apaga a resposta boa do cache (sem mudar o upsert de todos);
+impressão com as mesmas linhas e título do .docx (vêm do servidor); rotas com a ficha carregada uma
+vez e sem reler depois de gerar; questionamento pedido só pelo texto do ponto; `formatarData` do
+boletim e `ondeCitacao` no front reaproveitados; contagens e metadados deriváveis fora do JSON.
+Pulados: templates de questionamento com variáveis nomeadas (o motor das declarações listaria as
+lacunas como "falta no perfil") e perfis de IA por tarefa. Medido de novo: os mesmos 300/300,
+uso 10→10→11, 404/400/409/422, injeção barrada, tela e impressão sem erro, 137/137.
 
 **Seção 11b — pendente:**
 - [ ] **O aceite da spec**: 10 editais com o **Gemini real**, conferidos um a um, com o número de

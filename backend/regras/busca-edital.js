@@ -89,15 +89,30 @@ function blocosDaPagina(pagina, tamanho = TAMANHO_TRECHO) {
 }
 
 /**
+ * Os blocos de todas as páginas, cortados e normalizados uma vez só. Quem
+ * busca várias vezes no mesmo edital (o Resumo do Edital, Seção 11, faz uma
+ * busca por grupo) indexa uma vez e pontua quantas vezes quiser.
+ * @returns {Array<{bloco, ordem:number, palavras:string[]}>}
+ */
+function indexarBlocos(paginas) {
+  return paginas.flatMap((p) => blocosDaPagina(p)).map((bloco, ordem) => ({ bloco, ordem, palavras: normalizar(bloco.texto).split(' ') }));
+}
+
+/**
  * Os trechos do edital que mais falam da pergunta.
  *
  * @param {Array} paginas  saída de `paginasDoArquivo`, de todos os arquivos
  * @param {string} pergunta
  * @param {{dicas?:string[], max?:number}} [opcoes]
- * @returns {Array<{id:string, arquivoId, arquivo, pagina, texto, pontos:number}>}
+ * @returns {Array<{id:string, arquivoId, arquivo, pagina, texto}>}
  *   na ordem do documento, com id T1..Tn (é o id que o modelo cita).
  */
-function buscarTrechos(paginas, pergunta, { dicas = [], max = MAX_TRECHOS } = {}) {
+function buscarTrechos(paginas, pergunta, opcoes = {}) {
+  return pontuarBlocos(indexarBlocos(paginas), pergunta, opcoes).map(({ bloco }, i) => ({ id: `T${i + 1}`, ...bloco }));
+}
+
+/** Os blocos do índice que mais falam da pergunta, na ordem do documento (com `ordem`). */
+function pontuarBlocos(indice, pergunta, { dicas = [], max = MAX_TRECHOS } = {}) {
   const termos = new Set(termosDe(pergunta, dicas));
   if (!termos.size) return [];
 
@@ -105,11 +120,10 @@ function buscarTrechos(paginas, pergunta, { dicas = [], max = MAX_TRECHOS } = {}
   // prefixo de 5 — basta olhar os prefixos de 3, 4 e 5 letras no Set.
   const df = new Map();
   const blocos = [];
-  let total = 0;
-  for (const bloco of paginas.flatMap((p) => blocosDaPagina(p))) {
-    const ordem = total++;
+  const total = indice.length;
+  for (const { bloco, ordem, palavras } of indice) {
     const contagem = new Map();
-    for (const palavra of normalizar(bloco.texto).split(' ')) {
+    for (const palavra of palavras) {
       for (let n = 3; n <= Math.min(5, palavra.length); n += 1) {
         const prefixo = palavra.slice(0, n);
         // Termo curto (< 5) só casa a palavra inteira ou o começo dela, como antes.
@@ -133,8 +147,18 @@ function buscarTrechos(paginas, pergunta, { dicas = [], max = MAX_TRECHOS } = {}
   return blocos
     .sort((a, b) => b.pontos - a.pontos || a.ordem - b.ordem)
     .slice(0, max)
-    .sort((a, b) => a.ordem - b.ordem)
-    .map(({ bloco }, i) => ({ id: `T${i + 1}`, ...bloco }));
+    .sort((a, b) => a.ordem - b.ordem);
+}
+
+/**
+ * O conteúdo enviado ao modelo: cada trecho com o rótulo que ele cita, o
+ * arquivo e a página. É o contrato da citação — um formato só para o Pergunte
+ * ao Edital e o Resumo do Edital.
+ */
+function rotularTrechos(trechos) {
+  return trechos
+    .map((t) => `[${t.id}] (${t.arquivo || 'arquivo'}, ${t.pagina ? `página ${t.pagina}` : 'página não identificada'})\n${t.texto}`)
+    .join('\n\n');
 }
 
 /**
@@ -161,6 +185,9 @@ module.exports = {
   MAX_TRECHOS,
   paginasDoArquivo,
   blocosDaPagina,
+  indexarBlocos,
+  pontuarBlocos,
   buscarTrechos,
+  rotularTrechos,
   pareceInstrucao,
 };

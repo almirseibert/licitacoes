@@ -548,10 +548,10 @@ export const api = {
   // ------------- prazos, questionamentos e dossiês (seções 25 a 27)
   questionamentos: (id) => requisitar(`/licitacoes/${id}/questionamentos`),
 
-  montarQuestionamento: (id, codigo, questionamento, ponto) =>
+  montarQuestionamento: (id, codigo, ponto) =>
     requisitar(`/licitacoes/${id}/questionamentos/montar`, {
       method: 'POST',
-      body: JSON.stringify({ codigo, questionamento, ponto }),
+      body: JSON.stringify({ codigo, ponto }),
     }),
 
   criarQuestionamento: (id, campos) =>

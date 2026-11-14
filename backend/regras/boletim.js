@@ -272,6 +272,7 @@ function montarTexto(perfil, boletim, itens, { urlPublica = '', linkDescadastro 
 module.exports = {
   HORARIOS_PADRAO,
   LACUNA,
+  formatarData,
   validarPerfil,
   lerPerfil,
   temTermo,

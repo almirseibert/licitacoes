@@ -15,6 +15,7 @@ const EDITAL = [
 
 const paginas = paginasDoArquivo({ id: 7, nome: 'Edital PE 12/2026', extensao: 'pdf', texto: EDITAL });
 const trechos = r.selecionarTrechos(paginas, 60000);
+const preenchidos = (d) => d.grupos.flatMap((g) => g.campos).filter((c) => c.valor).length;
 const de = (frase) => trechos.find((t) => t.texto.includes(frase)).id;
 
 test('seleção: rótulos T1..Tn na ordem do documento, página do nosso texto', () => {
@@ -45,7 +46,7 @@ test('validação: citação literal entra com arquivo e página do nosso trecho
   assert.equal(campo.valor, 'R$ 50,00');
   assert.equal(campo.citacao.pagina, 3);
   assert.equal(campo.citacao.arquivo, 'Edital PE 12/2026');
-  assert.equal(v.dados.preenchidos, 2);
+  assert.equal(preenchidos(v.dados), 2);
 });
 
 test('validação: paráfrase, trecho inventado e chave fora do catálogo são descartados (viram Não informado)', () => {
@@ -65,7 +66,7 @@ test('validação: paráfrase, trecho inventado e chave fora do catálogo são d
   assert.equal(todos.find((c) => c.chave === 'vigencia').valor, null);
   assert.equal(todos.find((c) => c.chave === 'modalidade').valor, null);
   assert.equal(todos.some((c) => c.chave === 'pontuacao'), false);
-  assert.equal(v.dados.preenchidos, 0);
+  assert.equal(preenchidos(v.dados), 0);
   assert.equal(v.descartados.length, 4);
 });
 
