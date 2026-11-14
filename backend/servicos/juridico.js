@@ -11,9 +11,8 @@ const ia = require('./ia');
 const limites = require('./limites');
 const regras = require('../regras/juridico');
 const base = require('../config/dados/juridico');
-const { FALHAS, FALHA_PADRAO, INTERROMPIDA, ESPERA_MAXIMA_S } = require('./perguntas-edital');
+const { FALHAS, FALHA_PADRAO, INTERROMPIDA, ESPERA_MAXIMA_S, MAX_PENDENTES } = require('./perguntas-edital');
 
-const MAX_PENDENTES = 3;
 /** Trocas anteriores enviadas como contexto (só o que a pessoa perguntou e o que foi respondido). */
 const TROCAS_DE_CONTEXTO = 3;
 
@@ -64,6 +63,12 @@ async function obterConversa(organizacaoId, usuarioId, id) {
   return { ...conversa, mensagens: linhas.map(formatar) };
 }
 
+/** A conversa é da pessoa? Só a existência — sem carregar as mensagens (a rota de perguntar só precisa do 404). */
+async function conversaDaPessoa(organizacaoId, usuarioId, id) {
+  const [[c]] = await pool.query('SELECT 1 AS sim FROM juridico_conversas WHERE id = ? AND organizacao_id = ? AND usuario_id = ?', [id, organizacaoId, usuarioId]);
+  return Boolean(c);
+}
+
 async function apagarConversa(organizacaoId, usuarioId, id) {
   const [r] = await pool.query('DELETE FROM juridico_conversas WHERE id = ? AND organizacao_id = ? AND usuario_id = ?', [
     id,
@@ -71,15 +76,6 @@ async function apagarConversa(organizacaoId, usuarioId, id) {
     usuarioId,
   ]);
   return r.affectedRows > 0;
-}
-
-async function pendentes(organizacaoId) {
-  const [[r]] = await pool.query(
-    `SELECT COUNT(*) AS n FROM juridico_mensagens
-      WHERE organizacao_id = ? AND situacao = 'pendente' AND criado_em >= NOW() - INTERVAL ? SECOND`,
-    [organizacaoId, ESPERA_MAXIMA_S]
-  );
-  return Number(r.n);
 }
 
 /**
@@ -196,8 +192,8 @@ module.exports = {
   criarConversa,
   listarConversas,
   obterConversa,
+  conversaDaPessoa,
   apagarConversa,
-  pendentes,
   criarMensagem,
   obterMensagem,
   processar,

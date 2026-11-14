@@ -330,7 +330,8 @@ async function reservarUso(organizacaoId, chave) {
     limite === null ? [Number(organizacaoId), mes, chave] : [Number(organizacaoId), mes, chave, limite]
   );
   if (r.affectedRows > 0) return { ok: true, reservado: true };
-  const usado = (await uso(organizacaoId))[chave];
+  const [[linha]] = await db().query('SELECT quantidade FROM uso_mensal WHERE organizacao_id = ? AND mes = ? AND recurso = ?', [Number(organizacaoId), mes, chave]);
+  const usado = linha ? Number(linha.quantidade) : 0;
   return { ok: false, corpo: erroLimite(dados.plano, dados.planos, chave, { usado, limite }) };
 }
 

@@ -108,8 +108,7 @@ function filtrar(itens, textoDeItem, tituloDeItem, { q = '', tema = '' } = {}) {
   if (!palavras.length) return doTema;
   return doTema
     .map((item) => {
-      const corpo = normalizarPalavras(textoDeItem(item));
-      const titulo = normalizarPalavras(tituloDeItem(item));
+      const { corpo, titulo } = normalizado(item, textoDeItem, tituloDeItem);
       let pontos = 0;
       for (const p of palavras) {
         if (!corpo.includes(p) && !titulo.includes(p)) return null;
@@ -120,6 +119,13 @@ function filtrar(itens, textoDeItem, tituloDeItem, { q = '', tema = '' } = {}) {
     .filter(Boolean)
     .sort((a, b) => b.pontos - a.pontos)
     .map((x) => x.item);
+}
+
+// A base é estática: corpo e título de cada item são normalizados uma vez (a busca roda a cada digitação).
+const NORMALIZADOS = new WeakMap();
+function normalizado(item, textoDeItem, tituloDeItem) {
+  if (!NORMALIZADOS.has(item)) NORMALIZADOS.set(item, { corpo: normalizarPalavras(textoDeItem(item)), titulo: normalizarPalavras(tituloDeItem(item)) });
+  return NORMALIZADOS.get(item);
 }
 
 const buscarNaBiblioteca = (q, tema) => filtrar(base.GUIAS, (g) => `${g.resumo} ${g.corpo.join(' ')} ${g.termos.join(' ')}`, (g) => g.titulo, { q, tema });
@@ -164,9 +170,6 @@ const AVISO_MINUTA =
   'A base jurídica ainda não foi revisada por advogado. Confira cada artigo citado no texto da lei antes de agir.';
 
 module.exports = {
-  MINIMO,
-  MAXIMO,
-  MAX_ARTIGOS,
   AVISO,
   AVISO_MINUTA,
   numerosCitados,

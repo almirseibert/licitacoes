@@ -35,7 +35,7 @@ function Avisos({ sobre }) {
   );
 }
 
-export default function Juridico({ aoIr }) {
+export default function Juridico() {
   const [aba, setAba] = useState('consultor');
   const [sobre, setSobre] = useState(null);
   const [erro, setErro] = useState(null);
@@ -54,7 +54,7 @@ export default function Juridico({ aoIr }) {
       {erro && <p className="text-xs text-erro mb-3">{erro}</p>}
       <Abas abas={[['consultor', 'Consultor'], ['biblioteca', 'Jurídico Fácil']]} ativa={aba} aoMudar={setAba} />
       {aba === 'consultor' && sobre && <Consultor sobre={sobre} />}
-      {aba === 'biblioteca' && sobre && <Biblioteca sobre={sobre} aoIr={aoIr} />}
+      {aba === 'biblioteca' && sobre && <Biblioteca sobre={sobre} />}
     </div>
   );
 }

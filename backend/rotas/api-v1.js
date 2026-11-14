@@ -13,7 +13,6 @@ const { filtrosDe, comEtiquetas, COLUNAS_LISTA } = require('../servicos/radar');
 const funil = require('../regras/funil');
 const contratos = require('../servicos/contrato');
 
-const SITUACOES = new Set(['aguardando_assinatura', 'vigente', 'encerrado', 'rescindido', 'prorrogado']);
 
 const rotas = express.Router();
 
@@ -150,15 +149,11 @@ rotas.get('/licitacoes/:id', async (req, res) => {
 // Etapa sem nenhuma licitação sai com zero: o painel mostra o funil inteiro, na ordem.
 rotas.get('/funil', async (req, res) => {
   try {
-    const [linhas] = await pool.query(
-      'SELECT etapa, COUNT(*) AS total FROM org_licitacoes WHERE organizacao_id = ? AND descartada = 0 GROUP BY etapa',
-      [req.organizacaoId]
-    );
+    const [[linhas], [[descartadas]]] = await Promise.all([
+      pool.query('SELECT etapa, COUNT(*) AS total FROM org_licitacoes WHERE organizacao_id = ? AND descartada = 0 GROUP BY etapa', [req.organizacaoId]),
+      pool.query('SELECT COUNT(*) AS total FROM org_licitacoes WHERE organizacao_id = ? AND descartada = 1', [req.organizacaoId]),
+    ]);
     const porEtapa = new Map(linhas.map((l) => [l.etapa, Number(l.total)]));
-    const [[descartadas]] = await pool.query(
-      'SELECT COUNT(*) AS total FROM org_licitacoes WHERE organizacao_id = ? AND descartada = 1',
-      [req.organizacaoId]
-    );
     res.json({
       etapas: funil.ETAPAS.map((e) => ({ etapa: e.chave, descricao: e.descricao, total: porEtapa.get(e.chave) || 0 })),
       descartadas: Number(descartadas.total),
@@ -171,7 +166,7 @@ rotas.get('/funil', async (req, res) => {
 // GET /api/v1/contratos — os contratos da organização (recurso `contratos` do plano). `?situacao=vigente`.
 rotas.get('/contratos', limites.exigirRecurso('contratos'), async (req, res) => {
   try {
-    const lista = await contratos.listar({ organizacaoId: req.organizacaoId, situacao: SITUACOES.has(req.query.situacao) ? req.query.situacao : null });
+    const lista = await contratos.listar({ organizacaoId: req.organizacaoId, situacao: contratos.SITUACOES.includes(req.query.situacao) ? req.query.situacao : null });
     res.json({
       dados: lista.map((c) => ({
         id: c.id,

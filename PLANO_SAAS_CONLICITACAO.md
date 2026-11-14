@@ -28,8 +28,8 @@ cofre de senha de portal e a assinatura digital (ver a tabela de divergências n
 |---|---|---|---|
 | **A — Fundação SaaS** | 0 ✅, 1 (1a ✅, 1b ✅, 1c ✅ código), 2 ✅, 3 ✅ | Conta própria, equipe, dados isolados, tema claro/escuro, plano e cobrança | Dá para cobrar e isolar clientes |
 | **B — Paridade de captação** | 4 ✅, 7 ✅, 8 ✅, 9 ✅, 10 ✅ | Boletim diário, banco de licitações completo, gestão com tarefas, avisos por tipo, documentos | Substitui o uso diário do ConLicitação na captação |
-| **C — IA e inteligência** | 5 ✅, 11 (11b), 12 ✅ (12b), 13 ✅ (13b), 14 ✅ (14b), 15 ✅ (15b), 17 ✅ (17b) | Pergunte ao Edital, resumo com checklist, acompanhamentos, contratos e atas, concorrentes e mercado, API, onboarding | **Versão 1 vendável** — fim da Fase C |
-| **D — Estratégia e automação** | 6 (6b), 16 | Monitor de chat, alerta de deserta por segmento, consultor jurídico | Planos mais caros |
+| **C — IA e inteligência** | 5 ✅, 11 (11b: aceite com Gemini real), 12 ✅ (12b: PNCP), 13 ✅ (13b), 14 ✅ (14b ✅ código), 15 ✅ (15b ✅ código), 17 ✅ (17b ✅ código) | Pergunte ao Edital, resumo com checklist, acompanhamentos, contratos e atas, concorrentes e mercado, API, onboarding | **Versão 1 vendável** — fim da Fase C |
+| **D — Estratégia e automação** | 6 (6b), 16 (código ✅; base em minuta, aceite com o advogado pendente) | Monitor de chat, alerta de deserta por segmento, consultor jurídico | Planos mais caros |
 | **E — Ecossistema** | 18 (código ✅; aceite 18b) | Seguro garantia, assessoria cadastral, cursos por parceria | Receita complementar |
 
 Ordem de dependência: **1b antes de tudo** (sem pontuação por organização o resto herda o
@@ -726,17 +726,22 @@ Pulados: templates de questionamento com variáveis nomeadas (o motor das declar
 lacunas como "falta no perfil") e perfis de IA por tarefa. Medido de novo: os mesmos 300/300,
 uso 10→10→11, 404/400/409/422, injeção barrada, tela e impressão sem erro, 137/137.
 
-**Seção 11b — pendente:**
-- [ ] **O aceite da spec**: 10 editais com o **Gemini real**, conferidos um a um, com o número de
-      afirmações erradas (máx. 1 discutível). Precisa recarregar os créditos do projeto no AI
-      Studio; a chave já está no cofre do ambiente (`IA_PROTOCOLO=openai`,
-      `GEMINI_API_KEY=proxy-injected`, `NODE_USE_ENV_PROXY=1`).
-- [ ] Geração assíncrona (como o Pergunte ao Edital): hoje o POST espera até `IA_TIMEOUT_RESUMO_MS`
-      (240 s) e um proxy reverso com 60 s corta antes.
-- [ ] Ficha por organização ou versionada: hoje "gerar de novo" de uma organização troca a ficha que
-      todas leem (o pedido de questionamento detecta e pede recarga).
-- [ ] Ponto do questionamento no texto da impugnação (hoje só o trecho entra; o ponto aparece na
-      nota da tela).
+**Seção 11b — feito em 14/11/2026 o que é código; o aceite com o Gemini real segue pendente:**
+- [ ] **O aceite da spec**: 10 editais com o **Gemini real**, conferidos um a um, com o número de afirmações erradas
+      (máx. 1 discutível). **Não feito:** este ambiente não tem a chave (`GEMINI_API_KEY`) e os créditos do projeto no AI
+      Studio estavam zerados (402). Precisa recarregar os créditos e rodar (`IA_PROTOCOLO=openai`, chave no cofre).
+- [x] **Geração assíncrona** (14/11/2026): migração `041` guarda o estado na licitação (`ia_ficha_situacao`,
+      `ia_ficha_erro`, `ia_ficha_pedida_em`, `ia_ficha_reserva`). `POST` responde **202** na hora e a tela consulta o GET a
+      cada 3 s; a reserva é um UPDATE condicional (**5 POST simultâneos → o modelo é chamado 1 vez**) e só a execução dona do
+      código de reserva fecha a geração; pendente de mais de timeout+60 s é dada como interrompida e pode ser retomada;
+      falha vira `geracao.erro` em português e a ficha anterior fica; a unidade do limite do mês é reservada de forma
+      atômica e **devolvida se o modelo não cobrou**. Medido: 12/12 (202 em < 1,5 s, ficha pronta no GET, uso do mês 1,
+      sem texto → erro explicado, pendente velha interrompida e retomável).
+- [x] **Ponto do questionamento no texto da impugnação** (14/11/2026): na impugnação, que não tem a frase "Resta dúvida
+      quanto a", o ponto entra logo depois do trecho citado, marcado como apontado pelo resumo e a confirmar (`$&`, `$1` e
+      aspas no trecho ou no ponto entram como texto). Testes em `testes/resumo-edital.test.js`.
+- [ ] Ficha por organização ou versionada: hoje "gerar de novo" de uma organização troca a ficha que todas leem (o pedido de
+      questionamento detecta e pede recarga). Decisão de produto: uma ficha por organização multiplica o gasto com a IA.
 
 ---
 
@@ -792,7 +797,8 @@ Radar no "Objeto" (muda comportamento), valor estimado copiado na gravação (a 
 roda na página), regravação do dia corrente nos acompanhamentos. Rodada completa com o código final: contrato, ata e acompanhamento `ok` em 5,5 min (571 atas, 6.666 publicações). Medido de novo: isolamento (1 × 0
 favorita, 0 com palavra alheia, alerta só para quem favoritou), telas sem erro em 1366 e 390, 146/146.
 
-**Seção 12b — pendente:**
+**Seção 12b — pendente (nada feito: o PNCP não responde neste ambiente — o proxy recusa `pncp.gov.br` — e a carga
+histórica não se verifica sem ele):**
 - [ ] Carga histórica além da janela de 10.000 da busca (mês inteiro por UF): fatiar a busca por
       modalidade/esfera ou usar a consulta por órgão, e aí refazer a contagem mensal completa.
 - [ ] Fornecedor e valor da ata (itens/resultados da contratação no `pncp-api`).
@@ -848,7 +854,7 @@ toa, janela dos recorrentes em UTC). `simplify`: os revisores em paralelo caíra
 passada feita à mão (função só de teste removida, internos desexportados). Ficou de fora:
 `PorUf` do Dashboard virar o `Barras.jsx` novo (fora do diff).
 
-**Seção 13b — pendente:**
+**Seção 13b — pendente (nada de código a fazer agora: depende de portal de terceiro ou de decisão de produto):**
 - [ ] Desclassificação/inabilitação e itens não vencidos: só com a lista de propostas do portal de
       disputa (Compras.gov.br atrás de CAPTCHA — não se força, seção 5.4). Reavaliar se o PNCP
       passar a publicar os participantes.
@@ -890,14 +896,23 @@ ambiente), webhook para um destino https real na internet, `CONFIAR_PROXY` atrá
 verdade e MySQL 8 (o teste é MariaDB). A `security-review` não roda aqui (sem `origin/HEAD`); a
 revisão de segurança foi à mão (SSRF, hash, HMAC, isolamento). A skill `simplify` não foi rodada.
 
-**Seção 14b — pendente:**
-- [ ] Entrega **pelo menos uma vez** (falha entre o 2xx e o registro reenvia o lote); a cota mensal é
-      lida e incrementada em dois passos (pode passar do teto sob concorrência) e cobra mesmo se a
-      rota falhar.
-- [ ] Entrega de webhooks em série no worker (destinos lentos seguram a rodada); paralelizar com teto.
-- [ ] Limite de 30 tokens inválidos/min por IP vira 429 para todos quando `CONFIAR_PROXY=0`.
-- [ ] `webhook_itens` sem `organizacao_id`; helpers de parse JSON duplicados (api, integracoes, webhooks).
-- [ ] Mais endpoints no `/api/v1` (contratos, mercado, funil) e teste versionado do job e da cota.
+**Seção 14b — feito em 14/11/2026 o que é código (verificado contra MariaDB 10.11 real):**
+- [x] **Cota mensal atômica** (`servicos/api.js reservarChamada`): um upsert com `LAST_INSERT_ID(expr)` soma só se ainda cabe e
+      devolve o valor, numa ida ao banco; resposta 5xx **devolve** a chamada (erro nosso não gasta a cota). Medido: teto
+      de 10 e **30 chamadas simultâneas → 10 × 200 e 20 × 429, uso = 10**; a 1ª chamada do mês já traz
+      `X-Cota-Mensal-Restante` (9, depois 8).
+- [x] **Entrega "pelo menos uma vez" reconhecível**: o `entrega_id` do lote é derivado do webhook e dos itens
+      (`regras/api.js entregaIdDoLote`), então o reenvio depois de uma falha entre o 2xx e o registro sai com o **mesmo** id
+      (documentado em `docs/API.md`). A entrega continua "pelo menos uma vez".
+- [x] **Webhooks em paralelo, com teto de 4** (`servicos/paralelo.js`, o mesmo helper do aviso da 18b), resultado na ordem.
+- [x] **Limite de tokens inválidos por IP**: 30/min com `CONFIAR_PROXY` ≥ 1 e **300/min sem ele** (aí o IP visto é o do
+      proxy e 30 derrubaria todos os clientes por causa de um).
+- [x] `webhook_itens.organizacao_id` (migração `040`, com preenchimento do que já existia); `limites.lerJson` no lugar dos
+      parsers de JSON duplicados (api e job de webhooks).
+- [x] `/api/v1/funil` (etapas na ordem, com zero, e descartadas) e `/api/v1/contratos` (recurso `contratos`, `?situacao=`).
+- [ ] Teste versionado do job de webhook contra um receptor real e da cota sob carga (hoje: testes de unidade em
+      `testes/api.test.js` e a medição acima). Não foi exercitada uma entrega de webhook com catálogo real nesta sessão.
+- [ ] `/api/v1/mercado` (contratos e atas do mercado).
 
 ---
 
@@ -946,27 +961,64 @@ CNPJ da empresa e consulta principal em paralelo.
 **Não verificado:** catálogo e histórico de preços **sintéticos** (não há PNCP aqui), MySQL 8 (o teste é
 MariaDB) e organização com milhares de participações (a consulta traz as linhas ao Node e agrega lá).
 
-**Seção 15b — pendente:**
-- [ ] A definição de "participação" (etapas, data, taxa, valor ganho) está copiada entre `relatorioMensal`
-      (`servicos/exportar.js`) e `regras/desempenho.js`; extrair uma fonte única e fazer o relatório mensal
-      agrupar por mês as mesmas linhas (hoje diferem nas bordas e no desconto da perdida sem proposta).
-- [ ] `fim_propostas` não tem fuso (o PNCP publica horário de Brasília e a coleta grava como veio): a janela
-      em UTC pode errar a borda de uma participação sem `proposta_em`/`etapa_em`.
-- [ ] Órgão com e sem CNPJ vira dois grupos; "todo" como `de` nulo; cache de referência duplicado com
-      `diagnostico.js` (`montarDescontador`); `Numero` e `pct` ainda duplicados em outras telas.
-- [ ] Agregar no SQL (`GROUP BY`) se uma organização passar de alguns milhares de participações.
-- [ ] Margem por licitação com o custo vindo de várias propostas e aditivos de contrato.
+**Seção 15b — feito em 14/11/2026 o que é código (MariaDB 10.11 real, 14/14):**
+- [x] **Definição única de participação** (`servicos/participacoes.js`): "Meu desempenho" e o relatório mensal leem as
+      mesmas linhas; o relatório agrupa por mês em `regras/desempenho.js resumirPorMes`. O valor proposto do relatório passa
+      a ser o da **minha** proposta (na ganha sem proposta, o do resultado) — antes somava o valor do vencedor nas
+      perdidas, e o desconto da perdida sem proposta entrava na média. **Medido**: 5 participações, totais iguais nas duas
+      telas (disputei 5, ganhas, perdidas, valor ganho R$ 1.600), mês com a perdida sem proposta com 2 descontos (e não 3).
+- [x] **Fuso**: todas as datas viram dia de Brasília antes de comparar com o período e de cair num mês
+      (`proposta_em`/`etapa_em` em UTC menos 3 h; `fim_propostas` como o PNCP publica). Medido: ganha de 01/11 01:30 UTC
+      cai em **outubro** e a janela do dia 31/10 a pega; a de novembro não.
+- [x] **Órgão com e sem CNPJ vira um grupo só** (`mapaDeOrgaos`): medido, Prefeitura X com e sem CNPJ = 1 grupo de 3.
+- [ ] Agregar no SQL (`GROUP BY`) se uma organização passar de alguns milhares de participações (o relatório traz hoje uma
+      linha enxuta por participação ao Node, 12 meses).
+- [ ] "todo" como `de` nulo; cache de referência duplicado com `diagnostico.js` (`montarDescontador`); `Numero` e `pct`
+      duplicados em outras telas; margem por licitação com o custo vindo de várias propostas e aditivos de contrato.
 
 ---
 
-## Seção 16 — Consultor jurídico (Fase D)
-- [ ] Chat sobre a Lei 14.133 com histórico e "novo chat", **sempre citando o artigo**.
-- [ ] **Base jurídica revisada por advogado antes de publicar**, e aviso fixo "não substitui
-      advogado". **Bloqueada: o advogado revisor ainda não foi definido (13/11/2026).** Sem ele
-      a Seção 16 não sai; as demais seções da Fase D (monitor de chat) seguem normalmente.
-- [ ] Biblioteca "Jurídico Fácil": artigos curtos, busca, filtros por tema. Conteúdo **nosso**.
+## Seção 16 — Consultor jurídico (Fase D) — código feito em 14/11/2026; base em MINUTA, aceite com o advogado pendente (16b)
+- [x] Chat sobre a Lei 14.133 com histórico por pessoa e "novo chat", **sempre citando o artigo**: a resposta é
+      assíncrona (pendente → respondida/erro, como o Pergunte ao Edital); o modelo recebe só os artigos da base achados
+      pela busca (T1…Tn) e a resposta só vale como "encontrada" se a frase citada está, letra a letra, no artigo enviado
+      (mesma validação da 23.4). Pergunta que a base não cobre **não chama o modelo**; sem IA, o chat devolve os artigos da
+      base; erro do modelo vira mensagem em português; limite `ia_juridico_mes` (Avançado, 300) com reserva atômica.
+- [x] Aviso fixo "não substitui advogado" na tela e em todo o fluxo; faixa de **minuta** enquanto a base não tiver o aval.
+      **Sem advogado revisor, de propósito (decisão do usuário em 14/11/2026): o conteúdo está pronto e o que falta é só
+      preencher os dados dele** — `ADVOGADO_REVISOR_NOME`, `ADVOGADO_REVISOR_OAB`, `JURIDICO_REVISADO_EM` e
+      `JURIDICO_REVISADO=true` (`regras/revisao.js`, que serve também aos termos e ao termo de parceiros). Faltou um dos
+      quatro, é minuta. A API devolve `revisado_por_advogado` e `revisor`.
+- [x] Biblioteca "Jurídico Fácil": 14 guias curtos por tema, busca e filtro, cada guia apontando para os artigos em que
+      se apoia; conteúdo **nosso**, em `backend/config/dados/juridico.js` (58 artigos da Lei 14.133/2021 e da LC 123/2006,
+      resumidos em linguagem do cliente; artigo cujo inciso não foi conferido vem como faixa). Rotas `/api/juridico/*`
+      (recurso `consultor_juridico`); conversa é da pessoa, isolada por organização e por usuário.
+- [ ] **Aceite: 20 perguntas respondidas com artigo correto, conferidas pelo advogado revisor — NÃO verificado** (ver 16b).
 
-**Aceite:** 20 perguntas de teste respondidas com artigo correto, conferidas pelo advogado revisor.
+**Aceite medido (14/11/2026, API real e navegador, MariaDB 10.11, banco zerado migra até a 041; modelo = servidor local
+que imita `generateContent` — NÃO é o Gemini):** roteiro de **30 conferências pela API real, 30/30** + 6 de limites e
+perfis + a tela com Playwright (1366 e 390 px, **11/11**, sem rolagem lateral, 0 erro no console). Biblioteca: 14 guias,
+busca "impugnar" acha o guia certo, filtro por tema, 404 em guia/artigo inexistente. Chat: 202 na hora; resposta com
+citação literal do **art. 164**; citação inventada pelo modelo → `encontrado = false` com descarte registrado; resposta
+fora do formato → erro em português e sem cobrar resposta válida; pergunta fora da base ("futebol") → **0 chamada ao
+modelo**; histórico de 5 trocas com título pela 1ª pergunta; **isolamento**: outra organização recebe 404 ao abrir,
+perguntar, apagar e ler mensagem da conversa e vê lista vazia; novo chat e apagar funcionam. Sem IA: 'respondida' com os 6
+artigos achados e `sem_ia`. Limites: leitor lê a biblioteca e recebe **403** ao abrir conversa; teto 1/mês → 2ª pergunta
+**402** com o nome do limite, uso = 1; plano Profissional → **402**. **Concorrência:** 10 perguntas ao mesmo tempo com
+teto de 3 pendentes → 3 gravadas, 7 recusadas; 12 reservas com teto 4 → 4 ok, 8 negadas, uso 4. **As 20 perguntas de
+teste, sem rede: o artigo certo chega ao modelo em 20/20 (19/20 como primeiro resultado)**
+(`testes/juridico.test.js`, 9 testes). `code-review` (9 achados: reserva atômica, download abortado, reserva da geração
+do resumo, caminho comum das respostas com citação, entre outros) e `simplify` aplicados; lint limpo, **281/281** testes.
+
+**Não verificado:** a revisão do advogado (nada do conteúdo foi conferido por advogado — **os artigos, prazos e
+valores podem estar errados**; o texto manda conferir valores em reais e prazos no artigo); o Gemini real (sem chave
+neste ambiente); o texto que um modelo de verdade escreve nas 20 perguntas.
+
+**Seção 16b — pendente:**
+- [ ] Advogado revisor: conferir `backend/config/dados/juridico.js` (artigos, prazos, valores, faixas de artigos) e os
+      guias; subir `VERSAO_BASE`; preencher os dados do advogado no ambiente (acima).
+- [ ] Rodar as 20 perguntas com o Gemini real (`config/dados/juridico-teste.js`) e o advogado conferir a resposta de cada.
+- [ ] Mais artigos conforme as perguntas reais dos clientes (a base cobre o que o licitante pequeno mais usa).
 
 ---
 
@@ -1014,17 +1066,23 @@ do assistente só do filtro dele, índice da limpeza. `security-review`: nenhum 
 teste; e-mail **real** (sem SMTP o boletim fica na tela e o painel diz isso); MySQL 8 (o teste é MariaDB); uma
 **pessoa de verdade** fazendo o roteiro sem apoio (a medida acima é de script, não de usuário).
 
-**Seção 17b — pendente:**
-- [ ] Revisão de advogado dos termos e da política (e passar `REVISADO_POR_ADVOGADO` para `true`); preencher
-      `OPERADORA_*` e `SUPORTE_EMAIL` no ambiente.
+**Seção 17b — feito em 14/11/2026 o que é código:**
+- [x] **Dados do advogado só por ambiente** (`regras/revisao.js`): `ADVOGADO_REVISOR_NOME/OAB` + `LEGAL_REVISADO(_EM)` para
+      termos, política e aviso da IA (`revisado_por_advogado` e `revisor` na API), `PARCEIROS_REVISADO(_EM)` para o termo
+      de vínculo (faixa na prévia do pedido), `JURIDICO_*` para a base (Seção 16). Sem os quatro dados, é minuta. Falta o
+      advogado fazer a revisão e preencher; o texto, ao mudar, pede nova versão e novo aceite.
+- [x] **Exportação LGPD em fluxo** (sem teto de 50 mil linhas): uma tabela por vez, conexão do pool presa só enquanto lê,
+      espera o `drain` e **aborta se o cliente fechar** (a trilha registra o pedido antes do 1º byte). Medido: JSON válido
+      com as tabelas da organização e sem `senha_hash`/`token_hash`.
+- [x] **Teste de CI de classificação** (`testes/lgpd-classificacao.test.js`): lê as migrações e falha se surgir tabela com
+      `organizacao_id` fora de `TABELAS_EXPORTADAS` / `TABELAS_FORA_DA_EXPORTACAO` (e se sobrar nome que não existe mais).
+- [x] **Convite exige e grava o aceite dos termos no servidor** (400 sem `aceitou_termos`; caixa na tela de convite).
+- [x] **`pode_administrar` vem do backend** (`/assinatura` e `/onboarding`); **tela inicial é uma decisão só** em `App.jsx`.
+- [x] Auditoria de palavras-chave (e exclusões), ajustes e pesos da pontuação, repontuação e proposta (criar, gerar, remover),
+      sem o conteúdo.
 - [ ] Gravar os vídeos curtos por ferramenta e preencher `video` em `backend/config/dados/ajuda.js`.
 - [ ] Sugerir palavras-chave a partir dos CNAEs (precisa de um dicionário CNAE × termos; nada foi inventado).
-- [ ] Exportação LGPD em streaming (hoje monta até 50 mil linhas por tabela em memória e avisa se cortou) e um
-      teste de CI que falhe quando surgir tabela com `organizacao_id` sem classificação (exporta/fora).
-- [ ] Convite: exigir e gravar o aceite dos termos no servidor (hoje só o modal por cima do painel).
-- [ ] Devolver `pode_administrar` do backend em vez de o front decidir por lista de papéis; tela inicial única
-      (assistente × radar × dashboard) em vez de dois efeitos.
-- [ ] Auditar também palavras-chave, configurações e proposta; mover a classificação para declaração por rota.
+- [ ] Mover a classificação da auditoria para declaração por rota (hoje é a tabela `REGRAS` em `regras/auditoria.js`).
 - [ ] Rodar o roteiro com uma pessoa de fora da equipe e cronometrar de verdade.
 
 ---
@@ -1072,8 +1130,9 @@ sai).
 
 **Seção 18b — código feito em 14/11/2026; o que depende de gente de fora continua pendente:**
 - [ ] Cadastrar o primeiro parceiro de verdade, configurar SMTP e fechar **uma venda a cliente ativo** (o aceite).
-- [ ] Revisão de advogado do termo de vínculo (`backend/config/dados/servicos.js`; mesma pendência da Seção 16) e
-      sobe `VERSAO_TERMO_PARCEIRO` se o texto mudar.
+- [ ] Revisão de advogado do termo de vínculo (`backend/regras/servicos.js`; só falta o advogado: os dados dele entram por
+      `PARCEIROS_REVISADO(_EM)` + `ADVOGADO_REVISOR_*`, e a prévia do pedido mostra a faixa de minuta até lá) e sobe
+      `VERSAO_TERMO_PARCEIRO` se o texto mudar.
 - [ ] "Vendidos junto com o plano": hoje o parceiro cobra direto; cobrança no mesmo boleto/assinatura do painel fica
       para depois de haver parceiro e preço.
 - [x] **Avisar quem registrou interesse quando surge parceiro** (14/11/2026): migração `036` (`avisado_em`); ao
@@ -1091,8 +1150,10 @@ sai).
       `SUM`/`COUNT(DISTINCT)`); a exigência declara o serviço que liga (`servico: 'seguro_garantia'` no catálogo — o
       front não adivinha mais por `startsWith('garantia_')` e a rota não repete a lista de códigos); protocolo comum
       (`regras/protocolo.js`, SRV e SOL); consultas de licitação via `escopo.daOrganizacao`.
-- [ ] Ideias dos revisores, adiadas por serem de volume que ainda não existe: enviar os avisos com concorrência ou em
-      job (hoje um a um, dentro da requisição); a reserva `avisado_em` é desfeita no erro, mas uma queda do processo
+- [x] **Avisos em paralelo** (14/11/2026, até 5 ao mesmo tempo, `servicos/paralelo.js`): medido com 12 interessados e um SMTP
+      que demora 200 ms por e-mail — 12 avisos em **742 ms** (serial: ≥ 2,4 s), pico de 5 simultâneos, 0 pendentes, repetir
+      envia 0. Ainda dentro da requisição da operadora (job só se o volume crescer).
+- [ ] Ideias dos revisores, adiadas por serem de volume que ainda não existe: a reserva `avisado_em` é desfeita no erro, mas uma queda do processo
       entre a reserva e o envio deixaria a pessoa marcada sem e-mail (repetir o aviso não a pega — limpar à mão).
 
 **Aceite medido (14/11/2026, API real, MariaDB 10.11, banco zerado migra até a 036, duas organizações + a operadora,

@@ -6,8 +6,8 @@
 // ainda não foi definido. Enquanto isso, a API devolve `revisado_por_advogado: false` e a
 // tela mostra o aviso. Para publicar de verdade, quem revisar:
 //   1. confere e corrige este arquivo (artigos, prazos, valores) e sobe `VERSAO_BASE`;
-//   2. preenche JURIDICO_REVISOR_NOME, JURIDICO_REVISOR_OAB e JURIDICO_REVISADO_EM (AAAA-MM-DD)
-//      no ambiente e põe JURIDICO_REVISADO=true — só com os quatro a base conta como revisada.
+//   2. preenche ADVOGADO_REVISOR_NOME e ADVOGADO_REVISOR_OAB, mais JURIDICO_REVISADO_EM (AAAA-MM-DD)
+//      e JURIDICO_REVISADO=true no ambiente (regras/revisao.js) — só com os quatro a base conta como revisada.
 // Número de artigo em que a redação não foi conferida vem como faixa ("arts. 96 a 102") em vez de
 // inciso — nada de inciso inventado. Valores em reais mudam por decreto: o texto manda conferir.
 //

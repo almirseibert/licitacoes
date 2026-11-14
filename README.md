@@ -415,6 +415,26 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
   **6b (14/11/2026):** alerta por segmento só para assinatura que pode escrever, com uma conferência de plano por
   organização; teste automatizado de isolamento do chat (`testes/chat-isolamento.test.js`). Seguem pendentes a
   conferência portal a portal e a chave de mensagem repetida em portal sem hora (ver o plano).
+- **Seção 16 — Consultor jurídico e Jurídico Fácil, 14/11/2026 (base em MINUTA, sem revisão de advogado; aceite com o advogado pendente).**
+  Migração `039`. Tela **Jurídico** (recurso `consultor_juridico`, plano Avançado; limite `ia_juridico_mes` = 300):
+  **Consultor** (chat com histórico por pessoa e "novo chat"; a pergunta é gravada como pendente e a tela consulta até a
+  resposta; **toda resposta cita o artigo** — a frase citada tem de estar, letra a letra, no resumo do artigo enviado, senão
+  a resposta não vale como "encontrada"; pergunta que a base não cobre não chama o modelo; sem IA o chat devolve os
+  artigos da base) e **Jurídico Fácil** (14 guias curtos por tema, com busca e filtro, sem IA). A base é **conteúdo
+  nosso** em [backend/config/dados/juridico.js](backend/config/dados/juridico.js) (58 artigos da Lei 14.133/2021 e da LC
+  123/2006; número de artigo não conferido vem como faixa). **Para completar os dados do advogado depois**, só
+  ambiente: `ADVOGADO_REVISOR_NOME`, `ADVOGADO_REVISOR_OAB`, `JURIDICO_REVISADO_EM`, `JURIDICO_REVISADO=true`
+  ([regras/revisao.js](backend/regras/revisao.js), o mesmo advogado vale para `LEGAL_*` e `PARCEIROS_*`); até lá a API
+  devolve `revisado_por_advogado: false` e a tela mostra a faixa. Aviso fixo "não substitui advogado". As 20 perguntas de
+  aceite estão em `config/dados/juridico-teste.js` (`testes/juridico.test.js`: o artigo certo chega ao modelo nas 20).
+  **Aceite medido**: ver o plano (Seção 16).
+- **Seções 11b, 14b, 15b, 17b e 18b (14/11/2026):** o que é código foi feito; o que depende de gente de fora ou do PNCP
+  continua pendente (ver o plano, uma lista por seção). Migrações `040` (`webhook_itens.organizacao_id`) e `041`
+  (resumo do edital gerado em segundo plano). Resumo: cota da API reservada de forma atômica; webhooks em paralelo e
+  com `entrega_id` estável; `/api/v1/funil` e `/api/v1/contratos`; participação com **definição única** e dia de
+  Brasília (`servicos/participacoes.js`); exportação LGPD em fluxo; teste que falha se surgir tabela por organização
+  sem classificação; aceite dos termos gravado no convite; `pode_administrar` vindo do backend; auditoria de palavras,
+  pesos e propostas; aviso aos interessados em paralelo.
 - **Seção 18 — Ecossistema, código entregue em 14/11/2026 (aceite — serviço vendido a cliente ativo — pendente).**
   Migração `035_servicos_parceiros.sql` (`parceiros`, compartilhada; `servico_pedidos`, por organização). Serviços:
   seguro garantia, assessoria cadastral, cursos, clipping e bolsa de empregos, **sempre por parceiro cadastrado

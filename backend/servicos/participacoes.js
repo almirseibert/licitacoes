@@ -46,7 +46,7 @@ async function participacoes(organizacaoId, periodo, { completo = false } = {}) 
   if (!completo) {
     // Só o que as contas usam: o relatório mensal agrupa em memória e não precisa de objeto, órgão etc.
     const [linhas] = await pool.query(
-      `SELECT l.id, l.etapa, l.valor_estimado, l.valor_proposto, l.valor_final, ${DATA_DA_PARTICIPACAO} AS data FROM ${daOrganizacao(organizacaoId)} l WHERE ${filtro.sql} ORDER BY data DESC`,
+      `SELECT l.id, l.etapa, l.valor_estimado, l.valor_proposto, l.valor_final, ${DATA_DA_PARTICIPACAO} AS data FROM ${daOrganizacao(organizacaoId)} l WHERE ${filtro.sql}`,
       filtro.parametros
     );
     return { linhas, filtro };
@@ -72,4 +72,4 @@ async function participacoes(organizacaoId, periodo, { completo = false } = {}) 
   return { linhas, filtro };
 }
 
-module.exports = { DATA_DA_PARTICIPACAO, filtroDoPeriodo, participacoes };
+module.exports = { participacoes };

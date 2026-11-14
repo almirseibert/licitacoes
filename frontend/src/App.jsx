@@ -325,7 +325,7 @@ export default function App() {
         )}
         {tela === 'desempenho' && <Desempenho aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />}
         {tela === 'relatorio' && <Relatorio />}
-        {tela === 'juridico' && <Juridico aoIr={irPara} />}
+        {tela === 'juridico' && <Juridico />}
         {tela === 'equipe' && <Equipe />}
         {tela === 'integracoes' && <Integracoes />}
         {tela === 'configuracoes' && <Configuracoes />}

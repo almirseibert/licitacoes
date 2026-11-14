@@ -101,8 +101,7 @@ rotas.post('/conversas/:id/mensagens', async (req, res) => {
   if (pedido.erro) return res.status(400).json({ erro: pedido.erro });
   try {
     const conversaId = numero(req.params.id);
-    const conversa = await servico.obterConversa(req.organizacaoId, usuarioId(req), conversaId);
-    if (!conversa) return res.status(404).json({ erro: 'Conversa não encontrada.' });
+    if (!(await servico.conversaDaPessoa(req.organizacaoId, usuarioId(req), conversaId))) return res.status(404).json({ erro: 'Conversa não encontrada.' });
 
     // Reserva atômica de uma unidade do limite do mês (sem IA a pergunta não custa nada, não reserva).
     // Devolvida no fim se o modelo não cobrou (sem artigo na base, cache, falha sem custo).

@@ -5,6 +5,7 @@
 // erra calado (janela de meses, taxa sobre quem já teve resultado, margem sobre
 // o preço, média que não conta quem não tem o dado) ter teste sem banco.
 const { dataValida } = require('./gestao');
+const { normalizar } = require('./texto');
 const preco = require('./preco');
 const analise = require('./analise-mercado');
 const { arredondar } = require('./proposta');
@@ -160,7 +161,7 @@ function agruparPor(linhas, chaveDe, rotuloDe) {
  * linhas, qual CNPJ pertence a cada nome; a linha sem CNPJ usa o do nome, se algum o tem.
  */
 const soDigitos = (v) => String(v || '').replace(/\D/g, '');
-const nomeDoOrgao = (l) => String(l.orgao_nome || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+const nomeDoOrgao = (l) => normalizar(l.orgao_nome);
 
 function mapaDeOrgaos(linhas) {
   const mapa = new Map();
@@ -173,8 +174,8 @@ function mapaDeOrgaos(linhas) {
 }
 
 function chaveDoOrgao(l, mapa) {
-  const cnpj = soDigitos(l.orgao_cnpj) || mapa.get(nomeDoOrgao(l)) || '';
-  return cnpj || nomeDoOrgao(l) || '—';
+  const nome = nomeDoOrgao(l);
+  return soDigitos(l.orgao_cnpj) || mapa.get(nome) || nome || '—';
 }
 
 /** Por órgão: com e sem CNPJ na mesma linha de coleta viram o mesmo grupo (ver `mapaDeOrgaos`). */
