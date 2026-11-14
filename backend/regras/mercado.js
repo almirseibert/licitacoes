@@ -329,5 +329,6 @@ module.exports = {
   montarFiltros,
   diasParaFim,
   hojeEmBrasilia,
+  periodoEmUtc,
   like,
 };

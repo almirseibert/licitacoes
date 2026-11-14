@@ -720,7 +720,7 @@ de 10.000 ("10.000+"); resumo numa varredura por tabela e 10 min em memória; í
 órgão também busca a unidade, como no Radar. Pulados: cliente de busca compartilhado com
 `adaptadores/pncp.js` e `gravar` genérico para os outros jobs (fora do diff), busca por frases do
 Radar no "Objeto" (muda comportamento), valor estimado copiado na gravação (a subconsulta indexada só
-roda na página), regravação do dia corrente nos acompanhamentos. Medido de novo: isolamento (1 × 0
+roda na página), regravação do dia corrente nos acompanhamentos. Rodada completa com o código final: contrato, ata e acompanhamento `ok` em 5,5 min (571 atas, 6.666 publicações). Medido de novo: isolamento (1 × 0
 favorita, 0 com palavra alheia, alerta só para quem favoritou), telas sem erro em 1366 e 390, 146/146.
 
 **Seção 12b — pendente:**
