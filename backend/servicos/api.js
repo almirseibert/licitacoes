@@ -110,16 +110,6 @@ async function reservarChamada(organizacaoId, limite) {
   return { reservou: nova || r.affectedRows === 2, usado: nova ? 1 : r.insertId };
 }
 
-/** Devolve a chamada reservada (resposta 5xx: erro nosso não gasta a cota do cliente). */
-function estornarChamada(organizacaoId) {
-  return pool
-    .query(
-      "UPDATE uso_mensal SET quantidade = GREATEST(quantidade - 1, 0) WHERE organizacao_id = ? AND mes = ? AND recurso = 'api_chamadas_mes'",
-      [organizacaoId, limites.mesDe()]
-    )
-    .catch((erro) => console.error('API: não foi possível estornar a chamada:', erro.code || erro.message));
-}
-
 /** Passo 6: a cota mensal do plano (reserva atômica; falha do servidor devolve a chamada). */
 async function cotaMensal(req, res, next) {
   try {
@@ -135,7 +125,8 @@ async function cotaMensal(req, res, next) {
       return res.status(429).json(corpo);
     }
     res.on('finish', () => {
-      if (res.statusCode >= 500) estornarChamada(req.organizacaoId);
+      // Erro nosso não gasta a cota do cliente: devolve a chamada reservada.
+      if (res.statusCode >= 500) limites.devolverUso(req.organizacaoId, 'api_chamadas_mes').catch((erro) => console.error('API: não foi possível estornar a chamada:', erro.code || erro.message));
     });
     res.set('X-Cota-Mensal-Restante', limite === null ? 'ilimitada' : String(Math.max(0, limite - usado)));
     return next();

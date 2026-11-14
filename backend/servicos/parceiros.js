@@ -22,14 +22,14 @@ async function parceiroAtivo(servico) {
   return regras.escolherParceiro(await parceirosAtivos(servico));
 }
 
+const AVISOS_EM_PARALELO = 5;
+
 /**
  * Avisa por e-mail quem registrou interesse no serviço que agora há parceiro. Um e-mail por
  * pessoa; só marca `avisado_em` quando o e-mail saiu (sem SMTP o aviso fica pendente e a operadora
  * repete depois). Não envia dado de ninguém ao parceiro: o interesse continua só registrado.
  * @returns {{ avisados:number, sem_envio:number }} pessoas avisadas e pessoas que ficaram pendentes
  */
-const AVISOS_EM_PARALELO = 5;
-
 async function avisarInteressados(servico) {
   if (!(await parceirosAtivos(servico)).length) return { avisados: 0, sem_envio: 0 };
   const [linhas] = await pool.query(
