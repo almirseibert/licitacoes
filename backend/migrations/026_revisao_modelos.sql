@@ -12,6 +12,6 @@ UPDATE empresa_documentos
 --    `organizacao_id`, NULL no modelo do sistema, e NULL não colide. A coluna
 --    gerada troca o NULL por 0 (mesmo recurso da 024). As cópias já saíram na 025.
 ALTER TABLE modelos_declaracao
-  ADD COLUMN escopo_org INT AS (COALESCE(organizacao_id, 0)) STORED AFTER organizacao_id;
+  ADD COLUMN escopo_org INT AS (COALESCE(organizacao_id, 0)) VIRTUAL AFTER organizacao_id;
 ALTER TABLE modelos_declaracao DROP INDEX uq_modelo_sistema;
 CREATE UNIQUE INDEX uq_modelo_sistema ON modelos_declaracao (escopo_org, codigo, padrao_sistema, titulo);

@@ -135,6 +135,18 @@ dão "Não foi possível entrar/criar a conta agora", a causa está numa destas 
 
 Se ainda falhar, o Log do `licitacoes-api` mostra o erro técnico (o `detalhe` de `responderErro`).
 
+**Atualizado em 15/11/2026 — rode as duas em sequência e leia o resultado.** O `&&` faz o
+`semear` ser pulado se a migração falhar:
+
+```bash
+npm run migrar && npm run semear
+```
+
+Termina bem quando a última linha do `migrar` é `Migrations concluídas.` e não há `✗`. A 024
+e a 026 usavam coluna gerada `STORED`, que o MySQL 8 recusa ("Cannot add foreign key
+constraint") — corrigido para `VIRTUAL`, testado em MySQL 8 do zero até a 041. Quem já passou
+pela 023 só precisa implantar de novo e rodar os dois comandos acima.
+
 ## Todas as variáveis (iguais nos dois serviços)
 
 O worker ignora `PORTA` e `ADMIN_*`, mas ter as mesmas linhas nos dois evita divergência.
@@ -151,7 +163,7 @@ Além das 25 da tabela acima:
 | `IA_PRECO_ENTRADA` / `IA_PRECO_SAIDA` | opcional | só o livro-caixa da IA |
 | `GEMINI_API_KEY` | segredo, opcional | IA |
 | `PORTAL_TRANSPARENCIA_CHAVE` | segredo, opcional | CEIS/CNEP |
-| `MERCADO_UFS` | `RS` | contratos e atas do PNCP |
+| `MERCADO_UFS` | `RS,SC,PR` | contratos e atas do PNCP (decisão de 15/11/2026; sem custo de IA, só tempo e disco) |
 | `COBRANCA_PROVEDOR` / `COBRANCA_WEBHOOK_SEGREDO` | `manual` / vazio | Asaas quando o código existir |
 | `SMTP_HOST`, `SMTP_USUARIO`, `SMTP_SENHA`, `SMTP_DE`, `ALERTA_PARA` | opcional | e-mail, convite, recuperação de senha |
 | `SUPORTE_EMAIL` | opcional | aviso de solicitação de suporte |

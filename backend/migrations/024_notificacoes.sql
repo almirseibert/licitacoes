@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS notificacoes_config (
   id              INT AUTO_INCREMENT PRIMARY KEY,
   organizacao_id  INT NOT NULL,
   usuario_id      INT NULL,
-  usuario_chave   INT AS (COALESCE(usuario_id, 0)) STORED,
+  usuario_chave   INT AS (COALESCE(usuario_id, 0)) VIRTUAL,
   canal           ENUM('email','whatsapp','push') NOT NULL,
   tipo            VARCHAR(30) NOT NULL,
   ativo           TINYINT(1) NOT NULL DEFAULT 1,

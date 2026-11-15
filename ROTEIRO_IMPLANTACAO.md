@@ -106,6 +106,10 @@ Uma conversa por linha (`/implantar <id>`). Dependências conferidas contra o te
 | Radar e boletim | **casar por palavra inteira** | código: `regras/texto.js` no Radar e no boletim, com teste |
 | Advogado revisor | segue **minuta** até haver um (decisão de 14/11) | dados do advogado nas variáveis `ADVOGADO_REVISOR_*` |
 
+**Aprendizado de 15/11/2026:** o banco de teste (MariaDB) aceitou `STORED` com FK em cascata nas
+migrações 024 e 026; o MySQL 8 de produção não. Passou a haver `testes/migracoes-mysql8.test.js`.
+`MERCADO_UFS` começa em `RS,SC,PR`; `COBRANCA_PROVEDOR` fica `manual` até existir o código do Asaas.
+
 Próximas linhas de código, uma conversa cada (`/implantar`): **Asaas → `configuracoes` por organização →
 palavra inteira**. Banco de teste continua MariaDB; produção é MySQL 8 — a migração automática
 passa a validar as migrações no MySQL 8 a cada implantação.

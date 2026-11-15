@@ -157,7 +157,10 @@ rotas.post('/login', async (req, res) => {
       'SELECT id, nome, email, senha_hash, ativo, tema_preferido FROM usuarios WHERE email = ? LIMIT 1',
       [emailLimpo]
     );
-    if (!linhas.length) return res.status(401).json({ erro: 'E-mail ou senha incorretos.' });
+    if (!linhas.length) {
+      console.warn('Login recusado: e-mail não cadastrado (ip %s).', req.ip);
+      return res.status(401).json({ erro: 'E-mail ou senha incorretos.' });
+    }
 
     const usuario = linhas[0];
     if (!usuario.ativo) {
@@ -165,7 +168,10 @@ rotas.post('/login', async (req, res) => {
     }
 
     const senhaValida = await bcrypt.compare(palavraPasse, usuario.senha_hash);
-    if (!senhaValida) return res.status(401).json({ erro: 'E-mail ou senha incorretos.' });
+    if (!senhaValida) {
+      console.warn('Login recusado: senha não confere para o usuário %s (ip %s).', usuario.id, req.ip);
+      return res.status(401).json({ erro: 'E-mail ou senha incorretos.' });
+    }
 
     const organizacoes = await organizacoesDoUsuario(usuario.id);
     if (!organizacoes.length) {
