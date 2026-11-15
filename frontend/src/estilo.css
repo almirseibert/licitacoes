@@ -122,3 +122,31 @@ body {
   .tabela-densa tr { break-inside: avoid; }
   a[href]::after { content: none; }
 }
+
+/* Página de divulgação (Divulgacao.jsx): brilho do herói, grade e revelação ao rolar. */
+.fundo-grade {
+  background-image:
+    linear-gradient(rgb(var(--cor-borda) / 0.5) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(var(--cor-borda) / 0.5) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 30%, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 30%, transparent 75%);
+}
+.texto-brilho {
+  background: linear-gradient(100deg, rgb(var(--cor-voltagem)) 10%, rgb(var(--cor-texto)) 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.revelar { opacity: 0; transform: translateY(18px); transition: opacity .7s ease, transform .7s cubic-bezier(.2,.8,.2,1); }
+.revelar.visivel { opacity: 1; transform: none; }
+.cartao-vidro {
+  background: linear-gradient(160deg, rgb(var(--cor-superficie) / 0.9), rgb(var(--cor-superficie) / 0.55));
+  border: 1px solid rgb(var(--cor-borda));
+  backdrop-filter: blur(8px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .revelar { opacity: 1; transform: none; transition: none; }
+  .animate-aparecer, .animate-subir, .animate-flutuar { animation: none !important; }
+  html { scroll-behavior: auto !important; }
+}

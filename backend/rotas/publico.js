@@ -27,6 +27,32 @@ rotas.get('/legal', (_req, res) => {
   res.json(require('../config/dados/legal').documentos());
 });
 
+// GET /api/publico/planos — os planos à venda, para a página de divulgação. Lê o
+// banco (a mesma tabela que cobra), então o preço da vitrine nunca difere do cobrado.
+// Só o que o visitante precisa: nome, preços e limites; nada de organização.
+rotas.get('/planos', async (_req, res) => {
+  try {
+    const [linhas] = await pool.query(
+      `SELECT codigo, nome, descricao, preco_mensal_centavos, preco_anual_centavos, recursos, limites
+         FROM planos WHERE ativo = 1 ORDER BY ordem ASC`
+    );
+    res.set('Cache-Control', 'public, max-age=300');
+    res.json({
+      planos: linhas.map((p) => ({
+        codigo: p.codigo,
+        nome: p.nome,
+        descricao: p.descricao,
+        preco_mensal_centavos: p.preco_mensal_centavos,
+        preco_anual_centavos: p.preco_anual_centavos,
+        recursos: limites.lerJson(p.recursos, []),
+        limites: limites.lerJson(p.limites, {}),
+      })),
+    });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível mostrar os planos agora.', erro);
+  }
+});
+
 // GET /api/publico/radar/:token?pagina=1
 rotas.get('/radar/:token', async (req, res) => {
   const naoAchado = () => res.status(404).json({ erro: 'Este link não existe ou já expirou. Peça um novo a quem enviou.' });

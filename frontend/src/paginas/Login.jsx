@@ -1,7 +1,6 @@
-import { useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Loader2, X } from 'lucide-react';
 import { api, guardarSessao } from '../servicos/api';
-import AlternarTema from '../componentes/AlternarTema';
 import { definirTema } from '../servicos/tema';
 
 /**
@@ -9,13 +8,47 @@ import { definirTema } from '../servicos/tema';
  * entrar, criar a conta de uma empresa nova (vira 'dono' dela, com 15 dias de
  * teste) e pedir o link de senha nova. O link de senha nova e o de convite
  * chegam por e-mail e abrem as telas próprias (RedefinirSenha, Convite).
+ *
+ * É um popup sobre a página de divulgação (Divulgacao.jsx): `onFechar` o fecha
+ * (Esc, X ou clique fora) e `modoInicial` abre direto em "criar conta".
  */
-export default function Login({ onEntrar }) {
-  const [modo, setModo] = useState('entrar'); // entrar | cadastrar | esqueci
+export default function Login({ onEntrar, onFechar, modoInicial = 'entrar' }) {
+  const [modo, setModo] = useState(modoInicial); // entrar | cadastrar | esqueci
+  const caixa = useRef(null);
   const [campos, setCampos] = useState({ nome: '', organizacao: '', email: '', senha: '', aceitou_termos: false });
   const [erro, setErro] = useState(null);
   const [aviso, setAviso] = useState(null);
   const [enviando, setEnviando] = useState(false);
+
+  // Popup acessível: Esc fecha, a página de trás não rola, o foco entra no
+  // primeiro campo, fica preso dentro da caixa e volta ao botão que abriu.
+  useEffect(() => {
+    const anterior = document.activeElement;
+    const rolagem = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const aoTeclar = (e) => {
+      if (e.key === 'Escape') return onFechar && onFechar();
+      if (e.key !== 'Tab' || !caixa.current) return;
+      const focaveis = caixa.current.querySelectorAll('a[href], button:not([disabled]), input, select, textarea');
+      if (!focaveis.length) return;
+      const primeiro = focaveis[0];
+      const ultimo = focaveis[focaveis.length - 1];
+      if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus(); }
+      else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro.focus(); }
+    };
+    document.addEventListener('keydown', aoTeclar);
+    return () => {
+      document.removeEventListener('keydown', aoTeclar);
+      document.body.style.overflow = rolagem;
+      if (anterior && anterior.focus) anterior.focus();
+    };
+  }, [onFechar]);
+
+  // Troca de modo: o foco vai para o primeiro campo da tela nova.
+  useEffect(() => {
+    const campo = caixa.current && caixa.current.querySelector('input:not([type=checkbox])');
+    if (campo) campo.focus();
+  }, [modo]);
 
   const mudar = (chave) => (e) => setCampos({ ...campos, [chave]: e.target.value });
   const irPara = (novo) => {
@@ -50,16 +83,35 @@ export default function Login({ onEntrar }) {
   };
 
   const titulos = {
-    entrar: ['Painel de Licitações', 'Entre com o seu e-mail e senha'],
+    entrar: ['Entrar no painel', 'Use o e-mail e a senha da sua conta'],
     cadastrar: ['Criar conta', 'Sua empresa entra com 15 dias de teste, sem cartão'],
     esqueci: ['Esqueci minha senha', 'Mandamos um link para criar uma senha nova'],
   };
 
   return (
-    <div className="min-h-screen grid place-items-center px-4 relative">
-      <div className="absolute top-4 right-4"><AlternarTema /></div>
-      <form onSubmit={enviar} className="w-full max-w-sm">
-        <h1 className="font-titulo text-2xl mb-1">{titulos[modo][0]}</h1>
+    <div
+      className="fixed inset-0 z-50 grid place-items-center px-4 py-6 overflow-y-auto bg-obsidiana/70 backdrop-blur-md animate-aparecer"
+      onMouseDown={(e) => { if (e.target === e.currentTarget && onFechar) onFechar(); }}
+    >
+      <div
+        ref={caixa}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="login-titulo"
+        className="relative w-full max-w-sm bg-superficie border border-borda rounded-2xl shadow-2xl shadow-black/40 p-7 animate-subir"
+      >
+        {onFechar && (
+          <button
+            type="button"
+            onClick={onFechar}
+            aria-label="Fechar"
+            className="absolute top-3 right-3 p-1.5 rounded-lg text-texto-suave hover:text-texto hover:bg-realce/10"
+          >
+            <X size={16} />
+          </button>
+        )}
+      <form onSubmit={enviar}>
+        <h2 id="login-titulo" className="font-titulo text-2xl mb-1">{titulos[modo][0]}</h2>
         <p className="text-xs text-texto-suave mb-6">{titulos[modo][1]}</p>
 
         {modo === 'cadastrar' && (
@@ -104,7 +156,7 @@ export default function Login({ onEntrar }) {
         <button
           type="submit"
           disabled={enviando}
-          className="w-full flex items-center justify-center gap-2 bg-voltagem text-obsidiana font-medium rounded py-2 text-sm hover:brightness-110 disabled:opacity-60"
+          className="w-full flex items-center justify-center gap-2 bg-voltagem text-obsidiana font-medium rounded-lg py-2.5 text-sm hover:brightness-110 disabled:opacity-60"
         >
           {enviando && <Loader2 size={14} className="animate-spin" />}
           {modo === 'entrar' ? 'Entrar' : modo === 'cadastrar' ? 'Criar conta' : 'Mandar o link'}
@@ -128,6 +180,7 @@ export default function Login({ onEntrar }) {
           )}
         </div>
       </form>
+      </div>
     </div>
   );
 }

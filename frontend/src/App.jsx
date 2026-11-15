@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock, Newspaper, LayoutDashboard, ListTodo, ScrollText, BookMarked, BellRing, PieChart, Plug, Trophy, Rocket, LifeBuoy, Activity, ShieldCheck, History, MessagesSquare, Handshake, Scale } from 'lucide-react';
 import { api, obterToken, obterUsuario, obterOrganizacao, guardarSessao, encerrarSessao } from './servicos/api';
-import Login from './paginas/Login';
+import Divulgacao from './paginas/Divulgacao';
 import Convite from './paginas/Convite';
 import RedefinirSenha from './paginas/RedefinirSenha';
 import RadarPublico from './paginas/RadarPublico';
@@ -111,6 +111,9 @@ const PAGINA_LEGAL = (window.location.pathname.match(/^\/(termos|privacidade)\/?
 // Lista do Radar compartilhada por link (Seção 7): /publico/radar/<token>, sem login.
 const TOKEN_PUBLICO = (window.location.pathname.match(/^\/publico\/radar\/([A-Za-z0-9_-]{43})\/?$/) || [])[1];
 
+// /entrar e /cadastro abrem o popup de entrada sobre a página de divulgação.
+const POPUP_INICIAL = { '/entrar': 'entrar', '/cadastro': 'cadastrar' }[window.location.pathname.replace(/\/$/, '')] || null;
+
 function voltarParaRaiz() {
   window.history.replaceState(null, '', '/');
 }
@@ -195,7 +198,9 @@ export default function App() {
   if (TOKEN_PUBLICO) return <RadarPublico token={TOKEN_PUBLICO} />;
   if (link && link.tipo === 'redefinir-senha') return <RedefinirSenha token={link.token} onSair={paraEntrada} />;
   if (link && link.tipo === 'convite') return <Convite token={link.token} onEntrar={entrar} onSair={paraEntrada} />;
-  if (!usuario) return <Login onEntrar={entrar} />;
+  // Sem sessão: a página de divulgação, com a entrada como popup. /entrar e /cadastro
+  // (links antigos e de e-mail) abrem a página já com o popup aberto.
+  if (!usuario) return <Divulgacao onEntrar={entrar} abrirInicial={POPUP_INICIAL} />;
 
   const sair = () => {
     encerrarSessao();
