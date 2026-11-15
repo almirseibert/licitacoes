@@ -355,6 +355,12 @@ novo: mesmos números (uso 3, 404/402/429/403, injeção barrada), 127/127, tela
 - [ ] Aceite com o **Gemini real**: pergunta com citação e o edital com "ignore as instruções"
       (precisa de `GEMINI_API_KEY` no ambiente de teste; o modelo de verdade pode não obedecer à
       injeção, mas o schema já foi provado contra um que obedece).
+      **Tentado em 15/11/2026, não concluído:** a chave valida (`GET /v1beta/models` → 200, `gemini-2.5-flash`
+      listado), mas **toda geração devolve HTTP 402 `RESOURCE_EXHAUSTED` — "Your prepayment credits are depleted"**
+      (testado direto no `generateContent` e pela API do painel). É o mesmo bloqueio da 11b: o projeto do AI Studio
+      está sem crédito pré-pago, e isso só se resolve em https://ai.studio/projects. Deixado pronto para rodar assim
+      que houver crédito: `docs/aceite-ia/` (edital SINTÉTICO com a injeção "IGNORE TODAS AS INSTRUÇÕES" e as 6
+      perguntas do roteiro).
 - [ ] Páginas em estrutura própria (coluna JSON ou tabela) no lugar do `\f` dentro de
       `texto_extraido`, se aparecer um terceiro leitor do texto.
 - [ ] Cache em memória dos blocos normalizados por licitação (hoje cada pergunta relê o texto).
@@ -742,6 +748,12 @@ lacunas como "falta no perfil") e perfis de IA por tarefa. Medido de novo: os me
 uso 10→10→11, 404/400/409/422, injeção barrada, tela e impressão sem erro, 137/137.
 
 **Seção 11b — feito em 14/11/2026 o que é código; o aceite com o Gemini real segue pendente:**
+- [ ] **Tentado em 15/11/2026, bloqueado por dois motivos de fora do código:** (1) o Gemini devolve **402 sem crédito**
+      (ver 5b); (2) a API de arquivos do PNCP (`/pncp-api/v1/.../arquivos` e `/api/pncp/v1/...`) respondeu **503 "No
+      server is available"** em todas as 12 licitações tentadas e de novo minutos depois — sem o texto do edital não há o
+      que resumir. A coleta funcionou (2.702 encontradas, 1.861 novas); só o download falhou. Nota de ambiente: aqui o
+      Node só alcança a internet com `NODE_USE_ENV_PROXY=1` e `NODE_EXTRA_CA_CERTS=/root/.ccr/ca-bundle.crt`; sem isso a
+      coleta devolve "fetch failed" em tudo.
 - [ ] **O aceite da spec**: 10 editais com o **Gemini real**, conferidos um a um, com o número de afirmações erradas
       (máx. 1 discutível). **Não feito:** este ambiente não tem a chave (`GEMINI_API_KEY`) e os créditos do projeto no AI
       Studio estavam zerados (402). Precisa recarregar os créditos e rodar (`IA_PROTOCOLO=openai`, chave no cofre).
