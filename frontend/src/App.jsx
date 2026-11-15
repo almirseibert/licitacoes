@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Radar as IconeRadar, Database, Tags, SlidersHorizontal, FolderLock, FileSignature, KanbanSquare, TrendingDown, Stethoscope, Sparkles, CalendarRange, Landmark, FileCheck2, BarChart3, LogOut, Users, CreditCard, Gauge, Building2, Lock, Newspaper, LayoutDashboard, ListTodo, ScrollText, BookMarked, BellRing, PieChart, Plug, Trophy, Rocket, LifeBuoy, Activity, ShieldCheck, History, MessagesSquare, Handshake, Scale } from 'lucide-react';
 import { api, obterToken, obterUsuario, obterOrganizacao, guardarSessao, encerrarSessao } from './servicos/api';
+import { TELAS_MERCADO, categoriaDaTela } from './config/navegacao';
+import BarraSuperior from './componentes/BarraSuperior';
+import SidebarContextual from './componentes/SidebarContextual';
 import Divulgacao from './paginas/Divulgacao';
 import Convite from './paginas/Convite';
 import RedefinirSenha from './paginas/RedefinirSenha';
@@ -41,59 +43,7 @@ import Parceiros from './paginas/Parceiros';
 import Juridico from './paginas/Juridico';
 import AceiteTermos from './componentes/AceiteTermos';
 import PesquisaNps from './componentes/PesquisaNps';
-import Alertas from './componentes/Alertas';
-import AlternarTema from './componentes/AlternarTema';
-import { definirTema, seguirSistema, temaGuardado, temaPendente, salvarTemaNoUsuario } from './servicos/tema';
-
-const TELAS = [
-  { chave: 'dashboard', rotulo: 'Dashboard', icone: LayoutDashboard, recurso: 'gestao' },
-  { chave: 'radar', rotulo: 'Radar', icone: IconeRadar },
-  { chave: 'funil', rotulo: 'Funil', icone: KanbanSquare },
-  { chave: 'tarefas', rotulo: 'Tarefas', icone: ListTodo, recurso: 'gestao' },
-  { chave: 'boletins', rotulo: 'Boletins', icone: Newspaper, recurso: 'boletim' },
-  { chave: 'fontes', rotulo: 'Fontes', icone: Database },
-  { chave: 'palavras', rotulo: 'Palavras-chave', icone: Tags },
-  { chave: 'precos', rotulo: 'Preço de referência', icone: TrendingDown, recurso: 'historico' },
-  { chave: 'oportunidades', rotulo: 'Oportunidades', icone: Sparkles, recurso: 'estrategicas' },
-  { chave: 'calendario', rotulo: 'Calendário', icone: CalendarRange },
-  // Seção 12: "Meus contratos" (os que a organização ganhou) × "Contratos do mercado" (PNCP).
-  { chave: 'contratos', rotulo: 'Meus contratos', icone: FileCheck2, recurso: 'contratos' },
-  { chave: 'mercado_contratos', rotulo: 'Contratos do mercado', icone: ScrollText, recurso: 'mercado' },
-  { chave: 'mercado_atas', rotulo: 'Atas', icone: BookMarked, recurso: 'mercado' },
-  { chave: 'acompanhamentos', rotulo: 'Acompanhamentos', icone: BellRing, recurso: 'acompanhamentos' },
-  // Seção 6: chat do pregão, onde o portal publica sem login.
-  { chave: 'monitor_chat', rotulo: 'Monitor de chat', icone: MessagesSquare, recurso: 'acompanhamentos' },
-  // Seção 13: análise por segmento, concorrentes recorrentes e motivos de perda.
-  { chave: 'analise_mercado', rotulo: 'Análise de mercado', icone: PieChart, recurso: 'mercado' },
-  { chave: 'orgaos', rotulo: 'Órgãos', icone: Landmark, recurso: 'concorrentes' },
-  { chave: 'diagnostico', rotulo: 'Diagnóstico', icone: Stethoscope, recurso: 'relatorios' },
-  { chave: 'desempenho', rotulo: 'Meu desempenho', icone: Trophy, recurso: 'relatorios' },
-  { chave: 'relatorio', rotulo: 'Relatório mensal', icone: BarChart3, recurso: 'relatorios' },
-  // Seção 16: consultor jurídico (chat sobre a Lei 14.133) e biblioteca Jurídico Fácil.
-  { chave: 'juridico', rotulo: 'Jurídico', icone: Scale, recurso: 'consultor_juridico' },
-  { chave: 'cofre', rotulo: 'Documentos', icone: FolderLock },
-  // Seção 18: seguro garantia, assessoria cadastral e demais serviços por parceria.
-  { chave: 'servicos', rotulo: 'Serviços', icone: Handshake },
-  { chave: 'modelos', rotulo: 'Declarações', icone: FileSignature },
-  { chave: 'equipe', rotulo: 'Equipe', icone: Users },
-  // Seção 14: token de API e webhook de novas oportunidades.
-  { chave: 'integracoes', rotulo: 'Integrações', icone: Plug, recurso: 'api' },
-  { chave: 'configuracoes', rotulo: 'Configurações', icone: SlidersHorizontal },
-  { chave: 'assinatura', rotulo: 'Assinatura', icone: CreditCard },
-  { chave: 'uso', rotulo: 'Uso do plano', icone: Gauge },
-  // Seção 17: onboarding, ajuda e suporte, status, privacidade e auditoria.
-  { chave: 'primeiros_passos', rotulo: 'Primeiros passos', icone: Rocket },
-  { chave: 'ajuda', rotulo: 'Ajuda', icone: LifeBuoy },
-  { chave: 'status', rotulo: 'Status', icone: Activity },
-  { chave: 'privacidade', rotulo: 'Privacidade e dados', icone: ShieldCheck },
-  { chave: 'auditoria', rotulo: 'Auditoria', icone: History, soAdmin: true },
-  // Só aparece quando o backend diz `superadmin` (Seção 3).
-  { chave: 'organizacoes', rotulo: 'Organizações', icone: Building2, soSuperadmin: true },
-  { chave: 'parceiros', rotulo: 'Parceiros', icone: Handshake, soSuperadmin: true },
-];
-
-// Seção 12: as três telas do mercado são o mesmo componente, por tipo de lista.
-const TELAS_MERCADO = { mercado_contratos: 'contratos', mercado_atas: 'atas', acompanhamentos: 'acompanhamentos' };
+import { seguirSistema, definirTema, temaGuardado, temaPendente, salvarTemaNoUsuario } from './servicos/tema';
 
 // Situações em que vale um aviso fixo no topo (Seção 3).
 const AVISAR = ['teste_vencido', 'vencida', 'suspensa'];
@@ -121,14 +71,24 @@ function voltarParaRaiz() {
 export default function App() {
   const [usuario, setUsuario] = useState(() => (obterToken() ? obterUsuario() : null));
   const [tela, setTela] = useState('dashboard');
+  // Categoria ativa na barra superior (Descoberta/Gestão/Inteligência/Administração);
+  // null quando a tela é o Dashboard, que fica fora das categorias.
+  const [categoriaAtiva, setCategoriaAtiva] = useState(null);
   // Parâmetro da tela de destino (ex.: a aba do cofre), para o link do dashboard.
   const [parametros, setParametros] = useState({});
   const irPara = (destino, params = {}) => {
     setParametros(params);
     setTela(destino);
   };
+  // A sidebar contextual segue a tela atual, de onde quer que ela mude (clique
+  // no menu, num KPI do dashboard, ou na decisão de tela inicial abaixo).
+  useEffect(() => setCategoriaAtiva(categoriaDaTela(tela)), [tela]);
+  // Clicar numa categoria na barra superior abre a sidebar contextual sem
+  // mudar de tela — só ao clicar num item dela é que `irPara` navega de fato.
+  const selecionarCategoria = (chave) => setCategoriaAtiva((atual) => (atual === chave ? null : chave));
   // O sino e o funil abrem a gaveta de uma licitação pelo Radar.
   const [licitacaoAberta, setLicitacaoAberta] = useState(null);
+  const abrirLicitacao = (id) => { irPara('radar'); setLicitacaoAberta(id); };
   const [link, setLink] = useState(linkDeEmail);
   const [organizacao, setOrganizacao] = useState(obterOrganizacao);
   const [organizacoes, setOrganizacoes] = useState([]);
@@ -226,66 +186,30 @@ export default function App() {
   };
 
   return (
-    <div className="h-screen flex">
-      {/* Navegação lateral. Ícones em traço, na cor do texto suave (seção 15). */}
-      <nav className="w-14 md:w-52 shrink-0 border-r border-borda bg-superficie/40 flex flex-col">
-        <div className="px-3 py-4 border-b border-borda">
-          <p className="font-titulo text-sm leading-tight hidden md:block truncate">
-            {(organizacao && organizacao.nome) || 'Painel'}
-          </p>
-          <p className="text-[10px] uppercase tracking-widest text-texto-suave hidden md:block">Licitações</p>
-          {organizacoes.length > 1 && (
-            <select
-              className="campo-caixa w-full mt-2 text-xs hidden md:block"
-              aria-label="Trocar de organização"
-              value={organizacao ? organizacao.id : ''}
-              onChange={(e) => trocar(e.target.value)}
-            >
-              {organizacoes.map((o) => (
-                <option key={o.id} value={o.id}>{o.nome}</option>
-              ))}
-            </select>
-          )}
-          <p className="font-titulo text-base md:hidden text-center">SM</p>
-        </div>
+    <div className="h-screen flex flex-col">
+      <BarraSuperior
+        organizacao={organizacao}
+        organizacoes={organizacoes}
+        aoTrocarOrganizacao={trocar}
+        usuario={usuario}
+        categoriaAtiva={categoriaAtiva}
+        aoSelecionarCategoria={selecionarCategoria}
+        telaAtiva={tela}
+        aoIrParaDashboard={() => irPara('dashboard')}
+        aoAbrirLicitacao={abrirLicitacao}
+        aoSair={sair}
+      />
 
-        <div className="flex-1 py-2">
-          {TELAS.filter((t) => (!t.soSuperadmin || (plano && plano.superadmin)) && (!t.soAdmin || (plano && plano.pode_administrar))).map(({ chave, rotulo, icone: Icone, recurso }) => (
-            <button
-              key={chave}
-              onClick={() => irPara(chave)}
-              aria-label={rotulo}
-              title={rotulo}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm transition-colors ${
-                tela === chave
-                  ? 'text-texto bg-realce/[0.06] border-l-2 border-texto'
-                  : 'text-texto-suave hover:text-texto border-l-2 border-transparent'
-              }`}
-            >
-              <Icone size={16} />
-              <span className="hidden md:inline">{rotulo}</span>
-              {!temRecurso(recurso) && (
-                <Lock size={11} className="ml-auto hidden md:inline" aria-label="fora do seu plano" />
-              )}
-            </button>
-          ))}
-        </div>
-
-        <div className="border-t border-borda">
-          <Alertas aoAbrirLicitacao={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />
-        </div>
-
-        <div className="border-t border-borda p-3">
-          <p className="text-[11px] text-texto-suave truncate hidden md:block mb-2">{usuario.nome || usuario.email}</p>
-          <div className="flex flex-col md:flex-row md:justify-between gap-2">
-            <button onClick={sair} className="flex items-center gap-2 text-xs text-texto-suave hover:text-texto">
-              <LogOut size={14} />
-              <span className="hidden md:inline">sair</span>
-            </button>
-            <AlternarTema />
-          </div>
-        </div>
-      </nav>
+      <div className="flex-1 flex min-w-0 min-h-0">
+        <SidebarContextual
+          categoria={categoriaAtiva}
+          telaAtiva={tela}
+          aoIrPara={irPara}
+          podeAdministrar={Boolean(plano && plano.pode_administrar)}
+          superadmin={Boolean(plano && plano.superadmin)}
+          temRecurso={temRecurso}
+          aoFechar={() => setCategoriaAtiva(null)}
+        />
 
       <main className="flex-1 min-w-0 overflow-hidden flex flex-col">
         {plano && !plano.isenta && AVISAR.includes(plano.situacao.codigo) && (
@@ -298,8 +222,8 @@ export default function App() {
         )}
         <div className="flex-1 min-h-0">
         {tela === 'dashboard' && <Dashboard aoIr={irPara} />}
-        {tela === 'monitor_chat' && <MonitorChat aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />}
-        {tela === 'tarefas' && <Tarefas aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />}
+        {tela === 'monitor_chat' && <MonitorChat aoAbrir={abrirLicitacao} />}
+        {tela === 'tarefas' && <Tarefas aoAbrir={abrirLicitacao} />}
         {tela === 'radar' && <Radar abrir={licitacaoAberta} aoAbrir={setLicitacaoAberta} aoIr={irPara} />}
         {tela === 'fontes' && <Fontes />}
         {tela === 'palavras' && <Palavras />}
@@ -309,31 +233,31 @@ export default function App() {
         {tela === 'funil' && <Funil aoAbrir={setLicitacaoAberta} />}
         {tela === 'precos' && <Precos />}
         {tela === 'oportunidades' && (
-          <Oportunidades aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />
+          <Oportunidades aoAbrir={abrirLicitacao} />
         )}
         {tela === 'calendario' && (
-          <Calendario aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />
+          <Calendario aoAbrir={abrirLicitacao} />
         )}
         {tela === 'contratos' && (
-          <Contratos aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />
+          <Contratos aoAbrir={abrirLicitacao} />
         )}
         {TELAS_MERCADO[tela] && (
           <Mercado
             key={tela}
             tipo={TELAS_MERCADO[tela]}
-            aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }}
+            aoAbrir={abrirLicitacao}
           />
         )}
         {tela === 'analise_mercado' && (
-          <AnaliseMercado aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />
+          <AnaliseMercado aoAbrir={abrirLicitacao} />
         )}
         {tela === 'orgaos' && (
-          <Orgaos comMercado={temRecurso('mercado')} aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />
+          <Orgaos comMercado={temRecurso('mercado')} aoAbrir={abrirLicitacao} />
         )}
         {tela === 'diagnostico' && (
-          <Diagnostico aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />
+          <Diagnostico aoAbrir={abrirLicitacao} />
         )}
-        {tela === 'desempenho' && <Desempenho aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />}
+        {tela === 'desempenho' && <Desempenho aoAbrir={abrirLicitacao} />}
         {tela === 'relatorio' && <Relatorio />}
         {tela === 'juridico' && <Juridico />}
         {tela === 'equipe' && <Equipe />}
@@ -348,9 +272,10 @@ export default function App() {
         {tela === 'ajuda' && <Ajuda key={parametros.aba || 'guias'} abaInicial={parametros.aba} superadmin={Boolean(plano && plano.superadmin)} aoIr={irPara} />}
         {tela === 'status' && <Status aoIr={irPara} />}
         {tela === 'privacidade' && <Privacidade aoIr={irPara} />}
-        {tela === 'auditoria' && <Auditoria aoAbrir={(id) => { setTela('radar'); setLicitacaoAberta(id); }} />}
+        {tela === 'auditoria' && <Auditoria aoAbrir={abrirLicitacao} />}
         </div>
       </main>
+      </div>
 
       {onb && !onb.termos.aceita && <AceiteTermos aoAceitar={() => setOnb((o) => ({ ...o, termos: { ...o.termos, aceita: true } }))} aoSair={sair} />}
       {onb && onb.termos.aceita && onb.nps.devido && !npsFechado && <PesquisaNps aoFechar={() => setNpsFechado(true)} />}

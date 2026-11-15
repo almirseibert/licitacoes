@@ -471,6 +471,21 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
   252/252 testes. Pendentes: parceiro real, SMTP real, revisão do termo por advogado.
 - `backend/config/db-auth.js` foi removido; `AUTH_DB_DATABASE` não é mais lida. `.env.example`
   ganhou `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO` para o primeiro login do seed.
+- **Navegação redesenhada, 15/11/2026.** A sidebar vertical plana com os 34 itens de menu virou
+  uma barra superior fixa com 4 categorias (Descoberta, Gestão, Inteligência, Administração) —
+  agrupamento inspirado no menu "Nossas Ferramentas" do ConLicitação (benchmark funcional, não
+  visual: tema Voltage Obsidian mantido, nenhuma cor nova). Ao
+  selecionar uma categoria, abre uma sidebar contextual com os itens dela organizados por
+  subgrupo (ex.: dentro de "Gestão": Funil, Contratos, Acompanhamento, Documentos); o Dashboard
+  fica fora das categorias, acessado pelo botão "Painel" na barra. `frontend/src/config/navegacao.js`
+  centraliza a tabela de telas (antes inline em `App.jsx`) com os campos novos `categoria` e
+  `grupo`; `componentes/BarraSuperior.jsx` e `componentes/SidebarContextual.jsx` substituem o
+  `<nav>` único que havia antes. Nenhuma página, rota especial ou regra de visibilidade
+  (`recurso`/`soAdmin`/`soSuperadmin`) mudou — só a organização do menu. **Aceite**: `npm run
+  lint && npm test` sem regressão (30 testes, nenhum toca frontend); build de produção
+  (`vite build`) sem erro; conferido no navegador (Playwright, com sessão simulada) nas quatro
+  categorias, no botão Painel, no cadeado de recurso fora do plano e no menu mobile (< md), com
+  a categoria certa sempre selecionada ao chegar numa tela por outro caminho (ex. clique num KPI).
 
 A primeira coleta real no PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas
 com link que abre o edital no portal. Depois, pela tela, a palavra "videomonitoramento" foi
