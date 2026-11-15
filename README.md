@@ -1550,6 +1550,42 @@ problema que pode não existir. A mensagem diz as duas e quanto do seletor chego
 
 ---
 
+## Fontes nacionais além do PNCP — o que a pesquisa de 15/11/2026 encontrou
+
+O pedido era simples de enunciar: todas as bases de licitação do país, pré-configuradas, com
+"Testar agora" trazendo resultado de verdade. A seção 5.5 já cadastrava cinco aglomeradores
+municipais (`ativa: 0`, "o usuário ativa conforme for validando"), mas nenhum tinha sido
+verificado contra o portal real. Esta fase fez isso — com requisição de verdade em cada um,
+não em leitura de documentação de terceiro — e o resultado foi bem mais estreito do que o pedido
+supunha:
+
+| Fonte | O que a requisição real mostrou |
+|---|---|
+| **Compras RS (CELIC)** | **Funciona.** `/editais/pesquisar` entrega a tabela vazia, mas o `POST /editais/pesquisa.json` que a página chama devolve o JSON sem login, sem CAPTCHA, sem bloqueio — dado público de verdade. Não cabia no `generico_html` (que só faz GET+HTML), então ganhou adaptador próprio: [`backend/adaptadores/compras_rs.js`](backend/adaptadores/compras_rs.js). Testado com o termo "informática" em 15/11/2026: **105 licitações reais** na janela de 180 dias, de órgãos como a Polícia Penal do RS, o Instituto Rio-Grandense do Arroz e a própria CELIC. |
+| **Portal de Compras Públicas** | SPA Angular com SSR: `/processos` entrega só a casca (confirmado: 0 processos no HTML), e a lista é buscada depois por uma API JavaScript própria (`compras.api.portaldecompraspublicas.com.br`). É o mesmo caso do Compras.gov.br da Fase 7 — a seção 5.3 já decidiu não usar navegador headless por isso, e essa decisão continua valendo. Fica bloqueada. |
+| **BLL Compras** | Todo caminho em `bllcompras.com` redireciona para `/Home/Login`. Nenhuma página de consulta pública sem login foi encontrada. |
+| **Licitanet** | Bloqueia com 403 geral — até o próprio `robots.txt`. Inacessível mesmo fora de automação. |
+| **BNC — Bolsa Nacional de Compras** | `bnc.org.br` é só o site institucional (WordPress); a plataforma de disputa fica em outro domínio, não identificado. |
+| **Negócios Públicos** | Não é uma plataforma de licitação — é a editora da revista do setor. Estava no seed por engano de escopo; não há editais para coletar ali. |
+| **Licitar Digital** | Todo o domínio responde "Acesso Restrito", sem brecha pública. |
+| **BEC/SP** | O domínio não respondeu nas tentativas — compatível com relatos de que deixou de ser a porta padrão de disputa desde 2024. |
+| **Licitações-e (Banco do Brasil)** | Atrás de desafio do Cloudflare. A seção 5.4 proíbe contornar bloqueio de portal; isto não é `robots.txt`, é anti-automação, e a fonte fica sem configuração por decisão, não por falta dela. |
+
+**Aceite medido:** das 5 fontes aglomeradoras do seed mais as 4 pesquisadas por pedido do
+usuário, **1 passou a trazer licitação real** (Compras RS/CELIC, 105 resultados no teste). As
+outras 8 continuam cadastradas e inativas, cada uma com a `observacao` certa em vez do erro
+genérico "configure a URL" — para quem olhar a tela de Fontes saber, sem adivinhar, por que
+aquela fonte não anda.
+
+Isto não é cobertura menor do que parece: o PNCP já é, por lei (14.133), a base obrigatória de
+publicação federal, estadual e municipal — é por isso que a seção 5.5 o chama de "base
+obrigatória". Os aglomeradores municipais são reforço para quem publica no próprio portal e
+atrasa no PNCP, não uma segunda fonte do mesmo tamanho; e a pesquisa mostrou por que a maioria
+deles não dá: são produtos comerciais que vivem de cadastro de fornecedor, e por isso se fecham
+atrás de login, SPA ou bloqueio de bot — exatamente o que a seção 5.4 proíbe contornar.
+
+---
+
 ## Próximo passo
 
 As 14 fases da especificação estão entregues, e a revisão de 07/11/2026 fechou o que

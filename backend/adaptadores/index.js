@@ -3,11 +3,13 @@
 const pncp = require('./pncp');
 const comprasgov = require('./comprasgov');
 const genericoHtml = require('./generico_html');
+const comprasRs = require('./compras_rs');
 
 const adaptadores = {
   [pncp.chave]: pncp,
   [comprasgov.chave]: comprasgov,
   [genericoHtml.chave]: genericoHtml,
+  [comprasRs.chave]: comprasRs,
 };
 
 function obter(chave) {

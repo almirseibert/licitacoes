@@ -36,15 +36,34 @@ const FONTES = [
       'Completa as propostas de uma licitação que o PNCP já trouxe. O portal carrega o quadro por JavaScript atrás de CAPTCHA: o painel não força e mostra o link para abrir à mão.',
   },
   {
-    nome: 'Portal de Compras Públicas',
-    adaptador: 'generico_html',
-    url_base: 'https://www.portaldecompraspublicas.com.br',
-    config: {},
+    nome: 'Compras RS (CELIC)',
+    adaptador: 'compras_rs',
+    url_base: 'https://www.compras.rs.gov.br',
+    config: { dias_publicacao: 180, tam_pagina: 50, paginas_max: 3 },
     ativa: 0,
     intervalo_horas: 12,
     prioridade: 10,
     observacao:
-      'Muitos municípios do RS e SC. O adaptador existe desde a Fase 14; a fonte só coleta depois de você configurar o mapa de campos na própria tela (seção 5.3).',
+      'Governo do Estado do RS. Verificado em 15/11/2026 com requisição real: não é generico_html porque a lista não vem no HTML — ' +
+      '/editais/pesquisar entrega a tabela vazia e o POST em /editais/pesquisa.json devolve o JSON sem login e sem CAPTCHA. ' +
+      'Ganhou adaptador próprio (compras_rs.js) por isso. "Testar agora" traz resultado real; ative quando revisar.',
+  },
+  {
+    nome: 'Portal de Compras Públicas',
+    adaptador: 'generico_html',
+    url_base: 'https://www.portaldecompraspublicas.com.br',
+    config: {
+      url_busca: 'https://www.portaldecompraspublicas.com.br/processos?busca={termo}&pagina={pagina}',
+      seletor_lista: '.process-card',
+    },
+    ativa: 0,
+    intervalo_horas: 12,
+    prioridade: 11,
+    observacao:
+      'Muitos municípios do RS e SC. Verificado em 15/11/2026: é uma SPA Angular com SSR — /processos entrega só a casca, ' +
+      'sem nenhum processo; a lista é buscada depois por uma API JavaScript própria (compras.api.portaldecompraspublicas.com.br), ' +
+      'igual ao Compras.gov.br da seção 5.2. A seção 5.3 já decidiu não usar navegador headless por isso (seria preciso simular o ' +
+      'app inteiro). Fica bloqueada até essa decisão mudar — "Testar agora" vai dizer isso, não "configure a URL".',
   },
   {
     nome: 'BLL Compras',
@@ -53,8 +72,10 @@ const FONTES = [
     config: {},
     ativa: 0,
     intervalo_horas: 12,
-    prioridade: 11,
-    observacao: 'Municípios do PR e SC.',
+    prioridade: 12,
+    observacao:
+      'Municípios do PR e SC. Verificado em 15/11/2026: todo caminho em bllcompras.com redireciona para /Home/Login — não achamos ' +
+      'nenhuma página de consulta pública sem login. Sem configuração que resolva; fica sem url_busca até alguém achar a página certa.',
   },
   {
     nome: 'Licitanet',
@@ -63,8 +84,10 @@ const FONTES = [
     config: {},
     ativa: 0,
     intervalo_horas: 12,
-    prioridade: 12,
-    observacao: 'Municípios menores.',
+    prioridade: 13,
+    observacao:
+      'Municípios menores. Verificado em 15/11/2026: o portal bloqueia com 403 tudo, inclusive o robots.txt — nem manualmente dá ' +
+      'para abrir fora do navegador comum. Sem configuração possível hoje.',
   },
   {
     nome: 'BNC — Bolsa Nacional de Compras',
@@ -73,18 +96,56 @@ const FONTES = [
     config: {},
     ativa: 0,
     intervalo_horas: 12,
-    prioridade: 13,
-    observacao: 'Municípios do interior.',
+    prioridade: 14,
+    observacao:
+      'Municípios do interior. Verificado em 15/11/2026: bnc.org.br é só o site institucional (WordPress) — a plataforma de disputa ' +
+      'em si fica noutro endereço que não identificamos. Sem configuração até achar o domínio certo da plataforma.',
   },
   {
-    nome: 'Compras RS (CELIC)',
+    nome: 'Negócios Públicos',
     adaptador: 'generico_html',
-    url_base: 'https://compras.rs.gov.br',
+    url_base: 'https://negociospublicos.com.br',
     config: {},
     ativa: 0,
     intervalo_horas: 12,
-    prioridade: 14,
-    observacao: 'Governo do Estado do RS.',
+    prioridade: 15,
+    observacao:
+      'Verificado em 15/11/2026: não é uma plataforma de licitação — é a editora da revista "Negócios Públicos" (capacitação e ' +
+      'eventos do setor). Cadastrada aqui por engano de escopo; não há lista de editais para coletar deste domínio.',
+  },
+  {
+    nome: 'Licitar Digital',
+    adaptador: 'generico_html',
+    url_base: 'https://licitardigital.com.br',
+    config: {},
+    ativa: 0,
+    intervalo_horas: 12,
+    prioridade: 16,
+    observacao: 'Verificado em 15/11/2026: todo o domínio responde "Acesso Restrito" — não há página pública para configurar.',
+  },
+  {
+    nome: 'BEC/SP — Bolsa Eletrônica de Compras do Estado de SP',
+    adaptador: 'generico_html',
+    url_base: 'https://www.bec.sp.gov.br',
+    config: {},
+    ativa: 0,
+    intervalo_horas: 12,
+    prioridade: 17,
+    observacao:
+      'Verificado em 15/11/2026: o domínio não respondeu (pode ter saído do ar — relatos de terceiros dizem que o BEC deixou de ' +
+      'ser a porta padrão de novas disputas desde 2024). Sem configuração até confirmar o endereço atual.',
+  },
+  {
+    nome: 'Licitações-e (Banco do Brasil)',
+    adaptador: 'generico_html',
+    url_base: 'https://licitacoes-e2.bb.com.br',
+    config: {},
+    ativa: 0,
+    intervalo_horas: 12,
+    prioridade: 18,
+    observacao:
+      'Verificado em 15/11/2026: o domínio está atrás de um desafio do Cloudflare. A seção 5.4 proíbe contornar bloqueio de portal ' +
+      '— isto não é robots.txt, é desafio anti-automação —, então a fonte fica sem configuração por decisão, não por falta dela.',
   },
 ];
 
@@ -152,10 +213,19 @@ const EXCLUIDAS = [
 async function semearFontes() {
   let inseridas = 0;
   for (const fonte of FONTES) {
+    // Fonte já existente com `config = '{}'` nunca foi configurada por
+    // ninguém — é seguro atualizar adaptador/url_base/config/observação para
+    // a pesquisa mais recente (ex.: Compras RS ganhando adaptador próprio em
+    // 15/11/2026). Fonte que já tem config de verdade é decisão de quem
+    // configurou pela tela; o seed não sobrescreve isso, só a linha "virgem".
     const [r] = await pool.query(
       `INSERT INTO fontes (nome, adaptador, url_base, config, ativa, intervalo_horas, prioridade, observacao)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-       ON DUPLICATE KEY UPDATE id = id`,
+       ON DUPLICATE KEY UPDATE
+         adaptador   = IF(config = '{}', VALUES(adaptador), adaptador),
+         url_base    = IF(config = '{}', VALUES(url_base), url_base),
+         observacao  = IF(config = '{}', VALUES(observacao), observacao),
+         config      = IF(config = '{}', VALUES(config), config)`,
       [
         fonte.nome,
         fonte.adaptador,
