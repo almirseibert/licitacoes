@@ -13,6 +13,7 @@
     "dev:front": "npm --prefix frontend run dev",
     "migrar": "node backend/config/migrar.js",
     "semear": "node backend/config/semear.js",
+    "admin": "node backend/config/criar-admin.js",
     "coletar": "node backend/jobs/executar-coleta.js",
     "repontuar": "node backend/jobs/executar-repontuar.js",
     "baixar": "node backend/jobs/executar-download.js",

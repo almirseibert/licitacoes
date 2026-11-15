@@ -60,6 +60,7 @@ não se força.
 npm install && npm run migrar && npm run semear
 ```
 
+`npm run admin` (cria ou conserta o administrador de `ADMIN_EMAIL_PADRAO`; `-- --redefinir-senha` troca a senha),
 `npm run api`, `npm run worker`, `npm run dev:front`. Jobs pela linha de comando:
 `npm run coletar`, `npm run repontuar`, `npm run baixar`, `npm run ler`,
 `npm run encerradas` (amostra de preço), `npm run resultados -- --licitacao=<id>`,

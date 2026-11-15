@@ -5,8 +5,8 @@
 //   npm run semear
 const fs = require('fs');
 const path = require('path');
-const bcrypt = require('bcrypt');
 const pool = require('../config/db');
+const { garantirAdmin } = require('../servicos/admin-inicial');
 const perfilPadrao = require('./dados/perfil-padrao');
 const kitsPadrao = require('./dados/kits-padrao');
 const modelosDeclaracao = require('./dados/modelos-declaracao');
@@ -278,34 +278,22 @@ async function semearModelos() {
 // disso é a tela de "Equipe" que manda, o seed nunca mais toca em senha.
 // Sem ADMIN_SENHA_PADRAO no .env, o seed avisa e não cria ninguém: subir um
 // painel sem um primeiro login não serve, mas uma senha padrão fixa no
-// código seria pior.
+// código seria pior. Quando o seed não cria, devolve o motivo (antes saía em
+// silêncio) e `npm run admin` conserta mesmo com outros usuários no banco.
 async function semearAdmin() {
-  const [existentes] = await pool.query('SELECT id FROM usuarios LIMIT 1');
-  if (existentes.length) return null;
-
-  const emailAdmin = process.env.ADMIN_EMAIL_PADRAO;
-  const senhaAdmin = process.env.ADMIN_SENHA_PADRAO;
-  if (!emailAdmin || !senhaAdmin) {
-    console.warn(
-      '· nenhum usuário ainda, e ADMIN_EMAIL_PADRAO/ADMIN_SENHA_PADRAO não estão no .env — ' +
-        'sem eles o seed não cria o primeiro login. Defina os dois e rode `npm run semear` de novo, ' +
-        'ou cadastre a organização pela tela (/api/auth/cadastro).'
-    );
-    return null;
+  const [[{ n }]] = await pool.query('SELECT COUNT(*) AS n FROM usuarios');
+  if (Number(n) > 0) {
+    return { criado: null, motivo: `já há ${n} usuário(s) no banco, então o seed não mexeu em login — para criar ou consertar o administrador das variáveis, rode \`npm run admin\`` };
   }
-
-  const senhaHash = await bcrypt.hash(senhaAdmin, 12);
-  const [usuario] = await pool.query(
-    'INSERT INTO usuarios (nome, email, senha_hash) VALUES (?, ?, ?)',
-    ['Administrador', emailAdmin, senhaHash]
-  );
-  // A organização 1 (Studio Mythos) já existe desde a migração 016.
-  await pool.query(
-    `INSERT INTO organizacao_membros (organizacao_id, usuario_id, papel) VALUES (1, ?, 'dono')
-     ON DUPLICATE KEY UPDATE papel = papel`,
-    [usuario.insertId]
-  );
-  return emailAdmin;
+  const resultado = await garantirAdmin({
+    pool,
+    email: process.env.ADMIN_EMAIL_PADRAO,
+    senha: process.env.ADMIN_SENHA_PADRAO,
+  });
+  if (resultado.acao === 'sem_variaveis') {
+    return { criado: null, motivo: 'ADMIN_EMAIL_PADRAO/ADMIN_SENHA_PADRAO não estão definidas neste serviço — defina os dois, implante e rode `npm run admin`' };
+  }
+  return { criado: resultado.email, motivo: null };
 }
 
 // Coordenadas dos 5.570 municípios do IBGE, para o filtro de raio do Radar
@@ -342,9 +330,9 @@ async function principal() {
   const municipios = await semearMunicipios();
 
   console.log(
-    admin
-      ? `Usuário administrador criado: ${admin} (organização Studio Mythos, papel dono).`
-      : 'Usuário administrador: nenhum criado (já existia alguém, ou faltam as variáveis).'
+    admin.criado
+      ? `Usuário administrador criado: ${admin.criado} (organização Studio Mythos, papel dono).`
+      : `Usuário administrador: nenhum criado — ${admin.motivo}.`
   );
   console.log(`Municípios com coordenadas: ${municipios}.`);
   console.log(`Fontes inseridas: ${fontes} (de ${FONTES.length}).`);

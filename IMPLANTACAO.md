@@ -147,6 +147,20 @@ e a 026 usavam coluna gerada `STORED`, que o MySQL 8 recusa ("Cannot add foreign
 constraint") — corrigido para `VIRTUAL`, testado em MySQL 8 do zero até a 041. Quem já passou
 pela 023 só precisa implantar de novo e rodar os dois comandos acima.
 
+**Login recusado com "e-mail não cadastrado" (15/11/2026).** O `semear` só cria o administrador
+quando a tabela `usuarios` está **vazia**; se já havia alguém (ou as variáveis `ADMIN_*` ainda não
+estavam no serviço), ele pula e agora diz o motivo na linha "Usuário administrador: nenhum criado —
+…". Para criar ou consertar o administrador mesmo assim, no Console de `licitacoes-api`:
+
+```bash
+npm run admin
+```
+
+Cria o usuário de `ADMIN_EMAIL_PADRAO` (sem espaço, em minúsculas) como dono da Studio Mythos, ou só
+dá o vínculo se ele já existia. Se avisar que a senha não confere, `npm run admin -- --redefinir-senha`
+troca pela de `ADMIN_SENHA_PADRAO`. A senha mínima do cadastro é 8 caracteres: `123456` entra, mas
+troque-a logo depois de logar. O comando nunca imprime a senha.
+
 ## Todas as variáveis (iguais nos dois serviços)
 
 O worker ignora `PORTA` e `ADMIN_*`, mas ter as mesmas linhas nos dois evita divergência.
