@@ -74,8 +74,8 @@ ponta a ponta, não mock):**
       resto do catálogo ficam sem `organizacao_id` (combinado); `tarefas` (fila do worker),
       `ia_execucoes` (cache por hash), `recorrencias` (padrão do órgão) e `sancoes_consultas`
       (fato do CNPJ) também ficam de fora — são infraestrutura ou fato público, não decisão do
-      cliente. `configuracoes` mistura os dois e fica pendente de uma decisão de produto
-      (Seção 1b).
+      cliente. `configuracoes` mistura os dois — **decidido em 15/11/2026: passa a ser por
+      organização** (código ainda a fazer; ver ROTEIRO_IMPLANTACAO.md).
 - [x] `backend/rotas/auth.js`: cadastro, login, troca de organização, convite e aceite de
       convite. JWT passa a levar `id`, `organizacao_id` e `papel` (recuperação de senha fica
       para depois — hoje a saída é convidar de novo).
@@ -246,7 +246,7 @@ roda neste ambiente (sem `origin/HEAD`); a revisão de segurança foi feita à m
       organização — agrupar quando passar de algumas dezenas de clientes.
 - [ ] Rotas de `/api/auth` (equipe, tema) não passam por `assinaturaValida` — só o convite passa.
 - [ ] Avisar o administrador por e-mail quando o cliente pede um plano; tradução do payload do
-      gateway escolhido (Asaas ou Stripe) para o formato normalizado de `processarEventoGateway`.
+      gateway — **escolhido em 15/11/2026: Asaas** para o formato normalizado de `processarEventoGateway`.
 - [x] Menu: o cadeado acompanha o plano — a tela Assinatura/Uso devolve o plano lido ao App (15/11/2026).
 
 ---
@@ -777,7 +777,8 @@ uso 10→10→11, 404/400/409/422, injeção barrada, tela e impressão sem erro
 - [x] **Ponto do questionamento no texto da impugnação** (14/11/2026): na impugnação, que não tem a frase "Resta dúvida
       quanto a", o ponto entra logo depois do trecho citado, marcado como apontado pelo resumo e a confirmar (`$&`, `$1` e
       aspas no trecho ou no ponto entram como texto). Testes em `testes/resumo-edital.test.js`.
-- [ ] Ficha por organização ou versionada: hoje "gerar de novo" de uma organização troca a ficha que todas leem (o pedido de
+- [x] **Decidido em 15/11/2026: a ficha continua única por licitação** (uma por organização multiplicaria o gasto com a
+      IA). Registro do problema original — ficha por organização ou versionada: hoje "gerar de novo" de uma organização troca a ficha que todas leem (o pedido de
       questionamento detecta e pede recarga). Decisão de produto: uma ficha por organização multiplica o gasto com a IA.
 
 ---
@@ -896,7 +897,7 @@ passada feita à mão (função só de teste removida, internos desexportados). 
       disputa (Compras.gov.br atrás de CAPTCHA — não se força, seção 5.4). Reavaliar se o PNCP
       passar a publicar os participantes.
 - [ ] Relatório mensal **completo** depende da carga histórica da 12b (a busca alcança ~16 dias).
-- [ ] O Radar e o boletim ainda casam por trecho (`regras/texto.js`); avaliar o casamento por
+- [ ] **Decidido em 15/11/2026: casar por palavra inteira** (código ainda a fazer). O Radar e o boletim ainda casam por trecho (`regras/texto.js`); avaliar o casamento por
       palavra inteira lá também (muda o que entra no Radar — decisão de produto).
 
 ---
@@ -1219,9 +1220,9 @@ interessados filtra usuário ativo, membro da organização e organização não
 ---
 
 ## Fluxo de git (válido para todas as seções)
-Esta sessão só envia para `claude/admiring-gates-i8k4yg`. Uma seção por commit; ao final de
-cada seção, perguntar se já pode seguir para a `main` (o CLAUDE.md pede commit direto na
-`main`, mas essa branch é a desta sessão).
+Cada sessão envia só para o seu próprio branch `claude/…`. Uma seção por commit; ao final de
+cada seção, perguntar se já pode seguir para a `main` — decidido em 15/11/2026: branch por
+sessão, `main` só com aval do usuário (o CLAUDE.md foi alinhado a isto).
 
 ## Verificação (repetir a cada seção)
 `npm run lint && npm test` antes de qualquer commit. Testes novos sem banco e sem rede:

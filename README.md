@@ -1537,9 +1537,11 @@ EasyPanel para descobrir onde isso parou.
 continua pendente também — mas isso já dá para fazer hoje, local, sem esperar o deploy.
 
 O **botão de acesso na página da Studio Mythos** também já está no lugar: no menu do
-painel protegido, ao lado de CRM e Financeiro, apontando para o subdomínio — o login é o
-mesmo, com o mesmo `JWT_SECRET` e os mesmos usuários, então quem já entrou no CRM entra aqui
-com as mesmas credenciais.
+painel protegido, ao lado de CRM e Financeiro, apontando para o subdomínio. **Desde a Fase 15
+o login não é mais o do CRM**: o painel tem usuários próprios (`licitacoes.usuarios`), e a senha
+do CRM não entra aqui. O primeiro acesso da Studio Mythos (organização 1, a do superadmin) nasce
+do `npm run semear` com `ADMIN_EMAIL_PADRAO`/`ADMIN_SENHA_PADRAO`; cliente novo se cadastra pela
+tela. Ver [IMPLANTACAO.md](IMPLANTACAO.md#primeiro-acesso).
 
 ### Sobre o XLSX — por que escrito à mão
 

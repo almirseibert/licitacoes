@@ -86,20 +86,26 @@ Uma conversa por linha (`/implantar <id>`). Dependências conferidas contra o te
 | — | **16 — Consultor jurídico** | **Bloqueada** até haver advogado revisor. Não começar. |
 | 18 | **18 — Ecossistema** | Por parceria; por último. |
 
-## 3. Pendências de documentação a corrigir no caminho
-- `PLANO_SAAS_CONLICITACAO.md`, "Fluxo de git": cita o branch `claude/admiring-gates-i8k4yg`; o desta
-  sessão é `claude/exciting-einstein-r6coyq`. Além disso o `CLAUDE.md` manda commit direto na `main`
-  e o comando `/implantar` manda branch sem PR — decidir qual vale (sugestão: branch por sessão,
-  `main` só quando você autorizar, como o plano já diz).
-- `README.md`, "Próximo passo": ainda diz que o login é o do CRM ("mesmo `JWT_SECRET` e os mesmos
-  usuários"). Desde a 1a o painel tem usuários próprios; o `IMPLANTACAO.md` já está certo.
-  Corrigir no commit da 1b-B.
+## 3. Pendências de documentação
+- ✅ (15/11/2026) Fluxo de git decidido: **branch por sessão, `main` só com aval do usuário**.
+  `CLAUDE.md` e o "Fluxo de git" do plano SaaS alinhados.
+- ✅ (15/11/2026) `README.md`, "Próximo passo": tirada a frase de que o login é o do CRM.
 - `npm test` puro falha neste ambiente (`node --test testes/`); usar
   `node --test "testes/**/*.test.js"` ou corrigir o script no `package.json` (uma linha).
 - A spec menciona "33 testes", o `CLAUDE.md` diz 30: conferir e alinhar.
 
-## 4. Riscos que valem decisão sua antes de começar
-1. **Preços do plano** (R$ 149/299/499) são propostos, não decididos — só travam na Seção 3.
-2. **Gateway de cobrança** (Asaas ou Stripe): a Seção 3 entrega só o provedor "manual"; sem gateway
-   não há cobrança automática. Decidir antes de vender, não antes de codar.
-3. **Banco de teste é MariaDB**; produção é MySQL 8. O Marco D é o único jeito de validar de fato.
+## 4. Decisões — tomadas em 15/11/2026
+| Decisão | Escolha | O que falta |
+|---|---|---|
+| Migração em produção | **automática na subida da API** (`Dockerfile`: `npm run migrar && npm run api`) | nada; vale a partir da próxima implantação da `main` |
+| Fluxo de git | **branch por sessão; `main` só com aval** | nada |
+| Preços dos planos | **R$ 149 / 299 / 499 confirmados** | nada |
+| Gateway de cobrança | **Asaas** | código: traduzir o webhook do Asaas para `processarEventoGateway` e `COBRANCA_PROVEDOR=asaas` |
+| `configuracoes` | **por organização** | código: migração + rotas (alerta, limites, dados da empresa) |
+| Ficha do Resumo do Edital | **única por licitação** (economiza IA) | nada (item da 11b fechado) |
+| Radar e boletim | **casar por palavra inteira** | código: `regras/texto.js` no Radar e no boletim, com teste |
+| Advogado revisor | segue **minuta** até haver um (decisão de 14/11) | dados do advogado nas variáveis `ADVOGADO_REVISOR_*` |
+
+Próximas linhas de código, uma conversa cada (`/implantar`): **Asaas → `configuracoes` por organização →
+palavra inteira**. Banco de teste continua MariaDB; produção é MySQL 8 — a migração automática
+passa a validar as migrações no MySQL 8 a cada implantação.

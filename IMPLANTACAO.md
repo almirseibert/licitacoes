@@ -117,6 +117,51 @@ O lado do EasyPanel já está pronto para isso — o domínio
 apontando para a porta 4000, com HTTPS ligado. Assim que o DNS resolver, o EasyPanel emite
 o certificado Let's Encrypt sozinho, sem mais nenhum clique.
 
+## Primeiro acesso
+
+**Atualizado em 15/11/2026.** Se o login dá "E-mail ou senha incorretos" ou o login e o cadastro
+dão "Não foi possível entrar/criar a conta agora", a causa está numa destas três, nesta ordem:
+
+1. **Migrações 016–041 não aplicadas.** O banco de produção só foi migrado até a 015 (07/11);
+   usuários, organizações, planos e termos vêm depois. Desde 15/11 o `Dockerfile` roda
+   `npm run migrar` antes de subir a API, então basta implantar de novo a `main`. Para fazer na
+   hora, sem esperar: EasyPanel › `licitacoes-api` › Console → `npm run migrar`.
+2. **`JWT_SECRET` vazio.** A senha confere, mas o token não assina — 500 no login.
+3. **Senha do CRM.** Não vale mais desde a Fase 15. O primeiro acesso da Studio Mythos
+   (organização 1 — quem é dono/admin dela é o superadmin) nasce assim: preencha
+   `ADMIN_EMAIL_PADRAO` e `ADMIN_SENHA_PADRAO` no `licitacoes-api`, implante, e no Console rode
+   `npm run semear`. Ele só cria o usuário se a tabela `usuarios` estiver vazia. Quem se cadastra
+   pela tela cria uma organização **nova** (cliente), não entra na Studio Mythos.
+
+Se ainda falhar, o Log do `licitacoes-api` mostra o erro técnico (o `detalhe` de `responderErro`).
+
+## Todas as variáveis (iguais nos dois serviços)
+
+O worker ignora `PORTA` e `ADMIN_*`, mas ter as mesmas linhas nos dois evita divergência.
+Além das 25 da tabela acima:
+
+| Variável | Valor em produção | Para quê |
+|---|---|---|
+| `DB_PASSWORD` | **segredo** | obrigatória — sem ela nada sobe |
+| `JWT_SECRET` | **segredo** (texto longo e aleatório) | obrigatória — sem ela ninguém loga |
+| `ADMIN_EMAIL_PADRAO` / `ADMIN_SENHA_PADRAO` | seu e-mail / senha inicial | primeiro login (só no `semear`) |
+| `CONFIAR_PROXY` | `1` | IP real do cliente atrás do Traefik |
+| `IA_PROTOCOLO` | `gemini` | |
+| `IA_MAX_TOKENS_RESUMO` / `IA_TIMEOUT_RESUMO_MS` | `16000` / `240000` | Resumo do Edital 2.0 |
+| `IA_PRECO_ENTRADA` / `IA_PRECO_SAIDA` | opcional | só o livro-caixa da IA |
+| `GEMINI_API_KEY` | segredo, opcional | IA |
+| `PORTAL_TRANSPARENCIA_CHAVE` | segredo, opcional | CEIS/CNEP |
+| `MERCADO_UFS` | `RS` | contratos e atas do PNCP |
+| `COBRANCA_PROVEDOR` / `COBRANCA_WEBHOOK_SEGREDO` | `manual` / vazio | Asaas quando o código existir |
+| `SMTP_HOST`, `SMTP_USUARIO`, `SMTP_SENHA`, `SMTP_DE`, `ALERTA_PARA` | opcional | e-mail, convite, recuperação de senha |
+| `SUPORTE_EMAIL` | opcional | aviso de solicitação de suporte |
+| `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_ID`, `WHATSAPP_DESTINO`, `WHATSAPP_MODELO`, `WHATSAPP_MODELO_IDIOMA`, `WHATSAPP_API_URL` | opcional | WhatsApp (`pt_BR`, `https://graph.facebook.com`) |
+| `VAPID_CHAVE_PUBLICA`, `VAPID_CHAVE_PRIVADA`, `VAPID_ASSUNTO` | opcional | push do navegador |
+| `OPERADORA_RAZAO_SOCIAL`, `OPERADORA_CNPJ`, `OPERADORA_ENCARREGADO_EMAIL` | dados da Studio Mythos | termos e política (vazio vira `____________`) |
+| `ADVOGADO_REVISOR_NOME/OAB`, `JURIDICO_/LEGAL_/PARCEIROS_REVISADO(_EM)` | vazio / `false` | textos seguem como minuta |
+| `REDIS_URL` | vazio | só com `FILA_DRIVER=bullmq` |
+| `IA_URL_BASE`, `WEBHOOK_PERMITIR_LOCAL` | **não definir** | só teste local |
+
 ## Como confirmar que está tudo no ar
 
 Depois dos dois passos acima:

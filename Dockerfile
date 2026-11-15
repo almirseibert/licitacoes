@@ -20,6 +20,9 @@ COPY worker/ ./worker/
 COPY --from=frontend /app/frontend/dist ./frontend/dist
 RUN mkdir -p /dados/editais /dados/empresa /dados/pacotes
 EXPOSE 4000
-# API:    npm run api      (comando padrão)
-# Worker: npm run worker   (mesmo Dockerfile, só muda o comando no EasyPanel)
-CMD ["npm", "run", "api"]
+# API:    migra e sobe     (comando padrão). `migrar` é idempotente (tabela `migracoes`):
+#         a cada implantação aplica só as migrações novas; se falhar, a API não sobe
+#         e o erro fica no Log do serviço, em vez de login e cadastro caírem em 500.
+# Worker: npm run worker   (mesmo Dockerfile, só muda o comando no EasyPanel; não migra,
+#         para os dois não correrem a mesma migração ao mesmo tempo)
+CMD ["sh", "-c", "npm run migrar && npm run api"]

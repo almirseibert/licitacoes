@@ -10,7 +10,9 @@ registrada em comentário explicando por quê.
 O repositório no GitHub é o lugar oficial do trabalho:
 <https://github.com/almirseibert/licitacoes>
 
-- Cada fase termina com **commit e push direto na `main`**. Sem branch, sem PR.
+- Cada fase termina com **commit e push no branch da sessão**. Sem PR. A `main` só recebe o
+  trabalho quando o usuário autorizar (decisão de 15/11/2026) — e é a `main` que o EasyPanel
+  implanta, então nada chega a produção sem esse aval.
 - A fase só fecha depois de **passar no critério de aceite da seção 16**, verificado contra
   dados reais — não contra mock. O resultado medido vai no commit e no README.
 - O README registra o estado: o que cada fase entregou, onde está, e o aceite com os números.
