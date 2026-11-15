@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Sun, Moon } from 'lucide-react';
 import { api, obterToken } from '../servicos/api';
-import { definirTema, temaAtual } from '../servicos/tema';
+import { definirTema, temaAtual, salvarTemaNoUsuario } from '../servicos/tema';
 
 /**
  * Alternador claro/escuro (Seção 2 do plano SaaS). Troca na hora e guarda no
@@ -20,7 +20,7 @@ export default function AlternarTema({ compacto = false }) {
   const alternar = () => {
     const novo = tema === 'escuro' ? 'claro' : 'escuro';
     definirTema(novo);
-    if (obterToken()) api.salvarTema(novo).catch(() => {});
+    if (obterToken()) salvarTemaNoUsuario(api.salvarTema, novo);
   };
 
   const Icone = tema === 'escuro' ? Sun : Moon;

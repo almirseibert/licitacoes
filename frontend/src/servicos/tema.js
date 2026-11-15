@@ -50,8 +50,53 @@ export function definirTema(tema) {
   }
 }
 
+// Seção 2b: escolha que o servidor ainda não recebeu (rede caiu no PATCH). Fica marcada
+// até um envio dar certo; no próximo carregamento ela vale mais que o banco e é reenviada.
+const CHAVE_PENDENTE = 'licitacoes.tema_pendente';
+
+export function marcarTemaPendente(tema) {
+  try {
+    localStorage.setItem(CHAVE_PENDENTE, tema);
+  } catch {
+    // sem armazenamento: a escolha vale nesta sessão
+  }
+}
+
+export function temaPendente() {
+  try {
+    const tema = localStorage.getItem(CHAVE_PENDENTE);
+    return TEMAS.includes(tema) ? tema : null;
+  } catch {
+    return null;
+  }
+}
+
+export function limparTemaPendente() {
+  try {
+    localStorage.removeItem(CHAVE_PENDENTE);
+  } catch {
+    // nada a limpar
+  }
+}
+
+/**
+ * Salva o tema no usuário. Falhou? Fica pendente e o próximo carregamento tenta de novo.
+ * `enviar` é `api.salvarTema` (passada de fora para este arquivo não depender da API).
+ */
+export async function salvarTemaNoUsuario(enviar, tema) {
+  marcarTemaPendente(tema);
+  try {
+    await enviar(tema);
+    // Só apaga se ninguém escolheu outro enquanto este voava.
+    if (temaPendente() === tema) limparTemaPendente();
+  } catch {
+    // continua pendente
+  }
+}
+
 /** Ao sair: a escolha é do usuário, não do navegador — o próximo não a herda. */
 export function esquecerTema() {
+  limparTemaPendente();
   try {
     localStorage.removeItem(CHAVE_TEMA);
   } catch {

@@ -193,8 +193,9 @@ primeira medição pegou a faixa "Baixa" do Funil escuro em 3,73:1 — corrigida
 `claro`/`escuro`/`null`, 400 para valor inválido, 401 sem token. Lint limpo, 58/58 testes.
 
 **Seção 2b — pendente:**
-- [ ] Se o `PATCH /api/auth/tema` falhar (rede), a escolha vale só nesta sessão e o próximo login
-      volta ao que está no banco — avisar ou reenviar.
+- [x] Se o `PATCH /api/auth/tema` falhar (rede), a escolha fica marcada como pendente no navegador e é
+      reenviada no próximo carregamento (vale mais que o banco até chegar) — feito em 15/11/2026; conferido no
+      navegador (PATCH derrubado → pendente → recarrega → tema mantido, pendente limpo).
 - [ ] Gráficos: o painel ainda não tem gráfico com cor própria (o Relatório é tabela); quando a
       Seção 8/13/15 trouxer, usar os tokens, não hex.
 - [ ] Telas fora do aceite (Proposta, Envio, Contratos…) só foram vistas por amostra; o PDF da
@@ -246,7 +247,7 @@ roda neste ambiente (sem `origin/HEAD`); a revisão de segurança foi feita à m
 - [ ] Rotas de `/api/auth` (equipe, tema) não passam por `assinaturaValida` — só o convite passa.
 - [ ] Avisar o administrador por e-mail quando o cliente pede um plano; tradução do payload do
       gateway escolhido (Asaas ou Stripe) para o formato normalizado de `processarEventoGateway`.
-- [ ] Menu: o cadeado lê o plano no login; depois de trocar de plano, só atualiza ao recarregar.
+- [x] Menu: o cadeado acompanha o plano — a tela Assinatura/Uso devolve o plano lido ao App (15/11/2026).
 
 ---
 
@@ -483,7 +484,9 @@ sem microfone (o botão só aparece onde o navegador oferece a API).
 - [ ] Filtro "com **chat** monitorado" — depende da Seção 6.
 - [ ] Raio e cidade pelo **código IBGE** gravado na licitação (hoje casa pelo nome, sem acento e
       sem caixa; grafia diferente do IBGE fica fora do raio sem aviso).
-- [ ] Tela de Configurações para escolher a `radar_cidade_base` (hoje pela API de ajustes).
+- [x] Tela de Configurações para escolher a `radar_cidade_base`: busca pelo nome da cidade, grava o código IBGE,
+      mostra o nome escolhido e "limpar" (15/11/2026; `GET /licitacoes/municipios?codigo=`). Conferido: gravou só
+      na organização A e voltou com "Porto Alegre — RS" depois de recarregar.
 - [ ] Regra da "primeira data vista" num ponto só (trigger ou helper) — hoje está nos três
       caminhos de gravação de `coletar.js`.
 - [ ] Usar a pesquisa salva como filtro do boletim (os dois na mesma tabela, ainda com campos
@@ -534,12 +537,14 @@ listas num lugar só em `filtros-radar.js`, dashboard numa passada só por UF, e
 vez no detalhe, apagar andamento ligado na tela) aplicados.
 
 **Seção 8b — pendente:**
-- [ ] Download do anexo pela aba Anexos (hoje lista, anexa e remove; o arquivo sai no pacote do
-      envio).
+- [x] Download do anexo pela aba Anexos: `GET /licitacoes/:id/envio/anexos/:anexoId/arquivo` (15/11/2026).
+      Conferido pela API com duas organizações: dona 200 com o mesmo conteúdo, outra organização 404, sem login
+      401, anexo inexistente 404.
 - [ ] Tarefa/andamento só em licitação que a organização tem (`org_licitacoes`); hoje aceita
       qualquer uma do catálogo, como as anotações.
 - [x] Aviso de tarefa atrasada por e-mail/WhatsApp — entregue na Seção 9.
-- [ ] Registrar a troca de responsável na linha do tempo (hoje só a etapa vira anotação).
+- [x] Troca de responsável registrada no histórico do card (anotação `sistema`, "Responsável: A → B"; a mesma
+      pessoa de novo não registra) — 15/11/2026, 3 anotações conferidas em 4 PATCHes.
 
 ---
 

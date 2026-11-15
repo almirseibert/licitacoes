@@ -418,6 +418,18 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
   **Sondagem de 15/11/2026:** BLL, BNC e Portal de Compras Públicas respondem 200 mas sem chat público do pregão
   (BLL/BNC só têm o atendimento da empresa; PCP monta a lista por JavaScript); Licitanet devolve 403; CELIC-RS não
   foi alcançado. Nenhuma fonte configurada, o aceite real do chat segue **não atendido**.
+- **Página de divulgação e entrada em popup, 15/11/2026.** `frontend/src/paginas/Divulgacao.jsx` é o que se vê em
+  `licitacoes.studiomythos.com.br` sem sessão: herói com prévia ilustrativa do Radar (avisada como exemplo), recursos,
+  como funciona, o que o painel **não** faz (sem robô de lance, sem senha de portal, IA só sugere), planos e perguntas.
+  Os preços vêm do banco por `GET /api/publico/planos` (a tabela que cobra); se a chamada falhar, a vitrine não mostra
+  valor. A entrada (entrar, criar conta, esqueci a senha) é o popup `Login.jsx`: Esc, X ou clique fora fecham, o foco fica
+  preso na caixa e volta ao botão que abriu; `/entrar` e `/cadastro` abrem a página já com o popup. **Conferido no
+  navegador** (Playwright, 1366 px e 390 px, tema claro e escuro): 35/35 — título, 3 planos do banco com R$ 149/299/499,
+  sem rolagem horizontal, popup abre/fecha, criar conta pelo popup entra no painel — e 0 erro de console.
+- **Seções 2b, 3b, 7b e 8b (parte código), 15/11/2026.** Tema escolhido com a rede fora fica pendente e é reenviado;
+  o cadeado do menu acompanha a troca de plano; tela de Configurações escolhe a cidade-base do raio pelo nome; anexo da
+  licitação baixa pela aba Anexos (outra organização recebe 404); troca de responsável entra no histórico do card.
+  Conferido pela API com duas organizações (10/10) e no navegador (6/6).
 - **Seção 16 — Consultor jurídico e Jurídico Fácil, 14/11/2026 (base em MINUTA, sem revisão de advogado; aceite com o advogado pendente).**
   Migração `039`. Tela **Jurídico** (recurso `consultor_juridico`, plano Avançado; limite `ia_juridico_mes` = 300):
   **Consultor** (chat com histórico por pessoa e "novo chat"; a pergunta é gravada como pendente e a tela consulta até a

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Loader2, Trash2, Paperclip } from 'lucide-react';
+import { Loader2, Trash2, Paperclip, Download } from 'lucide-react';
 import { api } from '../servicos/api';
 import { dataHora } from '../servicos/formato';
 
@@ -41,6 +41,14 @@ export default function Anexos({ id }) {
     }
   };
 
+  const baixar = async (a) => {
+    try {
+      await api.baixarAnexo(id, a.id, a.nome_arquivo || a.titulo);
+    } catch (e) {
+      setErro(e.message);
+    }
+  };
+
   const remover = async (a) => {
     if (!window.confirm(`Remover o anexo "${a.titulo}"?`)) return;
     try {
@@ -72,6 +80,9 @@ export default function Anexos({ id }) {
                 {a.tamanho_bytes ? `${Math.max(1, Math.round(a.tamanho_bytes / 1024))} KB · ` : ''}
                 {dataHora(a.criado_em)}
               </span>
+              <button onClick={() => baixar(a)} className="text-texto-suave hover:text-voltagem" aria-label={`Baixar ${a.titulo}`}>
+                <Download size={13} />
+              </button>
               <button onClick={() => remover(a)} className="text-texto-suave hover:text-erro" aria-label={`Remover ${a.titulo}`}>
                 <Trash2 size={13} />
               </button>

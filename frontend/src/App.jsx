@@ -43,7 +43,7 @@ import AceiteTermos from './componentes/AceiteTermos';
 import PesquisaNps from './componentes/PesquisaNps';
 import Alertas from './componentes/Alertas';
 import AlternarTema from './componentes/AlternarTema';
-import { definirTema, seguirSistema, temaGuardado } from './servicos/tema';
+import { definirTema, seguirSistema, temaGuardado, temaPendente, salvarTemaNoUsuario } from './servicos/tema';
 
 const TELAS = [
   { chave: 'dashboard', rotulo: 'Dashboard', icone: LayoutDashboard, recurso: 'gestao' },
@@ -153,8 +153,13 @@ export default function App() {
         setOrganizacoes(r.organizacoes || []);
         // O tema salvo no usuário manda sobre o do navegador (Seção 2); se ele
         // nunca salvou, a escolha feita aqui (ex.: na tela de login) sobe ao banco.
-        if (r.tema) definirTema(r.tema);
-        else if (temaGuardado()) api.salvarTema(temaGuardado()).catch(() => {});
+        // Escolha que não chegou ao servidor (2b) manda mais que o banco e é reenviada.
+        const pendente = temaPendente();
+        if (pendente) {
+          definirTema(pendente);
+          salvarTemaNoUsuario(api.salvarTema, pendente);
+        } else if (r.tema) definirTema(r.tema);
+        else if (temaGuardado()) salvarTemaNoUsuario(api.salvarTema, temaGuardado());
         const atual = (r.organizacoes || []).find((o) => o.id === r.usuario.organizacao_id);
         if (atual) setOrganizacao(atual);
       })
@@ -334,8 +339,8 @@ export default function App() {
         {tela === 'equipe' && <Equipe />}
         {tela === 'integracoes' && <Integracoes />}
         {tela === 'configuracoes' && <Configuracoes />}
-        {tela === 'assinatura' && <Assinatura aba="assinatura" key="assinatura" />}
-        {tela === 'uso' && <Assinatura aba="uso" key="uso" />}
+        {tela === 'assinatura' && <Assinatura aba="assinatura" key="assinatura" aoAtualizarPlano={setPlano} />}
+        {tela === 'uso' && <Assinatura aba="uso" key="uso" aoAtualizarPlano={setPlano} />}
         {tela === 'organizacoes' && <Organizacoes />}
         {tela === 'parceiros' && <Parceiros />}
         {tela === 'servicos' && <Servicos key={parametros.licitacao_id || 'servicos'} inicial={parametros.servico ? parametros : null} />}

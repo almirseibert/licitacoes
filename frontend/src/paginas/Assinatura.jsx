@@ -45,7 +45,7 @@ function Medidor({ usado, limite }) {
  * do teste, quanto se usa de cada limite e o pedido de troca. Com o provedor
  * manual, o pedido avisa a Studio Mythos, que ativa depois do pagamento.
  */
-export default function Assinatura({ aba = 'assinatura' }) {
+export default function Assinatura({ aba = 'assinatura', aoAtualizarPlano }) {
   const [dados, setDados] = useState(null);
   const [uso, setUso] = useState(null);
   const [erro, setErro] = useState(null);
@@ -58,9 +58,11 @@ export default function Assinatura({ aba = 'assinatura' }) {
       .then(([a, u]) => {
         setDados(a);
         setUso(u);
+        // Seção 3b: o cadeado do menu acompanha o plano sem recarregar a página.
+        if (aoAtualizarPlano) aoAtualizarPlano(a);
       })
       .catch((e) => setErro(e.message));
-  }, []);
+  }, [aoAtualizarPlano]);
   useEffect(carregar, [carregar]);
 
   const pedir = async (plano) => {

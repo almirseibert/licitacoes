@@ -238,6 +238,32 @@ rotas.post('/anexos', (req, res) => {
   });
 });
 
+// Seção 8b: baixar o anexo pela aba Anexos. Mesmo cuidado do pacote: a linha é da
+// organização, o caminho tem de estar dentro do volume e arquivo sumido é 410.
+rotas.get('/anexos/:anexoId/arquivo', async (req, res) => {
+  try {
+    const [[anexo]] = await pool.query(
+      'SELECT nome_arquivo, titulo, arquivo_path FROM licitacao_anexos WHERE id = ? AND licitacao_id = ? AND organizacao_id = ?',
+      [req.params.anexoId, req.params.id, req.organizacaoId]
+    );
+    if (!anexo || !anexo.arquivo_path) return res.status(404).json({ erro: 'Anexo não encontrado.' });
+    if (!arquivos.dentroDoVolume(anexo.arquivo_path)) {
+      return res.status(400).json({ erro: 'Caminho de arquivo inválido.' });
+    }
+    const absoluto = arquivos.caminhoAbsoluto(anexo.arquivo_path);
+    if (!fs.existsSync(absoluto)) {
+      return res.status(410).json({ erro: 'O arquivo não está mais no volume. Anexe de novo.' });
+    }
+    const nome = anexo.nome_arquivo || anexo.titulo || 'anexo';
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(nome)}"`);
+    fs.createReadStream(absoluto).pipe(res);
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível entregar o anexo.', erro);
+  }
+});
+
 rotas.delete('/anexos/:anexoId', async (req, res) => {
   try {
     const [r] = await pool.query(

@@ -109,6 +109,17 @@ rotas.get('/exportar', limites.exigirLimite('exportacoes_mes'), async (req, res)
 
 // GET /api/licitacoes/municipios?busca=porto — cidade de partida do raio.
 rotas.get('/municipios', async (req, res) => {
+  // `?codigo=4314902`: o nome de uma cidade já escolhida (tela de Configurações, Seção 7b).
+  const codigo = String(req.query.codigo || '').trim();
+  if (codigo) {
+    if (!/^\d{7}$/.test(codigo)) return res.json({ dados: [] });
+    try {
+      const [dados] = await pool.query('SELECT codigo_ibge, nome, uf FROM municipios WHERE codigo_ibge = ?', [codigo]);
+      return res.json({ dados });
+    } catch (erro) {
+      return responderErro(res, 500, 'Não foi possível buscar a cidade.', erro);
+    }
+  }
   const busca = String(req.query.busca || '').trim();
   if (busca.length < 2) return res.json({ dados: [] });
   const prefixo = filtrosRadar.comoLike(busca).slice(1); // "porto%": quem começa assim vem primeiro
@@ -444,6 +455,23 @@ rotas.patch('/:id', async (req, res) => {
     );
 
     const avisos = [];
+
+    // Seção 8b: a troca de responsável também entra no histórico do card (tipo
+    // 'sistema'), com os nomes de antes e de depois — "ninguém" quando vazio.
+    if (corpo.responsavel_id !== undefined) {
+      const novo = corpo.responsavel_id === '' || corpo.responsavel_id === null ? null : Number(corpo.responsavel_id);
+      const antigo = antes.responsavel_id === undefined || antes.responsavel_id === null ? null : Number(antes.responsavel_id);
+      if (novo !== antigo) {
+        const ids = [novo, antigo].filter(Boolean);
+        const [nomes] = ids.length ? await pool.query('SELECT id, nome FROM usuarios WHERE id IN (?)', [ids]) : [[]];
+        const nome = (id) => (id ? ((nomes.find((u) => u.id === id) || {}).nome || 'alguém da equipe') : 'ninguém');
+        await pool.query(
+          "INSERT INTO anotacoes (organizacao_id, licitacao_id, texto, autor, tipo) VALUES (?, ?, ?, ?, 'sistema')",
+          [req.organizacaoId, req.params.id, `Responsável: ${nome(antigo)} → ${nome(novo)}`, (req.usuario && req.usuario.nome) || null]
+        );
+      }
+    }
+
     if (mudouEtapa) {
       await pool.query(
         "INSERT INTO anotacoes (organizacao_id, licitacao_id, texto, autor, tipo) VALUES (?, ?, ?, ?, 'etapa')",

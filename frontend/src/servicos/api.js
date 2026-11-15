@@ -446,6 +446,8 @@ export const api = {
     return enviarFormulario(`/licitacoes/${id}/envio/anexos`, forma);
   },
 
+  // Seção 8b: baixa o anexo com o nome original.
+  baixarAnexo: (id, anexoId, nome) => salvarComo(`/licitacoes/${id}/envio/anexos/${anexoId}/arquivo`, nome || 'anexo'),
   removerAnexo: (id, anexoId) =>
     requisitar(`/licitacoes/${id}/envio/anexos/${anexoId}`, { method: 'DELETE' }),
 
@@ -734,6 +736,7 @@ export const api = {
   // ------------------------------------------------- Radar 2.0 (Seção 7)
   itensDaLicitacao: (id) => requisitar(`/licitacoes/${id}/itens`),
   municipios: (busca) => requisitar(`/licitacoes/municipios?busca=${encodeURIComponent(busca)}`),
+  municipioPorCodigo: (codigo) => requisitar(`/licitacoes/municipios?codigo=${encodeURIComponent(codigo)}`),
   pesquisas: () => requisitar('/licitacoes/pesquisas'),
   salvarPesquisa: (nome, filtros) =>
     requisitar('/licitacoes/pesquisas', { method: 'POST', body: JSON.stringify({ nome, filtros }) }),
