@@ -221,10 +221,12 @@ export default function App() {
           </p>
         )}
         <div className="flex-1 min-h-0">
-        {tela === 'dashboard' && <Dashboard aoIr={irPara} />}
+        {tela === 'dashboard' && <Dashboard aoIr={irPara} aoAbrirLicitacao={abrirLicitacao} temRecurso={temRecurso} />}
         {tela === 'monitor_chat' && <MonitorChat aoAbrir={abrirLicitacao} />}
         {tela === 'tarefas' && <Tarefas aoAbrir={abrirLicitacao} />}
-        {tela === 'radar' && <Radar abrir={licitacaoAberta} aoAbrir={setLicitacaoAberta} aoIr={irPara} />}
+        {tela === 'radar' && (
+          <Radar abrir={licitacaoAberta} aoAbrir={setLicitacaoAberta} aoIr={irPara} filtroInicial={parametros} />
+        )}
         {tela === 'fontes' && <Fontes />}
         {tela === 'palavras' && <Palavras />}
         {tela === 'boletins' && <Boletins />}

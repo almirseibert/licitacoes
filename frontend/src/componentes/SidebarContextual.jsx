@@ -1,4 +1,4 @@
-import { Lock, X } from 'lucide-react';
+import { Lock, X, LayoutDashboard } from 'lucide-react';
 import { CATEGORIAS, TELAS } from '../config/navegacao';
 
 /**
@@ -33,6 +33,23 @@ export default function SidebarContextual({ categoria, telaAtiva, aoIrPara, pode
           </button>
         </div>
         <div className="flex-1 py-2">
+          {/* A aba "Dashboard" também abre esta sidebar (seção descoberta); este
+              item fixo leva à tela de métricas, igual ao botão "Painel". */}
+          {categoria === 'descoberta' && (
+            <div className="mb-1 pb-1 border-b border-borda">
+              <button
+                onClick={() => aoIrPara('dashboard')}
+                className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-sm transition-colors ${
+                  telaAtiva === 'dashboard'
+                    ? 'text-texto bg-realce/[0.06] border-l-2 border-texto'
+                    : 'text-texto-suave hover:text-texto border-l-2 border-transparent'
+                }`}
+              >
+                <LayoutDashboard size={15} />
+                <span>Visão geral</span>
+              </button>
+            </div>
+          )}
           {grupos.map((grupo) => (
             <div key={grupo.nome} className="mb-1">
               <p className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-widest text-texto-suave">{grupo.nome}</p>

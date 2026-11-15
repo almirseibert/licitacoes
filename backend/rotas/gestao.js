@@ -374,7 +374,7 @@ rotas.get('/dashboard', async (req, res) => {
   const eu = quem(req);
   const hoje = gestao.diaNoFuso();
   try {
-    const [[[boletins]], [[documentos]], [[portais]], [[tarefas]], [[andamentos]], [ufs]] = await Promise.all([
+    const [[[boletins]], [[documentos]], [[portais]], [[tarefas]], [[andamentos]], [ufs], [[licitacoesGerenciadas]]] = await Promise.all([
       pool.query(
         `SELECT COUNT(*) AS nao_lidos FROM boletins b
           WHERE b.organizacao_id = ? AND b.total_itens > 0
@@ -421,6 +421,14 @@ rotas.get('/dashboard', async (req, res) => {
                    FROM ${escopo.daOrganizacao(org)} l WHERE l.descartada = 0) x
           GROUP BY COALESCE(x.uf, '—')`
       ),
+      // O resumo do card "Licitações Gerenciadas" (seção 8): as quatro listas
+      // do Radar — favorita não exclui descartada, finalizada inclui a
+      // descartada de propósito (é um dos jeitos de fechar o ciclo).
+      pool.query(
+        `SELECT SUM(l.favorito = 1) AS favoritadas, SUM(${LISTAS.gerenciadas}) AS gerenciadas,
+                SUM(${LISTAS.finalizadas}) AS finalizadas, SUM(l.etapa = 'Ganhamos') AS ganhas
+           FROM ${escopo.daOrganizacao(org)} l`
+      ),
     ]);
 
     const n = (v) => Number(v || 0);
@@ -449,6 +457,12 @@ rotas.get('/dashboard', async (req, res) => {
         valor: soma('disputa_valor'),
         // Licitação de orçamento sigiloso não soma: o total é "pelo menos".
         sem_valor: soma('disputa_sem_valor'),
+      },
+      licitacoes_gerenciadas: {
+        favoritadas: n(licitacoesGerenciadas.favoritadas),
+        gerenciadas: n(licitacoesGerenciadas.gerenciadas),
+        finalizadas: n(licitacoesGerenciadas.finalizadas),
+        ganhas: n(licitacoesGerenciadas.ganhas),
       },
     });
   } catch (e) {

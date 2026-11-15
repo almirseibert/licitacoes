@@ -486,6 +486,33 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
   (`vite build`) sem erro; conferido no navegador (Playwright, com sessão simulada) nas quatro
   categorias, no botão Painel, no cadeado de recurso fora do plano e no menu mobile (< md), com
   a categoria certa sempre selecionada ao chegar numa tela por outro caminho (ex. clique num KPI).
+- **Dashboard redesenhado, 15/11/2026.** A categoria "Descoberta" virou "Dashboard" na barra —
+  sua sidebar agora abre com um item fixo "Visão geral" no topo (leva à tela de métricas, igual
+  ao botão "Painel"), seguido das mesmas 7 ferramentas de antes. A tela de métricas ganhou três
+  seções novas, todas clicáveis até a tela específica — nenhuma delas copia o visual do
+  ConLicitação, só a lógica funcional, mantendo o Voltage Obsidian:
+  - **Atalhos**: `componentes/AtalhosFerramentas.jsx`, 4 grupos (Oportunidades, Gestão,
+    Inteligência, Automação) com as ferramentas mais usadas — equivalente ao "Nossas
+    Ferramentas" deles, sem os 34 itens do menu completo.
+  - **Licitações por estado**: `componentes/MapaBrasil.jsx` desenha o Brasil com os traçados
+    públicos (CC-BY-4.0) do pacote `@svg-maps/brazil` — sem geocodificação nem chamada externa.
+    Cor é sequencial numa hue só (`--cor-voltagem`, em passos de opacidade), a mesma usada em
+    todo o painel para magnitude; tabela exata continua disponível (botão "ver tabela"). Cada
+    estado leva ao Radar já filtrado por aquela UF.
+  - **Licitações Gerenciadas**: `componentes/LicitacoesGerenciadas.jsx` (anel com as 4 listas do
+    Radar — Favoritadas, Gerenciadas, Finalizadas, Ganhas — cinza + o único acento do tema
+    reservado para "Ganhas", de propósito: nada de paleta categórica nova) ao lado de
+    `componentes/AgendaResumo.jsx` (mês atual + agenda do dia, versão compacta da tela
+    Calendário, com "ver agenda completa"). `GET /api/gestao/dashboard` ganhou o campo
+    `licitacoes_gerenciadas` (contagem das 4 listas, reaproveitando `LISTAS` de
+    `regras/filtros-radar.js` — nenhuma migração). Cada fatia e cada linha da legenda navegam
+    (Ganhas vai ao Funil; o resto, ao Radar com a lista certa).
+  - O Radar passou a aceitar um `filtroInicial` (prop nova), para o mapa e os links do card de
+    gestão chegarem já filtrados sem ficar reféns da busca salva do usuário.
+  - **Aceite**: `npm run lint` sem erro; `vite build` sem erro; conferido no navegador
+    (Playwright, dados simulados) — atalhos, mapa com degradê correto por UF, anel com as 4
+    contagens, agenda do mês e a aba "Dashboard" com "Visão geral" selecionada ao chegar na tela
+    de métricas.
 
 A primeira coleta real no PNCP trouxe **1.305 licitações em aberto, nenhuma duplicada**, todas
 com link que abre o edital no portal. Depois, pela tela, a palavra "videomonitoramento" foi

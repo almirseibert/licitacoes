@@ -45,7 +45,7 @@ function lerFiltrosSalvos() {
   }
 }
 
-export default function Radar({ abrir = null, aoAbrir = null, aoIr = null }) {
+export default function Radar({ abrir = null, aoAbrir = null, aoIr = null, filtroInicial = null }) {
   const [filtros, setFiltros] = useState(lerFiltrosSalvos);
   const [opcoes, setOpcoes] = useState({});
   const [resumo, setResumo] = useState(null);
@@ -60,6 +60,15 @@ export default function Radar({ abrir = null, aoAbrir = null, aoIr = null }) {
   useEffect(() => {
     if (abrir) setAberta(abrir);
   }, [abrir]);
+
+  // O Dashboard manda um filtro pronto (mapa por UF, listas do card de
+  // gestão): substitui a busca salva, com "em aberto" e nota mínima
+  // liberados — são recortes explícitos, a tela não deve escondê-los de
+  // novo pelos padrões do Radar livre.
+  useEffect(() => {
+    if (!filtroInicial || Object.keys(filtroInicial).length === 0) return;
+    setFiltros((f) => ({ ...f, em_aberto: '', pontuacao_min: 0, uf: '', lista: '', etapa: '', ...filtroInicial, pagina: 1 }));
+  }, [filtroInicial]);
   const [coletando, setColetando] = useState(false);
   const [exportando, setExportando] = useState(false);
   const [aviso, setAviso] = useState(null);

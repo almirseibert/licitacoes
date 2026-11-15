@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Newspaper, FolderLock, ListTodo, MessagesSquare, Table2, BarChart3 } from 'lucide-react';
+import { Loader2, Newspaper, FolderLock, ListTodo, MessagesSquare, Table2, Map as IconeMapa } from 'lucide-react';
 import { api } from '../servicos/api';
 import { moeda } from '../servicos/formato';
+import AtalhosFerramentas from '../componentes/AtalhosFerramentas';
+import MapaBrasil from '../componentes/MapaBrasil';
+import LicitacoesGerenciadas from '../componentes/LicitacoesGerenciadas';
+import AgendaResumo from '../componentes/AgendaResumo';
 
 /**
  * Dashboard (Seção 8): o que pede atenção hoje e o tamanho do que está em jogo.
- * Cada cartão leva à tela onde se resolve o que ele conta.
+ * Cada cartão, fatia do mapa e linha leva à tela onde se resolve o que ele conta.
  */
-export default function Dashboard({ aoIr }) {
+export default function Dashboard({ aoIr, aoAbrirLicitacao, temRecurso = () => true }) {
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState(null);
 
@@ -60,6 +64,9 @@ export default function Dashboard({ aoIr }) {
             {c.portais_vencidos ? ` · ${c.portais_vencidos} vencido(s)` : ''} — abrir a agenda de portais.
           </button>
         )}
+
+        <AtalhosFerramentas aoIr={aoIr} temRecurso={temRecurso} />
+
         <section aria-label="O que pede atenção" className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {cartoes.map(({ chave, icone: Icone, rotulo, valor, nota, alerta }) => (
             <button
@@ -79,11 +86,12 @@ export default function Dashboard({ aoIr }) {
         </section>
 
         <section aria-label="Oportunidades" className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <Numero rotulo="Oportunidades do dia" valor={dados.oportunidades.do_dia} nota="entraram nas últimas 24 h com pontuação" />
+          <Numero rotulo="Oportunidades do dia" valor={dados.oportunidades.do_dia} nota="entraram nas últimas 24 h com pontuação" aoClicar={() => aoIr('radar', { novas_24h: '1' })} />
           <Numero
             rotulo="Vigentes"
             valor={dados.oportunidades.vigentes}
             nota={`${moeda(dados.oportunidades.valor_vigentes)} estimados, ainda recebendo proposta`}
+            aoClicar={() => aoIr('radar', { em_aberto: '1' })}
           />
           <Numero
             rotulo="Valor total em disputa"
@@ -93,51 +101,60 @@ export default function Dashboard({ aoIr }) {
               `${dados.em_disputa.quantidade} licitação(ões) em análise, decididas ou em disputa` +
               (dados.em_disputa.sem_valor ? ` · ${dados.em_disputa.sem_valor} sem valor publicado (fora da soma)` : '')
             }
+            aoClicar={() => aoIr('radar', { lista: 'gerenciadas' })}
           />
         </section>
 
-        <PorUf linhas={dados.por_uf} />
+        <h2 className="font-titulo text-base">Licitações Gerenciadas</h2>
+        <section aria-label="Licitações gerenciadas e agenda" className="grid grid-cols-1 lg:grid-cols-[22rem_1fr] gap-3">
+          <LicitacoesGerenciadas dados={dados.licitacoes_gerenciadas} aoIr={aoIr} />
+          <AgendaResumo aoAbrir={aoAbrirLicitacao} aoVerCalendario={() => aoIr('calendario')} />
+        </section>
+
+        <PorUf linhas={dados.por_uf} aoIr={aoIr} />
       </div>
     </div>
   );
 }
 
-function Numero({ rotulo, valor, nota, destaque }) {
+function Numero({ rotulo, valor, nota, destaque, aoClicar }) {
   return (
-    <div className={`border rounded p-3 ${destaque ? 'border-voltagem/50' : 'border-borda'}`}>
+    <button
+      onClick={aoClicar}
+      className={`text-left border rounded p-3 hover:border-texto-suave transition-colors ${destaque ? 'border-voltagem/50' : 'border-borda'}`}
+    >
       <p className="text-xs text-texto-suave">{rotulo}</p>
       <p className="font-mono text-2xl mt-1">{valor}</p>
       <p className="text-[11px] text-texto-suave mt-0.5">{nota}</p>
-    </div>
+    </button>
   );
 }
 
 /**
- * Vigentes por UF — uma série só (quantidade), barras horizontais, sem
- * legenda (o título diz o que é). O valor estimado aparece na dica e na
- * tabela, nunca num segundo eixo.
+ * Vigentes por UF: mapa do Brasil por padrão (Seção "Decisões de interface" do
+ * benchmark — mapa, não lista), com a tabela como alternativa exata. Clicar
+ * num estado ou numa linha vai ao Radar já filtrado por ele.
  */
-function PorUf({ linhas }) {
-  const [tabela, setTabela] = useState(false);
-  const [foco, setFoco] = useState(null);
-  const maximo = Math.max(1, ...linhas.map((l) => l.quantidade));
+function PorUf({ linhas, aoIr }) {
+  const [visao, setVisao] = useState('mapa');
+  const irParaUf = (uf) => aoIr('radar', { uf, em_aberto: '1' });
 
   return (
     <section aria-labelledby="titulo-uf" className="border border-borda rounded p-3">
       <div className="flex items-center gap-2 mb-3">
-        <h2 id="titulo-uf" className="text-sm">Licitações vigentes por UF</h2>
+        <h2 id="titulo-uf" className="text-sm">Licitações vigentes por estado</h2>
         <button
           type="button"
           className="ml-auto text-xs text-texto-suave hover:text-texto flex items-center gap-1"
-          onClick={() => setTabela((t) => !t)}
+          onClick={() => setVisao((v) => (v === 'mapa' ? 'tabela' : 'mapa'))}
         >
-          {tabela ? <BarChart3 size={12} /> : <Table2 size={12} />} {tabela ? 'ver gráfico' : 'ver tabela'}
+          {visao === 'mapa' ? <Table2 size={12} /> : <IconeMapa size={12} />} {visao === 'mapa' ? 'ver tabela' : 'ver mapa'}
         </button>
       </div>
 
       {linhas.length === 0 ? (
         <p className="text-sm text-texto-suave">Nenhuma licitação vigente.</p>
-      ) : tabela ? (
+      ) : visao === 'tabela' ? (
         <table className="w-full text-xs">
           <thead>
             <tr className="text-texto-suave text-left">
@@ -149,7 +166,9 @@ function PorUf({ linhas }) {
           <tbody>
             {linhas.map((l) => (
               <tr key={l.uf} className="border-t border-borda">
-                <td className="py-1">{l.uf}</td>
+                <td className="py-1">
+                  <button className="hover:underline" onClick={() => irParaUf(l.uf)}>{l.uf}</button>
+                </td>
                 <td className="py-1 text-right font-mono">{l.quantidade}</td>
                 <td className="py-1 text-right font-mono">{moeda(l.valor)}</td>
               </tr>
@@ -157,36 +176,7 @@ function PorUf({ linhas }) {
           </tbody>
         </table>
       ) : (
-        <ul className="space-y-0.5" onMouseLeave={() => setFoco(null)}>
-          {linhas.map((l) => (
-            <li
-              key={l.uf}
-              className="relative flex items-center gap-2 py-1 cursor-default"
-              onMouseEnter={() => setFoco(l.uf)}
-              onFocus={() => setFoco(l.uf)}
-              onBlur={() => setFoco(null)}
-              tabIndex={0}
-              aria-label={`${l.uf}: ${l.quantidade} licitações, ${moeda(l.valor)}`}
-            >
-              <span className="w-8 text-xs text-texto-suave">{l.uf}</span>
-              <span className="flex-1 h-3">
-                <span
-                  className={`block h-3 rounded-r bg-voltagem transition-opacity ${foco && foco !== l.uf ? 'opacity-40' : ''}`}
-                  style={{ width: `${Math.max(1, (l.quantidade / maximo) * 100)}%` }}
-                />
-              </span>
-              <span className="w-10 text-right font-mono text-xs">{l.quantidade}</span>
-              {foco === l.uf && (
-                <span
-                  role="tooltip"
-                  className="absolute left-10 -top-7 z-10 whitespace-nowrap px-2 py-1 text-[11px] rounded border border-borda bg-superficie shadow"
-                >
-                  {l.uf} · {l.quantidade} licitação(ões) · {moeda(l.valor)}
-                </span>
-              )}
-            </li>
-          ))}
-        </ul>
+        <MapaBrasil porUf={linhas} aoClicarUf={irParaUf} />
       )}
     </section>
   );

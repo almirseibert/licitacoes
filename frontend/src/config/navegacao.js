@@ -9,7 +9,7 @@ import {
 // Agrupamento inspirado no "Nossas Ferramentas" do ConLicitação (4 blocos), mantendo o
 // Voltage Obsidian: a referência é a lógica de agrupamento, não o visual deles.
 export const CATEGORIAS = [
-  { chave: 'descoberta', rotulo: 'Descoberta', icone: Compass },
+  { chave: 'descoberta', rotulo: 'Dashboard', icone: Compass },
   { chave: 'gestao', rotulo: 'Gestão', icone: ClipboardList },
   { chave: 'inteligencia', rotulo: 'Inteligência', icone: BrainCircuit },
   { chave: 'administracao', rotulo: 'Administração', icone: Settings2 },
