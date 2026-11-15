@@ -407,7 +407,17 @@ Também não: e-mail/WhatsApp reais; MySQL 8.
 **Seção 6b — feito em 14/11/2026 o que é código; o aceite com portal real segue pendente:**
 - [ ] Conferir, portal a portal (BLL, Licitanet, Portal de Compras Públicas, BNC, CELIC-RS), se existe
       consulta pública do chat sem login; onde houver, configurar `config.chat` na fonte e fazer o aceite real.
-      **Não feito**: esta sessão não alcança esses portais.
+      **Sondagem de 15/11/2026** (GET público, User-Agent do painel, 1 requisição por página, sem login),
+      com os hosts liberados na rede da sessão — **nenhum chat público sem login foi encontrado, e nenhuma
+      fonte foi configurada**: **BLL** (200) e **BNC** (200): as páginas públicas não têm consulta de
+      sessão; o "chat" que aparece é o atendimento da própria empresa (BlipChat), não o do pregão.
+      **Portal de Compras Públicas** (200): `/processos` é Angular — a lista nasce por JavaScript, e a regra do
+      projeto é não forçar navegador (cairia em `bloqueado`); o robots.txt devolveu o app, não regras.
+      **Licitanet**: `403` para o próprio robots.txt (o portal recusa o acesso automatizado — respeitado, não
+      se força). **CELIC-RS** (`compras.rs.gov.br`): `301` para `www.compras.rs.gov.br`, que a rede da sessão
+      não liberou — não conferido. **Falta** (precisa de alguém com acesso): um pregão em andamento aberto à
+      mão em cada portal, para ver se a sessão tem URL pública com o chat e quais seletores usa; só então
+      configurar `config.chat`. Até lá, o aceite real da Seção 6 segue **não atendido**.
 - [ ] Mensagem repetida em portal sem hora e com janela rolante pode ser perdida (a chave usa a ocorrência).
       **Deixado de propósito**: corrigir exige saber como o portal real rola a janela e em que ordem lista; sem
       isso, trocar a chave troca uma perda rara por duplicata de alerta frequente. Fazer junto do aceite real.

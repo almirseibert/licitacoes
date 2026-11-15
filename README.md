@@ -415,6 +415,9 @@ entregue em duas partes — 1a em 12/11/2026 e 1b em 13/11/2026:
   **6b (14/11/2026):** alerta por segmento só para assinatura que pode escrever, com uma conferência de plano por
   organização; teste automatizado de isolamento do chat (`testes/chat-isolamento.test.js`). Seguem pendentes a
   conferência portal a portal e a chave de mensagem repetida em portal sem hora (ver o plano).
+  **Sondagem de 15/11/2026:** BLL, BNC e Portal de Compras Públicas respondem 200 mas sem chat público do pregão
+  (BLL/BNC só têm o atendimento da empresa; PCP monta a lista por JavaScript); Licitanet devolve 403; CELIC-RS não
+  foi alcançado. Nenhuma fonte configurada, o aceite real do chat segue **não atendido**.
 - **Seção 16 — Consultor jurídico e Jurídico Fácil, 14/11/2026 (base em MINUTA, sem revisão de advogado; aceite com o advogado pendente).**
   Migração `039`. Tela **Jurídico** (recurso `consultor_juridico`, plano Avançado; limite `ia_juridico_mes` = 300):
   **Consultor** (chat com histórico por pessoa e "novo chat"; a pergunta é gravada como pendente e a tela consulta até a
