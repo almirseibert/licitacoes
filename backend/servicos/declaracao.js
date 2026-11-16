@@ -24,6 +24,14 @@ function porExtenso(data = new Date()) {
   return `${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`;
 }
 
+// ME e EPP têm o mesmo benefício na licitação (LC 123/2006), mas são portes
+// diferentes — e uma EPP assinando "DECLARA que se enquadra como MICROEMPRESA"
+// estaria atestando o porte errado. O texto segue o que está cadastrado em
+// `empresa_perfis.natureza`; LTDA e Outra não têm porte ME/EPP, então a
+// variável fica vazia e a declaração correspondente sai com a lacuna visível
+// (seção 18.1) em vez de inventar um enquadramento que a empresa não tem.
+const PORTE = { ME: 'MICROEMPRESA', EPP: 'EMPRESA DE PEQUENO PORTE' };
+
 function cidadeDoEndereco(endereco) {
   if (!endereco) return null;
   // "Rua X, 123 - Bairro, Lajeado/RS" → "Lajeado"
@@ -56,6 +64,8 @@ function variaveis({ licitacao, perfil }) {
     // Derivadas: entram no texto só quando há dado, sem deixar vírgula solta.
     processo_frase: processo ? `, processo administrativo nº ${processo}` : '',
     municipio_orgao: licitacao.municipio || null,
+    porte: PORTE[perfil.natureza] || null,
+    regime_tributario: perfil.regime || null,
   };
 }
 

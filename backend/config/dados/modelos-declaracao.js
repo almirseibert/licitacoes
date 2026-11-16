@@ -1,4 +1,7 @@
-// Os treze modelos do seed (seção 18.2; os dois últimos, Seção 10 do plano SaaS).
+// Os quinze modelos do seed (seção 18.2; carta_credenciamento e renuncia_vistoria
+// vieram da Seção 10 do plano SaaS; manutencao_habilitacao e simples_nacional
+// entraram depois para cobrir compromisso de habilitação contínua e retenção de
+// tributos — pedidos recorrentes em edital que os treze anteriores não cobriam).
 //
 // São modelos GENÉRICOS, redigidos conforme a Lei 14.133/2021 e a LC 123/2006.
 // Quando o edital traz anexo próprio de declaração, o anexo do edital é que
@@ -51,9 +54,23 @@ Declaração prestada no âmbito da licitação {{modalidade}} nº {{numero_lici
   {
     codigo: 'exclusivo_me',
     titulo: 'Declaração de enquadramento como ME/EPP',
-    corpo: `A empresa {{razao_social}}, inscrita no CNPJ sob o nº {{cnpj}}, por intermédio de seu representante legal, {{representante}}, DECLARA, sob as penas da lei, que se enquadra como MICROEMPRESA nos termos do art. 3º da Lei Complementar nº 123/2006, e que não se enquadra em nenhuma das hipóteses de exclusão previstas no § 4º do mesmo artigo.
+    corpo: `A empresa {{razao_social}}, inscrita no CNPJ sob o nº {{cnpj}}, por intermédio de seu representante legal, {{representante}}, DECLARA, sob as penas da lei, que se enquadra como {{porte}} nos termos do art. 3º da Lei Complementar nº 123/2006, e que não se enquadra em nenhuma das hipóteses de exclusão previstas no § 4º do mesmo artigo.
 
 DECLARA, ainda, que pretende usufruir dos benefícios e do tratamento diferenciado previstos nos arts. 42 a 49 da Lei Complementar nº 123/2006 na licitação {{modalidade}} nº {{numero_licitacao}}, promovida por {{orgao}}.`,
+  },
+  {
+    codigo: 'manutencao_habilitacao',
+    titulo: 'Declaração de manutenção das condições de habilitação',
+    corpo: `A empresa {{razao_social}}, inscrita no CNPJ sob o nº {{cnpj}}, por intermédio de seu representante legal, {{representante}}, DECLARA, nos termos do art. 92, XVI, da Lei nº 14.133/2021, que se compromete a manter, durante toda a execução do contrato decorrente da licitação {{modalidade}} nº {{numero_licitacao}}{{processo_frase}}, promovida por {{orgao}}, todas as condições de habilitação e qualificação exigidas na licitação.
+
+DECLARA, ainda, estar ciente de que o descumprimento desta obrigação sujeita a contratada às sanções previstas no edital e na legislação aplicável.`,
+  },
+  {
+    codigo: 'simples_nacional',
+    titulo: 'Declaração de opção pelo Simples Nacional',
+    corpo: `A empresa {{razao_social}}, inscrita no CNPJ sob o nº {{cnpj}}, por intermédio de seu representante legal, {{representante}}, DECLARA, para os fins do art. 4º, §§ 1º e 2º, da Lei Complementar nº 123/2006, que é optante pelo Regime Especial Unificado de Arrecadação de Tributos e Contribuições devidos pelas Microempresas e Empresas de Pequeno Porte (Simples Nacional), de que trata a Lei Complementar nº 123/2006, e que não se encontra em nenhuma das situações de exclusão do regime previstas no art. 17 da mesma lei.
+
+Declaração prestada no âmbito da licitação {{modalidade}} nº {{numero_licitacao}}, promovida por {{orgao}}, para fins de retenção de tributos e emissão de nota fiscal.`,
   },
   {
     codigo: 'fato_impeditivo',

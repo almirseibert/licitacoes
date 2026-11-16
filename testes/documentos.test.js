@@ -83,11 +83,17 @@ test('marco do portal é o já cruzado, para não perder aviso se o worker parar
   assert.equal(p.marco(null), null);
 });
 
-test('declarações: 13 modelos, códigos únicos, com renúncia de vistoria e carta de credenciamento', () => {
-  assert.equal(modelos.length, 13);
-  assert.equal(new Set(modelos.map((m) => m.codigo)).size, 13);
-  for (const c of ['renuncia_vistoria', 'carta_credenciamento']) {
+test('declarações: 15 modelos, códigos únicos, com renúncia de vistoria, carta de credenciamento, manutenção de habilitação e Simples Nacional', () => {
+  assert.equal(modelos.length, 15);
+  assert.equal(new Set(modelos.map((m) => m.codigo)).size, 15);
+  for (const c of ['renuncia_vistoria', 'carta_credenciamento', 'manutencao_habilitacao', 'simples_nacional']) {
     const m = modelos.find((x) => x.codigo === c);
     assert.ok(m && m.corpo.includes('{{razao_social}}') && m.corpo.includes('{{numero_licitacao}}'));
   }
+});
+
+test('declarações: exclusivo_me usa {{porte}} em vez de "MICROEMPRESA" fixo (ME e EPP têm porte diferente)', () => {
+  const m = modelos.find((x) => x.codigo === 'exclusivo_me');
+  assert.ok(m.corpo.includes('{{porte}}'));
+  assert.ok(!m.corpo.includes('MICROEMPRESA'));
 });

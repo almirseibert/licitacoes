@@ -43,3 +43,11 @@ test('data por extenso sai em português', () => {
   assert.match(texto, /de 2026$/);
   assert.match(texto, /mar/i);
 });
+
+test('porte sai de `natureza`: ME e EPP têm texto certo, LTDA/Outra viram lacuna (não têm porte ME/EPP)', () => {
+  const licitacao = { orgao_nome: 'Órgão', modalidade: 'Pregão', chave_externa: '1/2026' };
+  assert.equal(declaracao.variaveis({ licitacao, perfil: { natureza: 'ME' } }).porte, 'MICROEMPRESA');
+  assert.equal(declaracao.variaveis({ licitacao, perfil: { natureza: 'EPP' } }).porte, 'EMPRESA DE PEQUENO PORTE');
+  assert.equal(declaracao.variaveis({ licitacao, perfil: { natureza: 'LTDA' } }).porte, null);
+  assert.equal(declaracao.variaveis({ licitacao, perfil: {} }).porte, null);
+});
