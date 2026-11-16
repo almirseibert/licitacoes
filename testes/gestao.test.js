@@ -78,7 +78,7 @@ test('listas: finalizadas inclui a descartada; gerenciadas não inclui triagem',
   assert.doesNotMatch(ger.onde, /Triagem/);
   assert.match(ger.onde, /l\.descartada = 0/);
   // Lista desconhecida não filtra nada (nem quebra).
-  assert.equal(f.montarFiltros({ pontuacao_min: '0', lista: 'xx' }, {}).onde, 'WHERE l.descartada = 0');
+  assert.equal(f.montarFiltros({ pontuacao_min: '0', lista: 'xx' }, {}).onde, 'WHERE l.descartada = 0 AND l.palavra_casada IS NOT NULL');
 });
 
 test('link público não carrega "por mim" nem a lista', () => {
@@ -86,4 +86,20 @@ test('link público não carrega "por mim" nem a lista', () => {
   assert.equal(publico.por, undefined);
   assert.equal(publico.lista, undefined);
   assert.equal(publico.busca, 'papel');
+});
+
+test('enquadramento: a faixa segue a natureza e o regime declarados', () => {
+  const regras = require('../backend/regras/contrato');
+  const me = regras.enquadramentoDe(300000, { natureza: 'ME', regime: 'Simples Nacional' });
+  assert.equal(me.por_natureza.teto, 360000);
+  assert.equal(me.por_natureza.perto_do_teto, true);
+  assert.equal(me.por_regime.teto, 4800000);
+
+  const epp = regras.enquadramentoDe(1000000, { natureza: 'EPP', regime: 'Lucro Presumido' });
+  assert.equal(epp.por_natureza.teto, 4800000);
+  assert.equal(epp.por_regime.teto, 78000000);
+
+  const real = regras.enquadramentoDe(9000000, { natureza: 'LTDA', regime: 'Lucro Real' });
+  assert.equal(real.por_natureza.aplica, false);
+  assert.equal(real.por_regime.aplica, false);
 });

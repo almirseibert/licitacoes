@@ -1706,6 +1706,24 @@ tiver acesso ao Shell do EasyPanel.
 
 ---
 
+## Quatro ajustes — 16/11/2026
+
+- **Radar só com palavra-chave.** `montarFiltros` (`backend/regras/filtros-radar.js`) sempre exige
+  `palavra_casada IS NOT NULL`, inclusive para favorita e etapa do funil. O CNAE só valida o que a
+  palavra trouxe (penalidade em `aderencia.js`); nunca traz licitação sozinho. Vale também para
+  webhooks, API v1 e link público. **Depois do deploy, rode `npm run repontuar`**, para que o
+  `palavra_casada` de palavras já desativadas seja recalculado.
+- **Só administrador** abre Palavras-chave, Fontes, Órgãos, Integrações e Status: `soAdmin` no menu,
+  guarda de rota em `App.jsx` (`telaPermitida`) e `apenasAdmin` nas rotas. O `GET /api/palavras`
+  continua aberto porque o filtro de Mercado usa a lista.
+- **Meus contratos** mostra o enquadramento declarado: natureza (ME 360 mil, EPP 4,8 mi) e regime
+  (Simples 4,8 mi, Presumido 78 mi, Real sem teto), em `enquadramentoDe` (`regras/contrato.js`).
+  LTDA/Outra e Lucro Real mostram só a receita.
+- **Balão de Alertas** abre abaixo do sino, alinhado à direita, e fecha ao clicar fora ou com Esc.
+
+Verificado: lint, build do frontend e testes novos (radar e enquadramento). Não verificado: aceite
+contra dados reais e o visual no navegador, que pedem banco e login.
+
 ## Próximo passo
 
 As 14 fases da especificação estão entregues, e a revisão de 07/11/2026 fechou o que

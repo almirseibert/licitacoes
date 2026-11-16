@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, obterToken, obterUsuario, obterOrganizacao, guardarSessao, encerrarSessao } from './servicos/api';
-import { TELAS_MERCADO, categoriaDaTela } from './config/navegacao';
+import { TELAS_MERCADO, categoriaDaTela, telaPermitida } from './config/navegacao';
 import BarraSuperior from './componentes/BarraSuperior';
 import SidebarContextual from './componentes/SidebarContextual';
 import Divulgacao from './paginas/Divulgacao';
@@ -70,7 +70,7 @@ function voltarParaRaiz() {
 
 export default function App() {
   const [usuario, setUsuario] = useState(() => (obterToken() ? obterUsuario() : null));
-  const [tela, setTela] = useState('dashboard');
+  const [telaPedida, setTela] = useState('dashboard');
   // Categoria ativa na barra superior (Descoberta/Gestão/Inteligência/Administração);
   // null quando a tela é o Dashboard, que fica fora das categorias.
   const [categoriaAtiva, setCategoriaAtiva] = useState(null);
@@ -82,7 +82,6 @@ export default function App() {
   };
   // A sidebar contextual segue a tela atual, de onde quer que ela mude (clique
   // no menu, num KPI do dashboard, ou na decisão de tela inicial abaixo).
-  useEffect(() => setCategoriaAtiva(categoriaDaTela(tela)), [tela]);
   // Clicar numa categoria na barra superior abre a sidebar contextual sem
   // mudar de tela — só ao clicar num item dela é que `irPara` navega de fato.
   const selecionarCategoria = (chave) => setCategoriaAtiva((atual) => (atual === chave ? null : chave));
@@ -95,6 +94,14 @@ export default function App() {
   // Plano da organização (Seção 3): recursos para o cadeado do menu, situação
   // para o aviso e `superadmin` para o menu de Organizações — tudo do backend.
   const [plano, setPlano] = useState(null);
+  // Guarda de rota (decisão de 16/11/2026): tela de administrador não abre para
+  // quem não administra, nem por atalho ou link interno; cai no Radar. Sem o plano
+  // carregado ainda, trata como não-admin para a tela restrita nem chegar a montar.
+  const tela = telaPermitida(telaPedida, {
+    podeAdministrar: Boolean(plano && plano.pode_administrar),
+    superadmin: Boolean(plano && plano.superadmin),
+  }) ? telaPedida : 'radar';
+  useEffect(() => setCategoriaAtiva(categoriaDaTela(tela)), [tela]);
   // Seção 17: estado do assistente, dos termos e do NPS (tudo vem do backend).
   const [onb, setOnb] = useState(null);
   const [onbPronto, setOnbPronto] = useState(false); // a chamada do assistente terminou (com ou sem sucesso)

@@ -1,5 +1,6 @@
 // Dossiês de concorrente e de órgão (seções 26 e 27), e a consulta de sanções.
 const express = require('express');
+const { apenasAdmin } = require('../middlewares/autenticar');
 const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const escopo = require('../servicos/escopo');
@@ -20,7 +21,7 @@ function lerJson(valor, padrao) {
 }
 
 // POST /api/dossies/agregar — recalcula tudo na hora (mensal no worker).
-rotas.post('/agregar', async (_req, res) => {
+rotas.post('/agregar', apenasAdmin, async (_req, res) => {
   try {
     const r = await dossies.agregarDossies();
     res.json({ ...r, mensagem: `${r.concorrentes} concorrente(s) e ${r.orgaos} órgão(s) recalculados.` });
@@ -31,7 +32,7 @@ rotas.post('/agregar', async (_req, res) => {
 });
 
 // GET /api/dossies/orgaos — a lista, com o filtro de proximidade da seção 27.2.
-rotas.get('/orgaos', async (req, res) => {
+rotas.get('/orgaos', apenasAdmin, async (req, res) => {
   const uf = req.query.uf || null;
   const busca = req.query.busca || null;
 

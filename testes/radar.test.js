@@ -120,3 +120,8 @@ test('link público descarta filtro de decisão da organização e mostra as des
   assert.deepEqual(p, { uf: 'RS', pontuacao_min: '0', incluir_descartadas: '1' });
   assert.doesNotMatch(f.montarFiltros(p).onde, /descartada|pontuacao|favorito|etapa/);
 });
+
+test('o Radar só mostra licitação que casou com palavra-chave, mesmo sem filtro algum', () => {
+  assert.match(f.montarFiltros({}, { organizacaoId: 7 }).onde, /l\.palavra_casada IS NOT NULL/);
+  assert.match(semNota({ pontuacao_min: '0', incluir_descartadas: '1' }).onde, /l\.palavra_casada IS NOT NULL/);
+});

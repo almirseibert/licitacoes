@@ -93,6 +93,11 @@ function montarFiltros(q = {}, contexto = {}) {
   // A lista "finalizadas" inclui a descartada: descartar também encerra.
   if (q.incluir_descartadas !== '1' && q.lista !== 'finalizadas') onde.push('l.descartada = 0');
 
+  // Decisão de 16/11/2026: o Radar só mostra o que casou com uma palavra-chave
+  // cadastrada. O CNAE valida o que a palavra trouxe; nunca traz licitação
+  // sozinho. Vale também para favorita e para etapa do funil.
+  onde.push('l.palavra_casada IS NOT NULL');
+
   if (q.grupo) {
     onde.push('l.grupo = ?');
     valores.push(q.grupo);

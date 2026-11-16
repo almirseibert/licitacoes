@@ -396,6 +396,8 @@ async function receita12m(organizacaoId, perfilId = null) {
     contratos_somados: somado.contratos,
     apurada_em: perfil ? perfil.receita_12m_apurada_em : null,
     natureza_declarada: perfil ? perfil.natureza : null,
+    regime_declarado: perfil ? perfil.regime : null,
+    enquadramento: regras.enquadramentoDe(base, { natureza: perfil && perfil.natureza, regime: perfil && perfil.regime }),
     // Divergência entre o que a empresa declara e a faixa calculada: a
     // declaração precisa acompanhar a realidade (seção 28.3).
     declaracao_desatualizada: Boolean(

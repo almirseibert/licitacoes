@@ -212,6 +212,49 @@ function faixaDe(receita) {
   };
 }
 
+// Tetos por regime tributário. Simples Nacional: LC 123, art. 3º, II. Lucro
+// Presumido: Lei 9.718/98, art. 13 (R$ 78 milhões). Lucro Real não tem teto.
+const TETO_REGIME = {
+  'Simples Nacional': { teto: 4800000, base_legal: 'LC 123/2006, art. 3º, II' },
+  'Lucro Presumido': { teto: 78000000, base_legal: 'Lei 9.718/1998, art. 13' },
+  'Lucro Real': { teto: null, base_legal: null },
+};
+const TETO_NATUREZA = { ME: FAIXAS[0], EPP: FAIXAS[1] };
+
+function medida(tipo, rotulo, teto, receita, baseLegal) {
+  const usado = teto ? receita / teto : null;
+  return {
+    tipo,
+    rotulo,
+    teto,
+    // Sem teto (Lucro Real, LTDA, Outra) a tela mostra só a receita, sem barra.
+    aplica: Boolean(teto),
+    falta: teto ? Math.max(0, Math.round((teto - receita) * 100) / 100) : null,
+    usado: usado === null ? null : Math.round(usado * 1000) / 1000,
+    perto_do_teto: usado !== null && usado >= AVISO_FAIXA,
+    passou_do_teto: usado !== null && usado > 1,
+    base_legal: baseLegal,
+  };
+}
+
+/**
+ * A faixa que vale para o enquadramento declarado da empresa: o da natureza
+ * (ME/EPP, LC 123) e o do regime tributário. Só o que se aplica aparece com
+ * teto; natureza LTDA/Outra e Lucro Real ficam sem barra, só com a receita.
+ */
+function enquadramentoDe(receita, { natureza = null, regime = null } = {}) {
+  const valor = Number(receita || 0);
+  const doRegime = TETO_REGIME[regime] || { teto: null, base_legal: null };
+  const daNatureza = TETO_NATUREZA[natureza] || null;
+  return {
+    natureza: natureza || null,
+    regime: regime || null,
+    por_natureza: medida('natureza', daNatureza ? daNatureza.rotulo : natureza || 'Não informada',
+      daNatureza ? daNatureza.teto : null, valor, daNatureza ? 'LC 123/2006, art. 3º' : null),
+    por_regime: medida('regime', regime || 'Não informado', doRegime.teto, valor, doRegime.base_legal),
+  };
+}
+
 module.exports = {
   MARCOS,
   POR_TIPO,
@@ -223,6 +266,8 @@ module.exports = {
   PRAZO_PAGAMENTO_DIAS,
   montarChecklist,
   faixaDe,
+  enquadramentoDe,
+  TETO_REGIME,
   diaDe,
   diasCorridosAntes,
   diasCorridosDepois,

@@ -132,7 +132,7 @@ rotas.delete('/:id', apenasOperadora, async (req, res) => {
 });
 
 // POST /api/fontes/:id/testar — roda a coleta só dela e devolve o que veio, SEM gravar.
-rotas.post('/:id/testar', async (req, res) => {
+rotas.post('/:id/testar', exigirPapel('admin'), async (req, res) => {
   try {
     const resultado = await coletarFonte({
       fonteId: Number(req.params.id),
@@ -178,7 +178,7 @@ rotas.post('/coletar-todas', apenasOperadora, async (req, res) => {
   }
 });
 
-rotas.get('/execucoes', async (_req, res) => {
+rotas.get('/execucoes', exigirPapel('admin'), async (_req, res) => {
   try {
     const [linhas] = await pool.query(
       `SELECT e.*, f.nome AS fonte_nome

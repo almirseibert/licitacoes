@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Bell, Check, AlertTriangle } from 'lucide-react';
 import { api } from '../servicos/api';
 import { dataHora } from '../servicos/formato';
@@ -11,6 +11,17 @@ import { dataHora } from '../servicos/formato';
 export default function Alertas({ aoAbrirLicitacao }) {
   const [dados, setDados] = useState({ dados: [], nao_lidos: 0 });
   const [aberto, setAberto] = useState(false);
+  const raiz = useRef(null);
+
+  // Fecha ao clicar fora ou com Esc: o balão não pode ficar preso na tela.
+  useEffect(() => {
+    if (!aberto) return undefined;
+    const fora = (e) => { if (raiz.current && !raiz.current.contains(e.target)) setAberto(false); };
+    const esc = (e) => { if (e.key === 'Escape') setAberto(false); };
+    document.addEventListener('mousedown', fora);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', fora); document.removeEventListener('keydown', esc); };
+  }, [aberto]);
   const [erro, setErro] = useState(null);
 
   const carregar = () =>
@@ -47,10 +58,11 @@ export default function Alertas({ aoAbrirLicitacao }) {
   const corDe = (a) => POR_NIVEL[a.nivel] || CORES[a.tipo] || 'text-texto';
 
   return (
-    <div className="relative">
+    <div className="relative" ref={raiz}>
       <button
         onClick={() => setAberto(!aberto)}
-        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-texto-suave hover:text-texto border-l-2 border-transparent"
+        aria-expanded={aberto}
+        className="flex items-center gap-2 px-3 py-2 text-sm text-texto-suave hover:text-texto"
       >
         <span className="relative">
           <Bell size={16} />
@@ -60,12 +72,12 @@ export default function Alertas({ aoAbrirLicitacao }) {
         </span>
         <span className="hidden md:inline">Alertas</span>
         {dados.nao_lidos > 0 && (
-          <span className="hidden md:inline ml-auto font-mono text-[11px] text-voltagem">{dados.nao_lidos}</span>
+          <span className="hidden md:inline font-mono text-[11px] text-voltagem">{dados.nao_lidos}</span>
         )}
       </button>
 
       {aberto && (
-        <div className="absolute left-full bottom-0 ml-2 w-96 max-h-[70vh] overflow-auto bg-superficie border border-borda rounded shadow-xl z-30">
+        <div className="absolute right-0 top-full mt-2 w-96 max-w-[calc(100vw-1rem)] max-h-[70vh] overflow-auto bg-superficie border border-borda rounded shadow-xl z-50">
           <div className="px-3 py-2 border-b border-borda flex items-center gap-2 sticky top-0 bg-superficie">
             <span className="text-xs uppercase tracking-wide text-texto-suave">
               Alertas {dados.nao_lidos > 0 && `· ${dados.nao_lidos} não lidos`}

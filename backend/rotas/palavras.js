@@ -2,6 +2,7 @@
 // mais o "Simular", que testa um termo antes de ativá-lo.
 const express = require('express');
 const { exigirLimite } = require('../servicos/limites');
+const { apenasAdmin } = require('../middlewares/autenticar');
 const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const { coletarFonte } = require('../jobs/coletar');
@@ -76,7 +77,7 @@ function limpar(corpo, { exigirTudo }) {
   return campos;
 }
 
-rotas.post('/', exigirLimite('palavras_chave'), async (req, res) => {
+rotas.post('/', apenasAdmin, exigirLimite('palavras_chave'), async (req, res) => {
   try {
     const campos = limpar(req.body || {}, { exigirTudo: true });
     campos.organizacao_id = req.organizacaoId;
@@ -92,7 +93,7 @@ rotas.post('/', exigirLimite('palavras_chave'), async (req, res) => {
   }
 });
 
-rotas.patch('/:id', async (req, res) => {
+rotas.patch('/:id', apenasAdmin, async (req, res) => {
   try {
     const campos = limpar(req.body || {}, { exigirTudo: false });
     const colunas = Object.keys(campos);
@@ -112,7 +113,7 @@ rotas.patch('/:id', async (req, res) => {
   }
 });
 
-rotas.delete('/:id', async (req, res) => {
+rotas.delete('/:id', apenasAdmin, async (req, res) => {
   try {
     const [r] = await pool.query(
       'DELETE FROM palavras_chave WHERE id = ? AND organizacao_id = ?',
@@ -128,7 +129,7 @@ rotas.delete('/:id', async (req, res) => {
 });
 
 // ---------------------------------------------------------- palavras excluídas
-rotas.post('/excluidas', async (req, res) => {
+rotas.post('/excluidas', apenasAdmin, async (req, res) => {
   try {
     const termo = String((req.body && req.body.termo) || '').trim().slice(0, 160);
     if (!termo) return res.status(400).json({ erro: 'Informe o termo a ignorar.' });
@@ -148,7 +149,7 @@ rotas.post('/excluidas', async (req, res) => {
   }
 });
 
-rotas.patch('/excluidas/:id', async (req, res) => {
+rotas.patch('/excluidas/:id', apenasAdmin, async (req, res) => {
   try {
     const campos = {};
     if (req.body && 'termo' in req.body) campos.termo = String(req.body.termo).trim().slice(0, 160);
@@ -168,7 +169,7 @@ rotas.patch('/excluidas/:id', async (req, res) => {
   }
 });
 
-rotas.delete('/excluidas/:id', async (req, res) => {
+rotas.delete('/excluidas/:id', apenasAdmin, async (req, res) => {
   try {
     const [r] = await pool.query(
       'DELETE FROM palavras_excluidas WHERE id = ? AND organizacao_id = ?',
@@ -189,7 +190,7 @@ rotas.delete('/excluidas/:id', async (req, res) => {
  *   `no_portal`  quanto o termo traria agora, buscando de verdade (sem gravar);
  *   `ja_no_radar` quanto do que já está gravado casaria com ele.
  */
-rotas.post('/simular', async (req, res) => {
+rotas.post('/simular', apenasAdmin, async (req, res) => {
   try {
     const termo = String((req.body && req.body.termo) || '').trim();
     if (!termo) return res.status(400).json({ erro: 'Informe o termo a simular.' });

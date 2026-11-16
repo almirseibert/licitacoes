@@ -124,7 +124,10 @@ export default function Contratos({ aoAbrir }) {
 
 /** Faturado em 12 meses, faixa atual e quanto falta para a próxima (seção 28.4). */
 function Faixa({ receita }) {
-  const pct = receita.usado_da_faixa === null ? null : Math.min(1, receita.usado_da_faixa);
+  const enq = receita.enquadramento;
+  // Só o que vale para a empresa: natureza e regime declarados. Cada um com
+  // teto vira uma barra; sem teto (Lucro Real, LTDA, Outra) fica só a receita.
+  const medidas = enq ? [enq.por_natureza, enq.por_regime].filter((m) => m.aplica) : [];
 
   return (
     <div className="border border-borda rounded p-3 bg-superficie/40 max-w-4xl">
@@ -134,33 +137,45 @@ function Faixa({ receita }) {
           <p className="font-mono text-lg text-voltagem">{moedaExata(receita.receita)}</p>
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-widest text-texto-suave">Faixa atual</p>
-          <p className="font-mono text-lg">{receita.faixa === 'acima' ? 'acima da EPP' : receita.faixa}</p>
+          <p className="text-[10px] uppercase tracking-widest text-texto-suave">Natureza</p>
+          <p className="font-mono text-lg">{enq && enq.natureza ? enq.natureza : '—'}</p>
         </div>
         <div>
-          <p className="text-[10px] uppercase tracking-widest text-texto-suave">
-            Falta para {receita.proxima || 'sair da faixa'}
-          </p>
-          <p className="font-mono text-lg">
-            {receita.falta_para_proxima === null ? '—' : moedaExata(receita.falta_para_proxima)}
-          </p>
+          <p className="text-[10px] uppercase tracking-widest text-texto-suave">Regime tributário</p>
+          <p className="font-mono text-lg">{enq && enq.regime ? enq.regime : '—'}</p>
         </div>
       </div>
 
-      {pct !== null && (
-        <div className="mt-3">
-          <div className="h-1.5 bg-realce/[0.06] rounded overflow-hidden">
-            <div
-              className={`h-full ${receita.perto_do_teto ? 'bg-atencao' : 'bg-voltagem'}`}
-              style={{ width: `${(pct * 100).toFixed(1)}%` }}
-            />
-          </div>
-          <p className="mt-1 text-[11px] text-texto-suave font-mono">
-            {(pct * 100).toFixed(1)}% do teto de {receita.faixa} ({moeda(receita.teto)})
-            {receita.perto_do_teto && <span className="text-atencao"> · passou de 80%</span>}
-          </p>
-        </div>
+      {medidas.length === 0 && (
+        <p className="mt-3 text-[11px] text-texto-suave">
+          Este enquadramento não tem teto de faixa: o painel mostra só a receita.
+        </p>
       )}
+
+      {medidas.map((m) => {
+        const pct = Math.min(1, m.usado);
+        return (
+          <div key={m.tipo} className="mt-3">
+            <div className="flex justify-between text-[11px] text-texto-suave mb-1">
+              <span>{m.tipo === 'natureza' ? `Faixa de ${m.rotulo}` : `Teto do ${m.rotulo}`}</span>
+              <span className="font-mono">
+                {m.passou_do_teto ? 'acima do teto' : `falta ${moedaExata(m.falta)}`}
+              </span>
+            </div>
+            <div className="h-1.5 bg-realce/[0.06] rounded overflow-hidden">
+              <div
+                className={`h-full ${m.perto_do_teto ? 'bg-atencao' : 'bg-voltagem'}`}
+                style={{ width: `${(pct * 100).toFixed(1)}%` }}
+              />
+            </div>
+            <p className="mt-1 text-[11px] text-texto-suave font-mono">
+              {(m.usado * 100).toFixed(1)}% do teto ({moeda(m.teto)})
+              {m.perto_do_teto && <span className="text-atencao"> · passou de 80%</span>}
+              {m.base_legal && <span> · {m.base_legal}</span>}
+            </p>
+          </div>
+        );
+      })}
 
       {receita.declaracao_desatualizada && (
         <p className="mt-2 px-2 py-1.5 text-[11px] border border-erro/40 text-erro rounded bg-erro/5">
@@ -172,7 +187,7 @@ function Faixa({ receita }) {
       <p className="mt-2 flex items-start gap-1.5 text-[11px] text-texto-suave">
         <Info size={12} className="shrink-0 mt-0.5" />
         {receita.ressalva} Pelo painel passaram {moedaExata(receita.receita_painel)} em{' '}
-        {receita.contratos_somados} contrato(s). {receita.base_legal}.
+        {receita.contratos_somados} contrato(s).
       </p>
     </div>
   );

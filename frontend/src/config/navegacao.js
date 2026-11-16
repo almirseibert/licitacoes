@@ -25,8 +25,8 @@ export const TELAS = [
   { chave: 'boletins', rotulo: 'Boletins', icone: Newspaper, recurso: 'boletim', categoria: 'descoberta', grupo: 'Oportunidades' },
   { chave: 'oportunidades', rotulo: 'Oportunidades', icone: Sparkles, recurso: 'estrategicas', categoria: 'descoberta', grupo: 'Oportunidades' },
 
-  { chave: 'fontes', rotulo: 'Fontes', icone: Database, categoria: 'descoberta', grupo: 'Busca e configuração' },
-  { chave: 'palavras', rotulo: 'Palavras-chave', icone: Tags, categoria: 'descoberta', grupo: 'Busca e configuração' },
+  { chave: 'fontes', rotulo: 'Fontes', icone: Database, soAdmin: true, categoria: 'descoberta', grupo: 'Busca e configuração' },
+  { chave: 'palavras', rotulo: 'Palavras-chave', icone: Tags, soAdmin: true, categoria: 'descoberta', grupo: 'Busca e configuração' },
   { chave: 'calendario', rotulo: 'Calendário', icone: CalendarRange, categoria: 'descoberta', grupo: 'Busca e configuração' },
   { chave: 'precos', rotulo: 'Preço de referência', icone: TrendingDown, recurso: 'historico', categoria: 'descoberta', grupo: 'Busca e configuração' },
 
@@ -41,7 +41,7 @@ export const TELAS = [
   { chave: 'acompanhamentos', rotulo: 'Acompanhamentos', icone: BellRing, recurso: 'acompanhamentos', categoria: 'gestao', grupo: 'Acompanhamento' },
   // Seção 6: chat do pregão, onde o portal publica sem login.
   { chave: 'monitor_chat', rotulo: 'Monitor de chat', icone: MessagesSquare, recurso: 'acompanhamentos', categoria: 'gestao', grupo: 'Acompanhamento' },
-  { chave: 'orgaos', rotulo: 'Órgãos', icone: Landmark, recurso: 'concorrentes', categoria: 'gestao', grupo: 'Acompanhamento' },
+  { chave: 'orgaos', rotulo: 'Órgãos', icone: Landmark, recurso: 'concorrentes', soAdmin: true, categoria: 'gestao', grupo: 'Acompanhamento' },
 
   { chave: 'cofre', rotulo: 'Documentos', icone: FolderLock, categoria: 'gestao', grupo: 'Documentos' },
   { chave: 'modelos', rotulo: 'Declarações', icone: FileSignature, categoria: 'gestao', grupo: 'Documentos' },
@@ -59,7 +59,7 @@ export const TELAS = [
 
   { chave: 'equipe', rotulo: 'Equipe', icone: Users, categoria: 'administracao', grupo: 'Conta' },
   // Seção 14: token de API e webhook de novas oportunidades.
-  { chave: 'integracoes', rotulo: 'Integrações', icone: Plug, recurso: 'api', categoria: 'administracao', grupo: 'Conta' },
+  { chave: 'integracoes', rotulo: 'Integrações', icone: Plug, recurso: 'api', soAdmin: true, categoria: 'administracao', grupo: 'Conta' },
   { chave: 'configuracoes', rotulo: 'Configurações', icone: SlidersHorizontal, categoria: 'administracao', grupo: 'Conta' },
 
   { chave: 'assinatura', rotulo: 'Assinatura', icone: CreditCard, categoria: 'administracao', grupo: 'Plano' },
@@ -68,7 +68,7 @@ export const TELAS = [
   // Seção 17: onboarding, ajuda e suporte, status, privacidade e auditoria.
   { chave: 'primeiros_passos', rotulo: 'Primeiros passos', icone: Rocket, categoria: 'administracao', grupo: 'Suporte' },
   { chave: 'ajuda', rotulo: 'Ajuda', icone: LifeBuoy, categoria: 'administracao', grupo: 'Suporte' },
-  { chave: 'status', rotulo: 'Status', icone: Activity, categoria: 'administracao', grupo: 'Suporte' },
+  { chave: 'status', rotulo: 'Status', icone: Activity, soAdmin: true, categoria: 'administracao', grupo: 'Suporte' },
   { chave: 'privacidade', rotulo: 'Privacidade e dados', icone: ShieldCheck, categoria: 'administracao', grupo: 'Suporte' },
 
   { chave: 'auditoria', rotulo: 'Auditoria', icone: History, soAdmin: true, categoria: 'administracao', grupo: 'Sistema' },
@@ -83,4 +83,11 @@ export const TELAS_MERCADO = { mercado_contratos: 'contratos', mercado_atas: 'at
 export function categoriaDaTela(chave) {
   const tela = TELAS.find((t) => t.chave === chave);
   return tela ? tela.categoria : null;
+}
+
+// Telas restritas: usadas pelo menu e pela guarda de rota do App (decisão de 16/11/2026).
+export function telaPermitida(chave, { podeAdministrar, superadmin }) {
+  const tela = TELAS.find((t) => t.chave === chave);
+  if (!tela) return true;
+  return (!tela.soAdmin || podeAdministrar) && (!tela.soSuperadmin || superadmin);
 }
