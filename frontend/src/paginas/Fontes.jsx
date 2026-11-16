@@ -45,6 +45,10 @@ export default function Fontes() {
     }
   };
 
+  // Espera em milissegundos entre cada conferência depois de enfileirar uma coleta de verdade
+  // (diferente de "testar", que já volta com o resultado — ver api.testarFonte).
+  const ESPERAS_APOS_ENFILEIRAR_MS = [2000, 3000, 5000, 8000, 12000];
+
   const agir = async (fonte, chamada, rotulo) => {
     setOcupada(`${rotulo}:${fonte.id}`);
     setAviso(null);
@@ -54,6 +58,17 @@ export default function Fontes() {
       if (rotulo === 'testar') setTeste({ fonte, ...r });
       else setAviso(r.mensagem);
       await carregar();
+
+      // "Coletar agora" só enfileira (202): o resultado de verdade ("ok: 12
+      // encontradas" ou o erro) só aparece na linha depois que o worker rodar o
+      // job. Sem isto, o botão parece não ter feito nada até alguém atualizar a
+      // tela na mão — exatamente a reclamação de quem usa.
+      if (rotulo === 'coletar') {
+        for (const espera of ESPERAS_APOS_ENFILEIRAR_MS) {
+          await new Promise((resolve) => setTimeout(resolve, espera));
+          await carregar();
+        }
+      }
     } catch (e) {
       setErro(e.message);
     } finally {
