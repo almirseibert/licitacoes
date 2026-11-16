@@ -17,6 +17,7 @@ import Proposta from './Proposta';
 import Concorrentes from './Concorrentes';
 import Tarefas from './Tarefas';
 import Anexos from './Anexos';
+import ChatLicitacao from '../componentes/ChatLicitacao';
 
 // As oito etapas da seção 10 — as mesmas de regras/funil.js no backend.
 // 'Documentação' e 'Resultado' eram de um rascunho anterior e o backend recusa:
@@ -189,6 +190,7 @@ export default function Detalhe({ id, onFechar, aoIr = null }) {
                   ['tarefas', 'Tarefas'],
                   ['historico', 'Anotações'],
                   ['anexos', 'Anexos'],
+                  ['chat', 'Chat'],
                   ['concorrentes', 'Resultados'],
                   // Exigência do edital × documento do cofre: o diferencial.
                   ['exigencias', 'Habilitação'],
@@ -231,6 +233,7 @@ export default function Detalhe({ id, onFechar, aoIr = null }) {
               {aba === 'exigencias' && <Exigencias id={id} aoCotarSeguro={aoIr ? () => aoIr('servicos', { servico: 'seguro_garantia', licitacao_id: id }) : null} />}
               {aba === 'tarefas' && <Tarefas licitacaoId={id} equipe={equipe} />}
               {aba === 'anexos' && <Anexos id={id} />}
+              {aba === 'chat' && <ChatLicitacao id={id} />}
               {aba === 'preco' && <Preco id={id} />}
               {aba === 'concorrentes' && <Concorrentes id={id} />}
               {aba === 'proposta' && <Proposta id={id} />}
