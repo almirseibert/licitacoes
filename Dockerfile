@@ -20,9 +20,13 @@ COPY worker/ ./worker/
 COPY --from=frontend /app/frontend/dist ./frontend/dist
 RUN mkdir -p /dados/editais /dados/empresa /dados/pacotes
 EXPOSE 4000
-# API:    migra e sobe     (comando padrão). `migrar` é idempotente (tabela `migracoes`):
+# API:    migra, semeia e sobe (comando padrão). `migrar` é idempotente (tabela `migracoes`):
 #         a cada implantação aplica só as migrações novas; se falhar, a API não sobe
 #         e o erro fica no Log do serviço, em vez de login e cadastro caírem em 500.
-# Worker: npm run worker   (mesmo Dockerfile, só muda o comando no EasyPanel; não migra,
-#         para os dois não correrem a mesma migração ao mesmo tempo)
-CMD ["sh", "-c", "npm run migrar && npm run api"]
+#         `semear` também é idempotente (backend/config/semear.js): só insere o que falta
+#         e só atualiza fonte que o usuário nunca configurou (config = '{}') — nunca
+#         sobrescreve o que foi editado na tela de Fontes. Assim, uma fonte nova ou
+#         corrigida no código chega sozinha em produção a cada deploy, sem passo manual.
+# Worker: npm run worker       (mesmo Dockerfile, só muda o comando no EasyPanel; não migra
+#         nem semeia, para os três serviços não disputarem a mesma escrita ao subir juntos)
+CMD ["sh", "-c", "npm run migrar && npm run semear && npm run api"]
