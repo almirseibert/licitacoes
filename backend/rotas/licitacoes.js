@@ -1,5 +1,6 @@
 // GET/PATCH /api/licitacoes — alimenta a tela Radar (seções 11.1 e 13).
 const fs = require('fs');
+const path = require('path');
 const express = require('express');
 const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
@@ -647,6 +648,22 @@ rotas.get('/:id/arquivos/:arqId', async (req, res) => {
 
     const absoluto = servicoArquivos.caminhoAbsoluto(arquivo.caminho);
     if (!fs.existsSync(absoluto)) {
+      // O banco diz "ok" e o arquivo não está lá: ou foi mesmo apagado por fora
+      // do painel, ou este container enxerga um volume diferente do que baixou
+      // (API e worker em /dados que não é o mesmo — ver "Deploy no EasyPanel" no
+      // README). O log tem o que falta para distinguir os dois: se a PASTA
+      // também não existe, é o segundo caso.
+      let pastaExiste = null;
+      try {
+        pastaExiste = fs.existsSync(path.dirname(absoluto));
+      } catch {
+        pastaExiste = null;
+      }
+      console.error(
+        `Arquivo ${arquivo.id} da licitação ${req.params.id} marcado 'ok' no banco, mas ausente no disco deste serviço. ` +
+          `Caminho: ${absoluto} · pasta existe: ${pastaExiste}. Se a pasta também não existe, confira se DIR_DADOS aponta ` +
+          `para o MESMO volume nos serviços api e worker.`
+      );
       return res.status(410).json({ erro: 'O arquivo não está mais no volume. Baixe a documentação de novo.' });
     }
 
