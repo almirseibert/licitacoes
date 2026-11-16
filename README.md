@@ -1586,7 +1586,7 @@ atrás de login, SPA ou bloqueio de bot — exatamente o que a seção 5.4 proí
 
 ---
 
-## Seis problemas reportados em produção — 16/11/2026
+## Sete problemas reportados em produção — 16/11/2026
 
 Depois do deploy de 15/11, a tela real em produção (`licitacoes.studiomythos.com.br`)
 mostrou seis problemas. Cada um foi investigado contra o código e, onde a causa exigia
@@ -1669,12 +1669,33 @@ dado de produção que esta sessão não tinha como ler (sem acesso ao MySQL nem
    um portal de disputa específico que publica o chat sem login, é questão de confirmar com
    uma requisição real e configurar — a mesma regra do item 3 se aplica aqui.
 
+7. **UX do Radar: filtros ocupando espaço demais, Objeto apertado, sem jeito de descartar
+   direto da lista** — a partir de print da tela real, três ajustes em
+   [frontend/src/componentes/Filtros.jsx](frontend/src/componentes/Filtros.jsx) e
+   [frontend/src/paginas/Radar.jsx](frontend/src/paginas/Radar.jsx):
+   - a barra de filtros (busca, grupo, UF, modalidade, pontuação mín., prazo, valor,
+     marcadores, ordenação) nasce recolhida atrás de um botão **Filtros** (com contador de
+     quantos estão ligados), e lembra a preferência de quem usa em `localStorage` — a área
+     que antes ficava sempre aberta devolve a altura para a listagem.
+   - na tabela, Órgão, Cidade/UF, Modalidade, Valor, Fecha em e Plataforma encolheram
+     (`table-fixed` + `truncate` com `title` no texto completo), e Objeto passou a usar o
+     espaço que sobrou — a linha ficou mais baixa e mais licitações cabem sem rolar.
+   - um botão de lixeira por linha (tabela e cards) descarta a licitação na hora, sem
+     pedir motivo: chama a mesma rota do Funil (`PATCH /api/licitacoes/:id`) com
+     `{ etapa: 'Descartada', motivo_descarte: 'outro' }`, para a licitação sumir do Radar
+     *e* continuar valendo no ranking de bloqueios da seção 20 (sob "Outro motivo"), em vez
+     de ficar com motivo em branco.
+
 **O que não deu para testar contra produção nesta sessão:** esta sessão roda num container
 isolado, sem o `.env` de produção nem acesso ao MySQL ou ao volume `/dados` do EasyPanel —
 por isso os itens 1, 2 e parte do 3 foram resolvidos por leitura de código e ficaram com uma
 ação de conferência explícita acima, em vez de "corrigido e confirmado com número medido"
 como a seção 16 pede. `npm run lint && npm test` passam (30 testes, sem banco e sem rede);
-o teste contra dado real de produção fica para quem tiver acesso ao Shell do EasyPanel.
+o item 7 foi conferido visualmente com Playwright contra um Radar montado com dados
+simulados (sem banco disponível aqui) — confirmado que o painel nasce fechado, abre com um
+clique, a tabela redistribuiu a largura das colunas e o botão de descarte remove a linha e
+dispara o PATCH certo; o teste contra dado real de produção, para os três, fica para quem
+tiver acesso ao Shell do EasyPanel.
 
 ---
 

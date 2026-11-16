@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ExternalLink, Gavel, LayoutGrid, List, Loader2, RefreshCw, Star, Download, FileSpreadsheet,
+  ExternalLink, Gavel, LayoutGrid, List, Loader2, RefreshCw, Star, Download, FileSpreadsheet, Trash2,
 } from 'lucide-react';
 import { api } from '../servicos/api';
 import { moeda, dataHora, resumir, faixaPontuacao } from '../servicos/formato';
@@ -117,6 +117,22 @@ export default function Radar({ abrir = null, aoAbrir = null, aoIr = null, filtr
     } catch (e) {
       setAviso(e.message);
       setDados((atual) => atual.map((l) => (l.id === licitacao.id ? { ...l, favorito: licitacao.favorito } : l)));
+    }
+  };
+
+  // Descarte rápido do Radar (seção 10): um clique, sem perguntar motivo — usa
+  // o motivo coringa "outro" para a licitação continuar valendo no ranking de
+  // bloqueios (seção 20) e aparecer certo no Funil, em vez de ficar sem motivo.
+  const descartar = async (licitacao) => {
+    setDados((atual) => atual.filter((l) => l.id !== licitacao.id));
+    try {
+      await api.atualizarLicitacao(licitacao.id, { etapa: 'Descartada', motivo_descarte: 'outro' });
+    } catch (e) {
+      setAviso(e.message);
+      setDados((atual) => {
+        if (atual.some((l) => l.id === licitacao.id)) return atual;
+        return [...atual, licitacao];
+      });
     }
   };
 
@@ -269,13 +285,13 @@ export default function Radar({ abrir = null, aoAbrir = null, aoIr = null, filtr
         )}
 
         {dados.length > 0 && visao === 'tabela' && (
-          <Tabela dados={dados} onAbrir={setAberta} onFavorito={alternarFavorito} />
+          <Tabela dados={dados} onAbrir={setAberta} onFavorito={alternarFavorito} onDescartar={descartar} />
         )}
 
         {dados.length > 0 && visao === 'cards' && (
           <div className="p-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {dados.map((l) => (
-              <Card key={l.id} licitacao={l} onAbrir={setAberta} onFavorito={alternarFavorito} />
+              <Card key={l.id} licitacao={l} onAbrir={setAberta} onFavorito={alternarFavorito} onDescartar={descartar} />
             ))}
           </div>
         )}
@@ -361,30 +377,32 @@ function SeloBeneficio({ valor }) {
   );
 }
 
-function Tabela({ dados, onAbrir, onFavorito }) {
+function Tabela({ dados, onAbrir, onFavorito, onDescartar }) {
   return (
-    <table className="w-full text-sm tabela-densa">
+    <table className="w-full text-sm tabela-densa table-fixed">
       <thead>
         <tr>
-          <th className="w-12">Pont.</th>
+          <th className="w-10">Pont.</th>
           <th>Objeto</th>
-          <th className="w-48">Órgão</th>
-          <th className="w-24">Cidade/UF</th>
-          <th className="w-32">Modalidade</th>
-          <th className="w-28 text-right">Valor</th>
-          <th className="w-24">Fecha em</th>
-          <th className="w-28">Plataforma</th>
-          <th className="w-16"></th>
+          <th className="w-36">Órgão</th>
+          <th className="w-20">Cidade/UF</th>
+          <th className="w-24">Modalidade</th>
+          <th className="w-24 text-right">Valor</th>
+          <th className="w-20">Fecha em</th>
+          <th className="w-24">Plataforma</th>
+          <th className="w-20"></th>
         </tr>
       </thead>
       <tbody>
         {dados.map((l) => {
           return (
             <tr key={l.id} className="cursor-pointer" onClick={() => onAbrir(l.id)}>
-              <td><Anel pontuacao={l.pontuacao} tamanho={34} /></td>
-              <td>
+              <td><Anel pontuacao={l.pontuacao} tamanho={30} /></td>
+              <td className="overflow-hidden">
                 <div className="flex items-start gap-2">
-                  <span className="text-texto leading-snug">{resumir(l.objeto, 150)}</span>
+                  <span className="text-texto leading-snug truncate block" title={l.objeto}>
+                    {resumir(l.objeto, 180)}
+                  </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 mt-0.5">
                   <Etiquetas licitacao={l} />
@@ -395,14 +413,14 @@ function Tabela({ dados, onAbrir, onFavorito }) {
                   )}
                 </div>
               </td>
-              <td className="text-texto-suave text-xs">{resumir(l.orgao_nome, 60)}</td>
-              <td className="text-texto-suave text-xs">
+              <td className="text-texto-suave text-xs truncate" title={l.orgao_nome}>{resumir(l.orgao_nome, 40)}</td>
+              <td className="text-texto-suave text-xs truncate">
                 {l.municipio ? `${l.municipio}/${l.uf || ''}` : l.uf || '—'}
               </td>
-              <td className="text-texto-suave text-xs">{l.modalidade || '—'}</td>
+              <td className="text-texto-suave text-xs truncate" title={l.modalidade}>{l.modalidade || '—'}</td>
               <td className="text-right font-mono text-xs">{moeda(l.valor_estimado)}</td>
               <td><Contagem fim={l.fim_propostas} /></td>
-              <td className="text-texto-suave text-xs">{resumir(l.plataforma_disputa, 22)}</td>
+              <td className="text-texto-suave text-xs truncate" title={l.plataforma_disputa}>{resumir(l.plataforma_disputa, 16)}</td>
               <td>
                 <div className="flex items-center gap-1.5 justify-end" onClick={(e) => e.stopPropagation()}>
                   <button
@@ -421,6 +439,13 @@ function Tabela({ dados, onAbrir, onFavorito }) {
                   >
                     <ExternalLink size={14} />
                   </a>
+                  <button
+                    onClick={() => onDescartar(l)}
+                    title="Descartar — não interessa"
+                    className="text-texto-suave hover:text-erro"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </td>
             </tr>
@@ -446,7 +471,7 @@ function SeloDocumentos({ status }) {
   return <span className={`text-[10px] uppercase tracking-wide ${estado[1]}`}>· {estado[0]}</span>;
 }
 
-function Card({ licitacao: l, onAbrir, onFavorito }) {
+function Card({ licitacao: l, onAbrir, onFavorito, onDescartar }) {
   const faixa = faixaPontuacao(l.pontuacao);
   return (
     <div
@@ -459,12 +484,22 @@ function Card({ licitacao: l, onAbrir, onFavorito }) {
           <p className="text-sm leading-snug">{resumir(l.objeto, 140)}</p>
           <p className="text-xs text-texto-suave mt-1">{resumir(l.orgao_nome, 50)}</p>
         </div>
-        <button
-          onClick={(e) => { e.stopPropagation(); onFavorito(l); }}
-          className={l.favorito ? 'text-atencao' : 'text-texto-suave hover:text-texto'}
-        >
-          <Star size={14} fill={l.favorito ? 'currentColor' : 'none'} />
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={(e) => { e.stopPropagation(); onFavorito(l); }}
+            title={l.favorito ? 'Remover dos favoritos' : 'Favoritar'}
+            className={l.favorito ? 'text-atencao' : 'text-texto-suave hover:text-texto'}
+          >
+            <Star size={14} fill={l.favorito ? 'currentColor' : 'none'} />
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onDescartar(l); }}
+            title="Descartar — não interessa"
+            className="text-texto-suave hover:text-erro"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-y-1 text-xs text-texto-suave">
