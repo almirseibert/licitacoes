@@ -1586,6 +1586,98 @@ atrás de login, SPA ou bloqueio de bot — exatamente o que a seção 5.4 proí
 
 ---
 
+## Seis problemas reportados em produção — 16/11/2026
+
+Depois do deploy de 15/11, a tela real em produção (`licitacoes.studiomythos.com.br`)
+mostrou seis problemas. Cada um foi investigado contra o código e, onde a causa exigia
+dado de produção que esta sessão não tinha como ler (sem acesso ao MySQL nem ao volume
+`/dados` do servidor), a causa mais provável fica registrada com o jeito de confirmá-la.
+
+1. **Arquivo baixado mas "não está mais no volume"** — o código de gravação
+   ([backend/jobs/baixar.js](backend/jobs/baixar.js)) e o de leitura
+   ([backend/rotas/licitacoes.js](backend/rotas/licitacoes.js)) usam o mesmo caminho
+   relativo e o mesmo `DIR_DADOS`; não há bug de path nos dois lados. A causa mais provável
+   com o volume intacto (confirmado pelo usuário) é os serviços `licitacoes-api` e
+   `licitacoes-worker` não estarem, de fato, no mesmo volume Docker — o nome igual
+   (`licitacoes-dados`) nos dois *deveria* bastar (ver [IMPLANTACAO.md](IMPLANTACAO.md)),
+   mas isso merece conferência direta: pelo Shell de cada serviço no EasyPanel,
+   `touch /dados/teste-volume.txt` num e `ls /dados/teste-volume.txt` no outro. A rota de
+   download agora grava no log (não na tela — seção da língua do CLAUDE.md) o caminho
+   absoluto tentado e se a pasta da licitação existe, para quem olhar o log do
+   `licitacoes-api` da próxima vez que isto acontecer já ter o que precisa sem reabrir o
+   EasyPanel para descobrir.
+2. **Resumo do edital não gera** — a rota ([backend/rotas/resumo-edital.js](backend/rotas/resumo-edital.js))
+   já recusa de propósito (409) quando não há texto lido do edital, com a mensagem "baixe e
+   leia os arquivos antes". Isso é decorrência direta do item 1: o job `ler_edital` lê do
+   mesmo arquivo que a rota de download não está achando, então sem o arquivo também não
+   há texto para resumir. Resolvido o item 1 (ou rodado `npm run baixar` de novo depois de
+   confirmar o volume), rodar `npm run ler` traz o texto e o resumo passa a gerar — sem
+   mudança de código aqui.
+3. **Fontes sem funcionar / "coletar agora" parecendo não fazer nada**
+   — duas causas, não uma:
+   - a tela de Fontes mostrava "Configure a `url_busca`" para fontes que **já ganharam**
+     `url_busca` no código desta sessão e da de 15/11 (Portal de Compras Públicas) ou
+     adaptador próprio (Compras RS/CELIC — ver a tabela da seção "Fontes nacionais" acima).
+     `npm run semear` só atualiza uma fonte que ainda está "virgem" (`config = '{}'`); quem
+     já tinha essas fontes cadastradas no banco antes dessas mudanças não ganha a
+     atualização sozinho. **Ação pendente em produção:** rodar `npm run semear` de novo
+     depois deste deploy (idempotente, não mexe em fonte que o usuário já configurou de
+     verdade) — e, para as fontes genuinamente sem configuração possível (BLL, Licitanet,
+     BNC e as demais da tabela), a observação já explica o motivo em vez do erro genérico.
+   - o botão "coletar agora" só enfileira o job (resposta 202, "está na fila") — o
+     resultado de verdade só chega depois que o worker processar, e a tela não
+     atualizava sozinha. Corrigido em [frontend/src/paginas/Fontes.jsx](frontend/src/paginas/Fontes.jsx):
+     depois de enfileirar, a tela confere de novo em 2, 5, 10, 18 e 30 segundos, então o
+     resultado aparece na linha sem precisar de F5.
+4. **Clicar numa licitação no Funil não abria nada** — causa real, confirmada no código:
+   [frontend/src/App.jsx](frontend/src/App.jsx) passava `setLicitacaoAberta` direto para o
+   Funil em vez de `abrirLicitacao` (a função que troca para a aba Radar *e* abre a
+   gaveta). Como a gaveta (`Detalhe`) só existe dentro da página Radar, clicar no Funil
+   mudava um estado que nada na tela lia — nenhum erro, nenhum efeito visível. Corrigido:
+   Funil agora usa `abrirLicitacao`, igual a Tarefas, Contratos, Diagnóstico, Órgãos etc.
+   Em Contratos do mercado/Atas/Acompanhamentos ([frontend/src/paginas/Mercado.jsx](frontend/src/paginas/Mercado.jsx))
+   o clique já funcionava (botão "abrir o edital no Radar"), só não cobria o card inteiro;
+   agora o card inteiro é clicável, igual ao Radar, mantendo os links que abrem em nova aba.
+5. **Modelos de declaração** — o seed já tinha treze modelos bons (seção 18.2), cobrindo a
+   maioria do que se pede em edital. Dois ajustes:
+   - `exclusivo_me` dizia sempre "MICROEMPRESA", mesmo para quem está cadastrado como EPP
+     em `empresa_perfis.natureza` — uma EPP assinaria um porte que não é o dela. Agora usa
+     `{{porte}}`, resolvido a partir do cadastro real (ME → "MICROEMPRESA", EPP → "EMPRESA
+     DE PEQUENO PORTE"; LTDA/Outra deixam a lacuna visível, porque de fato não têm porte
+     ME/EPP para declarar).
+   - dois modelos novos: **manutenção das condições de habilitação** (compromisso durante
+     a execução do contrato, art. 92, XVI da Lei 14.133) e **opção pelo Simples Nacional**
+     (pedido separado do enquadramento ME/EPP em bastante edital, para fins de retenção de
+     tributo). [Migração 042](backend/migrations/042_declaracoes_porte.sql) leva as duas
+     mudanças para quem já rodou o seed antes — o seed nunca reescreve modelo de sistema
+     já existente, de propósito (comentário em `semearModelos`), então sem a migração quem
+     já tinha os treze ficaria com o texto velho.
+6. **Chat do pregão** — a infraestrutura já existia quase inteira (seção 6 do plano SaaS):
+   tabela `chat_mensagens`, o catálogo de portais conhecidos (bloqueado/não há/não
+   conferido/configurável) e a tela "Monitor de chat". O que faltava, e que foi feito
+   agora: o chat de **cada licitação** passou a aparecer também na ficha dela (quinta
+   imagem do pedido) — nova aba "Chat" em [frontend/src/paginas/Detalhe.jsx](frontend/src/paginas/Detalhe.jsx),
+   com o mesmo painel do Monitor de chat, extraído para
+   [frontend/src/componentes/ChatLicitacao.jsx](frontend/src/componentes/ChatLicitacao.jsx)
+   para não duplicar. Se o monitor ainda não estava ligado para aquela licitação, a aba
+   agora oferece "Ligar o chat desta licitação" em vez de só mostrar o erro 404. **Pendente,
+   por decisão e não por falta de infraestrutura:** nenhum portal de disputa foi confirmado
+   com consulta pública de chat em HTML simples (a tabela da seção "Fontes nacionais" acima
+   mostra por quê — a maioria está atrás de login, SPA ou bloqueio) — então a situação
+   "configurável" do catálogo (que ligaria a configuração por fonte, nos mesmos moldes do
+   `url_busca` do item 3) segue sem nenhuma fonte real para apontar. Se o usuário souber de
+   um portal de disputa específico que publica o chat sem login, é questão de confirmar com
+   uma requisição real e configurar — a mesma regra do item 3 se aplica aqui.
+
+**O que não deu para testar contra produção nesta sessão:** esta sessão roda num container
+isolado, sem o `.env` de produção nem acesso ao MySQL ou ao volume `/dados` do EasyPanel —
+por isso os itens 1, 2 e parte do 3 foram resolvidos por leitura de código e ficaram com uma
+ação de conferência explícita acima, em vez de "corrigido e confirmado com número medido"
+como a seção 16 pede. `npm run lint && npm test` passam (30 testes, sem banco e sem rede);
+o teste contra dado real de produção fica para quem tiver acesso ao Shell do EasyPanel.
+
+---
+
 ## Próximo passo
 
 As 14 fases da especificação estão entregues, e a revisão de 07/11/2026 fechou o que
