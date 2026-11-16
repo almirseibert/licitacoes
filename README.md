@@ -1685,6 +1685,13 @@ dado de produção que esta sessão não tinha como ler (sem acesso ao MySQL nem
      `{ etapa: 'Descartada', motivo_descarte: 'outro' }`, para a licitação sumir do Radar
      *e* continuar valendo no ranking de bloqueios da seção 20 (sob "Outro motivo"), em vez
      de ficar com motivo em branco.
+   - segunda rodada (a partir de esboço do usuário): o botão **Filtros** subiu para o
+     cabeçalho, ao lado do seletor "todas as listas" (estado aberto/fechado no hook
+     `usePainelFiltros`, ainda lembrado em `localStorage`), e a faixa própria do botão
+     sumiu. Na tabela, as seis colunas viraram duas — `Órgão / Cidade-UF / Modalidade` e
+     `Valor / Fecha em / Plataforma` — empilhadas em 3 linhas com rótulo pequeno em cima de
+     cada valor; o Objeto ganhou a largura que sobrou e mostra a descrição em até 4 linhas
+     (`line-clamp-4`, texto inteiro no `title`).
 
 **O que não deu para testar contra produção nesta sessão:** esta sessão roda num container
 isolado, sem o `.env` de produção nem acesso ao MySQL ou ao volume `/dados` do EasyPanel —

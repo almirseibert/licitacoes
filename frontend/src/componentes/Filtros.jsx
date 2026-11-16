@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Search, SlidersHorizontal, X } from 'lucide-react';
 import FiltrosAvancados from './FiltrosAvancados';
 
@@ -33,50 +33,63 @@ const campo =
   'focus:outline-none focus:border-voltagem/60 placeholder:text-texto-suave/50';
 
 /**
- * Filtros do topo do Radar (seção 11.1). O estado vive no Radar, que salva
- * tudo no localStorage por usuário.
+ * Aberto/fechado do painel de filtros. Nasce fechado para dar mais espaço à
+ * listagem — mas lembra a última escolha de quem usa o painel.
  */
-export default function Filtros({ valores, opcoes, onMudar, onLimpar }) {
-  const mudar = (campoNome) => (evento) => onMudar({ ...valores, [campoNome]: evento.target.value, pagina: 1 });
-  const alternar = (nome) => () => onMudar({ ...valores, [nome]: valores[nome] === '1' ? '' : '1', pagina: 1 });
-  const ligadosAvancados = AVANCADOS.filter((c) => valores[c]).length;
-  const ligados = contarLigados(valores);
-  // Nasce fechado para dar mais espaço à listagem — mas lembra a última
-  // escolha de quem usa o painel.
+export function usePainelFiltros() {
   const [painelAberto, setPainelAberto] = useState(() => {
     try {
-      const salvo = localStorage.getItem(CHAVE_PAINEL_ABERTO);
-      return salvo === null ? false : salvo === '1';
+      return localStorage.getItem(CHAVE_PAINEL_ABERTO) === '1';
     } catch {
       return false;
     }
   });
+
+  const alternarPainel = useCallback(() => {
+    setPainelAberto((atual) => {
+      const novo = !atual;
+      try {
+        localStorage.setItem(CHAVE_PAINEL_ABERTO, novo ? '1' : '0');
+      } catch {
+        // localStorage indisponível (modo privado etc.) — só não lembra a preferência.
+      }
+      return novo;
+    });
+  }, []);
+
+  return [painelAberto, alternarPainel];
+}
+
+/** O botão "Filtros (n)" — mora no cabeçalho do Radar, ao lado das listas. */
+export function BotaoFiltros({ valores, aberto, onAlternar }) {
+  const ligados = contarLigados(valores);
+  return (
+    <button
+      onClick={onAlternar}
+      aria-expanded={aberto}
+      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border text-xs hover:text-texto ${
+        aberto ? 'border-voltagem/60 text-texto' : 'border-borda text-texto-suave'
+      }`}
+    >
+      <SlidersHorizontal size={13} /> Filtros{ligados ? ` (${ligados})` : ''}
+    </button>
+  );
+}
+
+/**
+ * Filtros do topo do Radar (seção 11.1). O estado vive no Radar, que salva
+ * tudo no localStorage por usuário. Só aparece com o painel aberto.
+ */
+export default function Filtros({ valores, opcoes, onMudar, onLimpar, painelAberto }) {
+  const mudar = (campoNome) => (evento) => onMudar({ ...valores, [campoNome]: evento.target.value, pagina: 1 });
+  const alternar = (nome) => () => onMudar({ ...valores, [nome]: valores[nome] === '1' ? '' : '1', pagina: 1 });
+  const ligadosAvancados = AVANCADOS.filter((c) => valores[c]).length;
   const [aberto, setAberto] = useState(ligadosAvancados > 0);
 
-  const alternarPainel = () => {
-    const novo = !painelAberto;
-    setPainelAberto(novo);
-    try {
-      localStorage.setItem(CHAVE_PAINEL_ABERTO, novo ? '1' : '0');
-    } catch {
-      // localStorage indisponível (modo privado etc.) — só não lembra a preferência.
-    }
-  };
+  if (!painelAberto) return null;
 
   return (
     <div className="border-b border-borda bg-obsidiana/80 backdrop-blur sticky top-0 z-20 imprimir-oculto">
-      <div className="px-4 py-2 flex items-center">
-        <button
-          onClick={alternarPainel}
-          aria-expanded={painelAberto}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-borda text-xs text-texto-suave hover:text-texto"
-        >
-          <SlidersHorizontal size={13} /> Filtros{ligados ? ` (${ligados})` : ''}
-        </button>
-      </div>
-
-      {painelAberto && (
-      <>
       <div className="px-4 py-3 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
         <div className="col-span-2 md:col-span-2">
           <label className={rotuloCampo} title='Palavras soltas: todas, em qualquer ordem. Entre aspas: a frase exata.'>
@@ -197,8 +210,6 @@ export default function Filtros({ valores, opcoes, onMudar, onLimpar }) {
       </div>
 
       {aberto && <FiltrosAvancados valores={valores} opcoes={opcoes} onMudar={onMudar} />}
-      </>
-      )}
     </div>
   );
 }

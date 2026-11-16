@@ -6,7 +6,7 @@ import { api } from '../servicos/api';
 import { moeda, dataHora, resumir, faixaPontuacao } from '../servicos/formato';
 import Anel from '../componentes/Anel';
 import Contagem from '../componentes/Contagem';
-import Filtros from '../componentes/Filtros';
+import Filtros, { BotaoFiltros, usePainelFiltros } from '../componentes/Filtros';
 import { Etiquetas, ExpansaoDoCartao, linkDoPortal, PesquisasSalvas, SaidasDoRadar } from '../componentes/RadarExtras';
 import Detalhe from './Detalhe';
 import PorMim from '../componentes/PorMim';
@@ -55,6 +55,7 @@ export default function Radar({ abrir = null, aoAbrir = null, aoIr = null, filtr
   const [erro, setErro] = useState(null);
   const [visao, setVisao] = useState(() => localStorage.getItem('licitacoes.visao') || 'tabela');
   const [aberta, setAberta] = useState(null);
+  const [painelAberto, alternarPainel] = usePainelFiltros();
 
   // O sino de alertas e o funil pedem para abrir uma licitação específica.
   useEffect(() => {
@@ -202,6 +203,7 @@ export default function Radar({ abrir = null, aoAbrir = null, aoIr = null, filtr
             <option value="gerenciadas">gerenciadas</option>
             <option value="finalizadas">finalizadas</option>
           </select>
+          <BotaoFiltros valores={filtros} aberto={painelAberto} onAlternar={alternarPainel} />
         </div>
 
         <div className="ml-auto flex items-center gap-2">
@@ -244,7 +246,7 @@ export default function Radar({ abrir = null, aoAbrir = null, aoIr = null, filtr
         </div>
       </div>
     ),
-    [resumo, visao, carregando, coletando, carregar, exportar, exportando, filtros]
+    [resumo, visao, carregando, coletando, carregar, exportar, exportando, filtros, painelAberto, alternarPainel]
   );
 
   return (
@@ -255,6 +257,7 @@ export default function Radar({ abrir = null, aoAbrir = null, aoIr = null, filtr
         opcoes={opcoes}
         onMudar={setFiltros}
         onLimpar={() => setFiltros(FILTROS_PADRAO)}
+        painelAberto={painelAberto}
       />
 
       {avisosFiltro.map((a) => (
@@ -377,19 +380,30 @@ function SeloBeneficio({ valor }) {
   );
 }
 
+// Um par rótulo/valor da tabela do Radar: rótulo pequeno em cima, valor
+// cortado com "..." (o texto inteiro fica no title).
+function Dado({ rotulo, titulo, linhas = 1, children }) {
+  return (
+    <div className="leading-tight mb-1 last:mb-0">
+      <div className="text-[9px] uppercase tracking-wide text-texto-suave/70">{rotulo}</div>
+      <div className={`text-xs text-texto-suave break-words ${linhas > 1 ? 'line-clamp-2' : 'truncate'}`} title={titulo}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function Tabela({ dados, onAbrir, onFavorito, onDescartar }) {
   return (
     <table className="w-full text-sm tabela-densa table-fixed">
       <thead>
         <tr>
-          <th className="w-10">Pont.</th>
+          <th className="w-12">Pont.</th>
           <th>Objeto</th>
-          <th className="w-36">Órgão</th>
-          <th className="w-20">Cidade/UF</th>
-          <th className="w-24">Modalidade</th>
-          <th className="w-24 text-right">Valor</th>
-          <th className="w-20">Fecha em</th>
-          <th className="w-24">Plataforma</th>
+          {/* Os seis dados em 2 colunas × 3 linhas, rótulo em cima de cada
+              valor — o Objeto fica com a largura que sobra. */}
+          <th className="w-52"></th>
+          <th className="w-36"></th>
           <th className="w-20"></th>
         </tr>
       </thead>
@@ -400,8 +414,8 @@ function Tabela({ dados, onAbrir, onFavorito, onDescartar }) {
               <td><Anel pontuacao={l.pontuacao} tamanho={30} /></td>
               <td className="overflow-hidden">
                 <div className="flex items-start gap-2">
-                  <span className="text-texto leading-snug truncate block" title={l.objeto}>
-                    {resumir(l.objeto, 180)}
+                  <span className="text-texto leading-snug line-clamp-4 break-words" title={l.objeto}>
+                    {l.objeto}
                   </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 mt-0.5">
@@ -413,14 +427,16 @@ function Tabela({ dados, onAbrir, onFavorito, onDescartar }) {
                   )}
                 </div>
               </td>
-              <td className="text-texto-suave text-xs truncate" title={l.orgao_nome}>{resumir(l.orgao_nome, 40)}</td>
-              <td className="text-texto-suave text-xs truncate">
-                {l.municipio ? `${l.municipio}/${l.uf || ''}` : l.uf || '—'}
+              <td className="align-top overflow-hidden">
+                <Dado rotulo="Órgão" titulo={l.orgao_nome} linhas={2}>{l.orgao_nome || '—'}</Dado>
+                <Dado rotulo="Cidade/UF">{l.municipio ? `${l.municipio}/${l.uf || ''}` : l.uf || '—'}</Dado>
+                <Dado rotulo="Modalidade" titulo={l.modalidade}>{l.modalidade || '—'}</Dado>
               </td>
-              <td className="text-texto-suave text-xs truncate" title={l.modalidade}>{l.modalidade || '—'}</td>
-              <td className="text-right font-mono text-xs">{moeda(l.valor_estimado)}</td>
-              <td><Contagem fim={l.fim_propostas} /></td>
-              <td className="text-texto-suave text-xs truncate" title={l.plataforma_disputa}>{resumir(l.plataforma_disputa, 16)}</td>
+              <td className="align-top overflow-hidden">
+                <Dado rotulo="Valor"><span className="font-mono text-texto">{moeda(l.valor_estimado)}</span></Dado>
+                <Dado rotulo="Fecha em"><Contagem fim={l.fim_propostas} /></Dado>
+                <Dado rotulo="Plataforma" titulo={l.plataforma_disputa}>{l.plataforma_disputa || '—'}</Dado>
+              </td>
               <td>
                 <div className="flex items-center gap-1.5 justify-end" onClick={(e) => e.stopPropagation()}>
                   <button
