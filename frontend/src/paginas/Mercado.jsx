@@ -264,12 +264,24 @@ function Rodape({ link, licitacaoId, aoAbrir }) {
   return (
     <div className="flex gap-3 mt-2 text-xs">
       {link && (
-        <a href={link} target="_blank" rel="noreferrer" className="text-voltagem flex items-center gap-1">
+        <a
+          href={link}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="text-voltagem flex items-center gap-1"
+        >
           ver no PNCP <ExternalLink size={11} />
         </a>
       )}
       {licitacaoId && (
-        <button className="text-voltagem" onClick={() => aoAbrir(licitacaoId)}>
+        <button
+          className="text-voltagem"
+          onClick={(e) => {
+            e.stopPropagation();
+            aoAbrir(licitacaoId);
+          }}
+        >
           abrir o edital no Radar
         </button>
       )}
@@ -285,7 +297,10 @@ function Registro({ r, tipo, aoAbrir }) {
   const link = linkPncp(r.numero_controle, tipo);
   const fim = r.dias_para_fim;
   return (
-    <li className="border border-borda rounded p-3 bg-superficie/40">
+    <li
+      className={`border border-borda rounded p-3 bg-superficie/40 ${r.licitacao_id ? 'cursor-pointer hover:border-texto-suave/40' : ''}`}
+      onClick={() => r.licitacao_id && aoAbrir(r.licitacao_id)}
+    >
       <div className="flex items-start gap-3 flex-wrap">
         <div className="min-w-0 flex-1">
           <p className="text-sm break-words">{resumir(r.objeto, 220) || LACUNA}</p>
@@ -341,7 +356,10 @@ function Registro({ r, tipo, aoAbrir }) {
 function Publicacao({ p, aoAbrir }) {
   const link = linkPncp(p.numero_controle_compra, 'edital');
   return (
-    <li className="border border-borda rounded p-3 bg-superficie/40">
+    <li
+      className={`border border-borda rounded p-3 bg-superficie/40 ${p.licitacao_id ? 'cursor-pointer hover:border-texto-suave/40' : ''}`}
+      onClick={() => p.licitacao_id && aoAbrir(p.licitacao_id)}
+    >
       <div className="flex items-start gap-3 flex-wrap">
         <span className="text-[11px] px-2 py-0.5 border border-borda rounded shrink-0">{p.rotulo}</span>
         {p.favorita && <Star size={14} className="text-voltagem shrink-0" aria-label="favorita" />}

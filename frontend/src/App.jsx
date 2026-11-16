@@ -232,7 +232,7 @@ export default function App() {
         {tela === 'boletins' && <Boletins />}
         {tela === 'cofre' && <Cofre key={parametros.aba || 'documentos'} abaInicial={parametros.aba} />}
         {tela === 'modelos' && <Modelos />}
-        {tela === 'funil' && <Funil aoAbrir={setLicitacaoAberta} />}
+        {tela === 'funil' && <Funil aoAbrir={abrirLicitacao} />}
         {tela === 'precos' && <Precos />}
         {tela === 'oportunidades' && (
           <Oportunidades aoAbrir={abrirLicitacao} />
