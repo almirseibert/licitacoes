@@ -245,12 +245,10 @@ async function rodarDeHoraEmHora() {
       console.log(`Leitura de edital enfileirada para ${leituras.enfileiradas} licitações.`);
     }
 
-    // Leitura assistida (seção 23.3): só entra na fila quem vale o token, e só
-    // se a chave estiver configurada. Sem IA, isto é um no-op barato.
-    const lidas = await iaResumos.enfileirarResumos({ limite: 10 });
-    if (lidas.enfileiradas) {
-      console.log(`Leitura assistida enfileirada para ${lidas.enfileiradas} licitações.`);
-    }
+    // Leitura assistida (seção 23.3): desligada por decisão (20/11/2026) — só
+    // roda por clique de quem usa o painel (POST /api/licitacoes/:id/ia),
+    // nunca mais automaticamente. `enfileirarResumos` continua existindo em
+    // jobs/ia-resumos.js para quem quiser voltar a ligar.
 
     // Contratos, atas e acompanhamentos do PNCP (Seção 12), uma vez por dia.
     if (naHoraDiaria('mercado', HORA_DO_MERCADO)) {
