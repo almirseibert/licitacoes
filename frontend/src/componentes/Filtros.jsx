@@ -61,8 +61,9 @@ export function usePainelFiltros() {
 }
 
 /** O botão "Filtros (n)" — mora no cabeçalho do Radar, ao lado das listas. */
-export function BotaoFiltros({ valores, aberto, onAlternar }) {
-  const ligados = contarLigados(valores);
+export function BotaoFiltros({ valores, contagem, aberto, onAlternar }) {
+  // `contagem` vem pronta de telas cujos filtros não são os do Radar (ex.: Contratos do mercado).
+  const ligados = contagem ?? contarLigados(valores);
   return (
     <button
       onClick={onAlternar}

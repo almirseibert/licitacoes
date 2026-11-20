@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Loader2, ExternalLink, Star, Search, AlertTriangle } from 'lucide-react';
+import { Loader2, ExternalLink, Star, Search, AlertTriangle, X } from 'lucide-react';
 import { api } from '../servicos/api';
+import { BotaoFiltros } from '../componentes/Filtros';
 import { moedaExata, data as comoData, dataHora, resumir, LACUNA } from '../servicos/formato';
 
 /**
@@ -49,6 +50,14 @@ function paraParametros(f) {
   return Object.fromEntries(Object.entries(p).filter(([, v]) => v !== '' && v !== null && v !== undefined));
 }
 
+// Nome de cada filtro nos "chips" de filtros ativos (a linha fina que fica visível com o painel fechado).
+const ROTULO_FILTRO = {
+  busca: 'Objeto', uf: 'UF', municipio: 'Cidade', orgao: 'Órgão', esfera: 'Esfera', modalidade: 'Modalidade',
+  vigencia: 'Vigência', poder: 'Poder', tipo: 'Tipo', empresa: 'Empresa', cnpj: 'CNPJ', valor_min: 'Contratado de',
+  valor_max: 'Contratado até', estimado_min: 'Estimado de', estimado_max: 'Estimado até', edital: 'Edital',
+  atividade: 'Atividade', de: 'De', ate: 'Até', favoritas: 'Só favoritas', adesao: 'Aceita adesão',
+};
+
 // App.jsx monta com `key={tipo}`: trocar de tela recomeça do zero (filtro de uma
 // lista não vale na outra) sem uma requisição a mais com os filtros antigos.
 export default function Mercado({ tipo, aoAbrir }) {
@@ -61,7 +70,7 @@ export default function Mercado({ tipo, aoAbrir }) {
   const [tipos, setTipos] = useState([]);
   const [erro, setErro] = useState(null);
   const [carregando, setCarregando] = useState(false);
-  // No celular a grade de filtros ocupa a tela inteira: começa fechada.
+  // A grade de filtros toma boa parte da tela: nasce fechada (botão "Filtros") e fecha de novo ao filtrar.
   const [verFiltros, setVerFiltros] = useState(false);
 
   useEffect(() => {
@@ -94,6 +103,14 @@ export default function Mercado({ tipo, aoAbrir }) {
     e.preventDefault();
     setPagina(1);
     setAplicados(filtros);
+    setVerFiltros(false);
+  };
+  // Tira um filtro só (o "×" do chip) e refaz a busca na hora.
+  const tirar = (nome) => {
+    const sem = (f) => Object.fromEntries(Object.entries(f).filter(([k]) => k !== nome));
+    setFiltros(sem);
+    setAplicados(sem);
+    setPagina(1);
   };
   const limpar = () => {
     setFiltros({});
@@ -102,6 +119,14 @@ export default function Mercado({ tipo, aoAbrir }) {
   };
 
   const opcoes = (resumo && resumo.opcoes) || {};
+  const ativos = Object.entries(aplicados).filter(([, v]) => v !== '' && v !== null && v !== undefined);
+  const textoDoFiltro = (nome, valor) => {
+    if (nome === 'atividade') {
+      const p = palavras.find((x) => String(x.id) === String(valor));
+      return p ? p.termo : valor;
+    }
+    return valor === '1' ? '' : String(valor);
+  };
   const { titulo } = TITULOS[tipo];
   const subtitulo =
     typeof TITULOS[tipo].subtitulo === 'function'
@@ -133,8 +158,38 @@ export default function Mercado({ tipo, aoAbrir }) {
   return (
     <div className="h-full flex flex-col">
       <div className="px-4 py-3 border-b border-borda shrink-0">
-        <h1 className="font-titulo text-xl">{titulo}</h1>
-        <p className="text-xs text-texto-suave max-w-3xl">{subtitulo}</p>
+        <div className="flex items-start gap-3">
+          <div className="min-w-0">
+            <h1 className="font-titulo text-xl">{titulo}</h1>
+            <p className="text-xs text-texto-suave max-w-3xl">{subtitulo}</p>
+          </div>
+          <div className="ml-auto flex items-center gap-3 shrink-0">
+            {dados && (
+              <span className="text-xs text-texto-suave">
+                {dados.total.toLocaleString('pt-BR')}
+                {dados.total_limitado ? '+' : ''} resultado(s)
+                {carregando && <Loader2 size={12} className="inline animate-spin ml-1" />}
+              </span>
+            )}
+            <BotaoFiltros contagem={ativos.length} aberto={verFiltros} onAlternar={() => setVerFiltros(!verFiltros)} />
+          </div>
+        </div>
+        {ativos.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 mt-2" aria-label="Filtros ativos">
+            {ativos.map(([nome, valor]) => (
+              <span key={nome} className="inline-flex items-center gap-1 text-[11px] border border-borda rounded px-1.5 py-0.5 bg-superficie">
+                <span className="text-texto-suave">{ROTULO_FILTRO[nome] || nome}</span>
+                {textoDoFiltro(nome, valor) && <span className="text-texto">{textoDoFiltro(nome, valor)}</span>}
+                <button type="button" onClick={() => tirar(nome)} title="Tirar este filtro" className="text-texto-suave hover:text-erro">
+                  <X size={11} />
+                </button>
+              </span>
+            ))}
+            <button type="button" onClick={limpar} className="text-[11px] text-texto-suave hover:text-texto underline ml-1">
+              limpar tudo
+            </button>
+          </div>
+        )}
         {coletas.length > 0 && (
           <p className="text-[11px] text-texto-suave mt-1">
             Coleta do PNCP:{' '}
@@ -145,12 +200,9 @@ export default function Mercado({ tipo, aoAbrir }) {
         )}
       </div>
 
-      <button type="button" className="sm:hidden mx-4 mt-2 botao self-start" onClick={() => setVerFiltros(!verFiltros)}>
-        {verFiltros ? 'esconder filtros' : 'filtros'}
-      </button>
       <form
         onSubmit={aplicar}
-        className={`px-4 py-3 border-b border-borda gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 shrink-0 sm:grid ${verFiltros ? 'grid' : 'hidden'}`}
+        className={`px-4 pt-3 pb-0 border-b border-borda gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 shrink-0 max-h-[60vh] overflow-auto ${verFiltros ? 'grid' : 'hidden'}`}
       >
         {campo('Objeto', 'busca', { placeholder: 'ex.: merenda' })}
         {campo('UF', 'uf', { maxLength: 2, placeholder: 'RS' })}
@@ -185,7 +237,7 @@ export default function Mercado({ tipo, aoAbrir }) {
         )}
         {campo(tipo === 'acompanhamentos' ? 'Publicado de' : 'Assinado de', 'de', { type: 'date' })}
         {campo('até', 'ate', { type: 'date' })}
-        <div className="flex items-end gap-2 col-span-2 sm:col-span-3 lg:col-span-6 flex-wrap">
+        <div className="flex items-end gap-2 col-span-2 sm:col-span-3 lg:col-span-6 flex-wrap sticky bottom-0 bg-superficie border-t border-borda -mx-4 px-4 py-2">
           {tipo === 'acompanhamentos' && (
             <label className="text-xs text-texto-suave flex items-center gap-1 mr-2">
               <input type="checkbox" checked={filtros.favoritas === '1'} onChange={mudar('favoritas')} /> só as minhas favoritas
@@ -202,13 +254,6 @@ export default function Mercado({ tipo, aoAbrir }) {
           <button type="button" className="botao" onClick={limpar}>
             limpar
           </button>
-          {dados && (
-            <span className="text-xs text-texto-suave ml-auto">
-              {dados.total.toLocaleString('pt-BR')}
-              {dados.total_limitado ? '+' : ''} resultado(s)
-              {carregando && <Loader2 size={12} className="inline animate-spin ml-1" />}
-            </span>
-          )}
         </div>
       </form>
 
