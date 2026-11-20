@@ -1787,7 +1787,10 @@ contra o PNCP de verdade.
 **Aceite (seção 16), medido:** `npm run lint` limpo; `npm test` 317 testes passam (em Node 22 o
 `node --test testes/` sem glob falha, use `testes/*.test.js`, e os testes de banco precisam de
 `DB_HOST` & cia definidos — com valores quaisquer, são sem rede). Varredura real do RS contra o
-PNCP: ver o número final abaixo.
+PNCP (fonte 1, `--varrer=RS`, 11,5 min): **3.892 abertos, 3.792 lidos** (a página 31 falhou nas 3
+rodadas e foi pulada: 100 editais ficam para a próxima varredura), **67 casaram com palavra-chave e
+foram gravados, de 54 órgãos diferentes**; os outros 3.723 não casaram e não entram no Radar. Antes,
+só a busca por palavra alimentava o RS, com no máximo 300 resultados por termo.
 
 ## Quatro ajustes — 16/11/2026
 
