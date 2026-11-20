@@ -256,6 +256,12 @@ export default function Palavras() {
                     executar(() => api.salvarExcluida(e.id, { termo: ev.target.value }))
                   }
                 />
+                <span
+                  className="text-[11px] text-texto-suave whitespace-nowrap"
+                  title="licitações do Radar que esta palavra esconde agora"
+                >
+                  {e.ativa ? `esconde ${Number(e.escondidas || 0)}` : 'desligada'}
+                </span>
                 <button
                   className="text-texto-suave hover:text-erro"
                   title="apagar"
@@ -268,8 +274,8 @@ export default function Palavras() {
           </ul>
 
           <p className="px-3 py-2 text-[11px] text-texto-suave border-t border-borda">
-            Uma palavra de corte vale na próxima coleta. Para aplicar ao que já está no Radar,
-            use <strong className="text-texto">Repontuar</strong> em Configurações.
+            A palavra vale na hora: as licitações que a contêm somem do Radar e na próxima coleta
+            já nem entram. Apagar ou desligar a palavra as traz de volta.
           </p>
         </section>
       </div>

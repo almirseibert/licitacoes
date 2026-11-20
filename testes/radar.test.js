@@ -125,3 +125,17 @@ test('o Radar só mostra licitação que casou com palavra-chave, mesmo sem filt
   assert.match(f.montarFiltros({}, { organizacaoId: 7 }).onde, /l\.palavra_casada IS NOT NULL/);
   assert.match(semNota({ pontuacao_min: '0', incluir_descartadas: '1' }).onde, /l\.palavra_casada IS NOT NULL/);
 });
+
+test('palavra de Ignorar filtra a lista na hora, só da organização, e some nas listas de finalizadas', () => {
+  const lista = f.montarFiltros({ pontuacao_min: '0' }, { organizacaoId: 7 });
+  assert.match(lista.onde, /NOT EXISTS \(SELECT 1 FROM palavras_excluidas pe WHERE pe\.organizacao_id = 7 AND pe\.ativa = 1 AND l\.objeto LIKE CONCAT\('%', REPLACE\(REPLACE\(REPLACE\(pe\.termo, '\|', '\|\|'\), '%', '\|%'\), '_', '\|_'\), '%'\) ESCAPE '\|'\)/);
+  // LOCATE não ignora acento no MySQL 8 (verificado em 20/11/2026): a regra tem de ser LIKE.
+  assert.doesNotMatch(lista.onde, /LOCATE/);
+  // O id entra na SQL e não nos valores: a ordem dos `?` das outras condições não muda.
+  assert.deepEqual(lista.valores, []);
+
+  assert.doesNotMatch(f.montarFiltros({ lista: 'finalizadas' }, { organizacaoId: 7 }).onde, /palavras_excluidas/);
+  assert.doesNotMatch(f.montarFiltros({ incluir_descartadas: '1' }, { organizacaoId: 7 }).onde, /palavras_excluidas/);
+  // Sem organização conhecida, nada de SQL montada com id inválido.
+  assert.doesNotMatch(f.montarFiltros({}, { organizacaoId: "7; DROP TABLE x" }).onde, /palavras_excluidas/);
+});

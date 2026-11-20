@@ -213,19 +213,22 @@ const EXCLUIDAS = [
 async function semearFontes() {
   let inseridas = 0;
   for (const fonte of FONTES) {
-    // Fonte já existente com `config = '{}'` nunca foi configurada por
+    // Fonte já existente com config vazia (`{}` ou NULL) nunca foi configurada por
     // ninguém — é seguro atualizar adaptador/url_base/config/observação para
     // a pesquisa mais recente (ex.: Compras RS ganhando adaptador próprio em
     // 15/11/2026). Fonte que já tem config de verdade é decisão de quem
     // configurou pela tela; o seed não sobrescreve isso, só a linha "virgem".
+    // Não comparar a coluna JSON com a string '{}': no MySQL 8 isso é sempre falso
+    // (a string vira um JSON string, não um objeto vazio) e o seed nunca atualizava
+    // nada em produção. `JSON_LENGTH(...) = 0` vale no MySQL 8 e no MariaDB.
     const [r] = await pool.query(
       `INSERT INTO fontes (nome, adaptador, url_base, config, ativa, intervalo_horas, prioridade, observacao)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
-         adaptador   = IF(config = '{}', VALUES(adaptador), adaptador),
-         url_base    = IF(config = '{}', VALUES(url_base), url_base),
-         observacao  = IF(config = '{}', VALUES(observacao), observacao),
-         config      = IF(config = '{}', VALUES(config), config)`,
+         adaptador   = IF((config IS NULL OR JSON_LENGTH(config) = 0), VALUES(adaptador), adaptador),
+         url_base    = IF((config IS NULL OR JSON_LENGTH(config) = 0), VALUES(url_base), url_base),
+         observacao  = IF((config IS NULL OR JSON_LENGTH(config) = 0), VALUES(observacao), observacao),
+         config      = IF((config IS NULL OR JSON_LENGTH(config) = 0), VALUES(config), config)`,
       [
         fonte.nome,
         fonte.adaptador,

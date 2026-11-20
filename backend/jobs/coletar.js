@@ -240,7 +240,7 @@ async function salvarAvaliacao(organizacaoId, licitacaoId, avaliacao, { descarta
   const motivoExclusao = 'palavra excluída';
 
   const [antes] = await pool.query(
-    'SELECT id, descartada FROM org_licitacoes WHERE organizacao_id = ? AND licitacao_id = ?',
+    'SELECT id, descartada, motivo_descarte FROM org_licitacoes WHERE organizacao_id = ? AND licitacao_id = ?',
     [organizacaoId, licitacaoId]
   );
 
@@ -258,15 +258,23 @@ async function salvarAvaliacao(organizacaoId, licitacaoId, avaliacao, { descarta
   }
 
   const descartar = descartarSeExcluida && excluida && !antes[0].descartada;
+  // Palavra de "Ignorar" apagada ou desativada: o descarte que ELA fez (e só ele —
+  // o motivo grava a origem) é desfeito. Descarte manual nunca é tocado.
+  const restaurar =
+    descartarSeExcluida && !excluida && antes[0].descartada &&
+    String(antes[0].motivo_descarte || '').startsWith('palavra excluída');
+  let complemento = '';
+  if (descartar) complemento = ', descartada = 1, motivo_descarte = ?, descartado_em = NOW()';
+  else if (restaurar) complemento = ', descartada = 0, motivo_descarte = NULL, descartado_em = NULL';
   await pool.query(
     `UPDATE org_licitacoes SET
        pontuacao = ?, pontuacao_detalhe = ?, grupo = ?, palavra_casada = ?,
        pode_participar = ?, motivo_participacao = ?, objeto_social = ?, objeto_social_motivo = ?
-       ${descartar ? ', descartada = 1, motivo_descarte = ?, descartado_em = NOW()' : ''}
+       ${complemento}
      WHERE id = ?`,
     [...valores, ...(descartar ? ['palavra excluída passou a valer'] : []), antes[0].id]
   );
-  return { descartou: descartar };
+  return { descartou: descartar, restaurou: restaurar };
 }
 
 /**
@@ -539,14 +547,15 @@ async function detalharLicitacao({ licitacaoId }) {
  * corte, o Radar inteiro se reorganiza.
  *
  * Licitação que passa a casar com uma palavra excluída é descartada com o
- * motivo à vista — nunca apagada, para o histórico continuar explicável.
+ * motivo à vista — nunca apagada, para o histórico continuar explicável. Se a
+ * palavra some ou é desativada, o descarte dela é desfeito (o do usuário não).
  */
 async function repontuar({ lote = 500, organizacaoId = null } = {}) {
   // Sem organização: todas as ativas (botão do worker, `npm run repontuar`).
   // Com organização: só ela — é o que a tela de Configurações e o cadastro de
   // uma organização nova pedem, e cria a linha dela para cada licitação.
   const contextos = organizacaoId ? [await carregarContexto(organizacaoId)] : await carregarContextos();
-  const resumo = { avaliadas: 0, mudaram: 0, descartadas: 0, organizacoes: contextos.length };
+  const resumo = { avaliadas: 0, mudaram: 0, descartadas: 0, restauradas: 0, organizacoes: contextos.length };
   let ultimoId = 0;
 
   for (;;) {
@@ -578,10 +587,11 @@ async function repontuar({ lote = 500, organizacaoId = null } = {}) {
         resumo.avaliadas += 1;
         if (avaliacao.pontuacao !== notaAntes.get(linha.id)) resumo.mudaram += 1;
 
-        const { descartou } = await salvarAvaliacao(contexto.organizacaoId, linha.id, avaliacao, {
+        const { descartou, restaurou } = await salvarAvaliacao(contexto.organizacaoId, linha.id, avaliacao, {
           descartarSeExcluida: true,
         });
         if (descartou) resumo.descartadas += 1;
+        if (restaurou) resumo.restauradas += 1;
       }
     }
 

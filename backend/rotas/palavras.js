@@ -6,6 +6,8 @@ const { apenasAdmin } = require('../middlewares/autenticar');
 const { responderErro } = require('../middlewares/responder-erro');
 const pool = require('../config/db');
 const { coletarFonte } = require('../jobs/coletar');
+const { objetoContemTermo } = require('../regras/filtros-radar');
+const CONTEM = objetoContemTermo('e.termo', 'l.objeto');
 
 const rotas = express.Router();
 
@@ -23,8 +25,14 @@ rotas.get('/', async (req, res) => {
         ORDER BY p.grupo ASC, p.peso DESC, p.termo ASC`,
       [org]
     );
+    // `escondidas`: quantas licitações do Radar (não descartadas) esse termo esconde agora.
+    // Mesma condição da lista do Radar (`objetoContemTermo`): acento, caixa e `%` literal.
     const [excluidas] = await pool.query(
-      'SELECT * FROM palavras_excluidas WHERE organizacao_id = ? ORDER BY termo',
+      `SELECT e.*,
+              (SELECT COUNT(*) FROM org_licitacoes o JOIN licitacoes l ON l.id = o.licitacao_id
+                WHERE o.organizacao_id = e.organizacao_id AND ${CONTEM}
+                  AND (o.descartada = 0 OR o.motivo_descarte LIKE 'palavra excluída%')) AS escondidas
+         FROM palavras_excluidas e WHERE e.organizacao_id = ? ORDER BY e.termo`,
       [org]
     );
     const [grupos] = await pool.query(
@@ -129,6 +137,24 @@ rotas.delete('/:id', apenasAdmin, async (req, res) => {
 });
 
 // ---------------------------------------------------------- palavras excluídas
+/**
+ * Palavra de "Ignorar" apagada, desativada ou trocada: devolve ao Radar o que SÓ ela
+ * tinha descartado (motivo 'palavra excluída…'). Descarte manual não é tocado, e
+ * licitação que ainda cai em outra palavra ativa continua fora. É um UPDATE só.
+ * Esconder não precisa disto: a lista já filtra pelo que está cadastrado agora.
+ */
+async function devolverAoRadar(organizacaoId) {
+  const [r] = await pool.query(
+    `UPDATE org_licitacoes o JOIN licitacoes l ON l.id = o.licitacao_id
+        SET o.descartada = 0, o.motivo_descarte = NULL, o.descartado_em = NULL
+      WHERE o.organizacao_id = ? AND o.descartada = 1 AND o.motivo_descarte LIKE 'palavra excluída%'
+        AND NOT EXISTS (SELECT 1 FROM palavras_excluidas pe
+                         WHERE pe.organizacao_id = o.organizacao_id AND pe.ativa = 1 AND ${objetoContemTermo('pe.termo', 'l.objeto')})`,
+    [organizacaoId]
+  );
+  return r.affectedRows;
+}
+
 rotas.post('/excluidas', apenasAdmin, async (req, res) => {
   try {
     const termo = String((req.body && req.body.termo) || '').trim().slice(0, 160);
@@ -141,7 +167,7 @@ rotas.post('/excluidas', apenasAdmin, async (req, res) => {
     res.status(201).json({
       ok: true,
       id: r.insertId,
-      mensagem: `"${termo}" passa a cortar resultados. Repontue para aplicar ao que já está no Radar.`,
+      mensagem: `"${termo}" já saiu do Radar: as licitações que a contêm ficam escondidas.`,
     });
   } catch (erro) {
     if (erro.code === 'ER_DUP_ENTRY') return res.status(409).json({ erro: 'Esse termo já está na lista.' });
@@ -162,7 +188,8 @@ rotas.patch('/excluidas/:id', apenasAdmin, async (req, res) => {
       [...colunas.map((c) => campos[c]), req.params.id, req.organizacaoId]
     );
     if (!r.affectedRows) return res.status(404).json({ erro: 'Palavra não encontrada.' });
-    res.json({ ok: true });
+    const devolvidas = await devolverAoRadar(req.organizacaoId);
+    res.json({ ok: true, devolvidas });
   } catch (erro) {
     if (erro.code === 'ER_DUP_ENTRY') return res.status(409).json({ erro: 'Esse termo já está na lista.' });
     res.status(400).json({ erro: erro.message });
@@ -176,7 +203,8 @@ rotas.delete('/excluidas/:id', apenasAdmin, async (req, res) => {
       [req.params.id, req.organizacaoId]
     );
     if (!r.affectedRows) return res.status(404).json({ erro: 'Palavra não encontrada.' });
-    res.json({ ok: true });
+    const devolvidas = await devolverAoRadar(req.organizacaoId);
+    res.json({ ok: true, devolvidas });
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível apagar a palavra.', erro);
   }

@@ -20,6 +20,16 @@ const RAIO_MAXIMO_KM = 1000;
 
 const DATA = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * Condição SQL: o texto contém o termo da coluna, sem acento e sem caixa (a
+ * collation utf8mb4_unicode_ci), com `%` e `_` do termo tratados como texto.
+ * Não usar LOCATE: no MySQL 8 ele NÃO ignora acento ("gestao" não acha "gestão"),
+ * ao contrário do LIKE. `|` como escape evita a confusão das contrabarras na SQL.
+ */
+function objetoContemTermo(colunaTermo, colunaTexto) {
+  return `${colunaTexto} LIKE CONCAT('%', REPLACE(REPLACE(REPLACE(${colunaTermo}, '|', '||'), '%', '|%'), '_', '|_'), '%') ESCAPE '|'`;
+}
+
 /** Lista separada por vírgula, sem vazios. */
 function lista(valor) {
   return String(valor || '').split(',').map((v) => v.trim()).filter(Boolean);
@@ -91,7 +101,19 @@ function montarFiltros(q = {}, contexto = {}) {
   const avisos = [];
 
   // A lista "finalizadas" inclui a descartada: descartar também encerra.
-  if (q.incluir_descartadas !== '1' && q.lista !== 'finalizadas') onde.push('l.descartada = 0');
+  if (q.incluir_descartadas !== '1' && q.lista !== 'finalizadas') {
+    onde.push('l.descartada = 0');
+    // Palavra de "Ignorar" vale na hora e é reversível (decisão de 20/11/2026): a
+    // lista filtra pelo que está cadastrado AGORA, sem depender de repontuar. Apagar
+    // ou desativar a palavra traz a licitação de volta. O id é numérico, por isso
+    // entra direto na SQL e não mexe na ordem dos `valores`.
+    const org = Number(contexto.organizacaoId);
+    if (Number.isInteger(org) && org > 0) {
+      onde.push(
+        `NOT EXISTS (SELECT 1 FROM palavras_excluidas pe WHERE pe.organizacao_id = ${org} AND pe.ativa = 1 AND ${objetoContemTermo('pe.termo', 'l.objeto')})`
+      );
+    }
+  }
 
   // Decisão de 16/11/2026: o Radar só mostra o que casou com uma palavra-chave
   // cadastrada. O CNAE valida o que a palavra trouxe; nunca traz licitação
@@ -301,4 +323,4 @@ function limparFiltros(filtros) {
   return limpo;
 }
 
-module.exports = { LISTAS, sqlPorMim, montarFiltros, limparFiltros, filtrosPublicos, comoLike, lerBusca, ufsDasRegioes, REGIOES, ESFERAS, CAMPOS };
+module.exports = { objetoContemTermo, LISTAS, sqlPorMim, montarFiltros, limparFiltros, filtrosPublicos, comoLike, lerBusca, ufsDasRegioes, REGIOES, ESFERAS, CAMPOS };
