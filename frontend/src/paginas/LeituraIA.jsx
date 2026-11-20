@@ -126,7 +126,7 @@ export default function LeituraIA({ id }) {
           {estado.disponivel && (
             <button
               className={d ? 'botao flex items-center gap-1' : 'botao-primario flex items-center gap-1'}
-              onClick={() => ler(Boolean(d))}
+              onClick={() => ler(true)}
               disabled={Boolean(ocupado)}
             >
               {ocupado === 'ler' ? <Loader2 size={11} className="animate-spin" /> : <RefreshCcw size={11} />}

@@ -1,15 +1,11 @@
-// Job `ia_resumos` (seções 14 e 23.3) — leitura assistida das licitações que
-// valem o token.
-//
-// Contínuo, pela fila. O corte é pontuação ≥ 55 ou favorita: ler edital de
-// licitação que não interessa é gastar dinheiro para produzir texto que
-// ninguém abre.
+// Leitura assistida (seção 23.3), só por clique de quem usa o painel
+// (decisão de 20/11/2026): nada aqui entra na fila nem roda no worker. Ler edital
+// de licitação que não interessa é gastar dinheiro para produzir texto que
+// ninguém abre — por isso a decisão de ler é sempre humana.
 const pool = require('../config/db');
 const escopo = require('../servicos/escopo');
-const fila = require('../servicos/fila');
 const ia = require('../servicos/ia');
 const { arquivosComTexto } = require('../servicos/perguntas-edital');
-const { ia: cfg } = require('../config/ambiente');
 
 /** O texto já extraído dos arquivos da licitação (Fase 4), na ordem do edital. */
 async function textoDaLicitacao(licitacaoId) {
@@ -48,38 +44,7 @@ async function resumirLicitacao({ licitacaoId, forcar = false }) {
 }
 
 /**
- * Enfileira a leitura do que vale a pena e ainda não foi lido.
- * Só mexe em licitação com texto extraído: ir à IA antes da Fase 4 ter lido o
- * PDF seria pagar para o modelo dizer que não recebeu nada.
- */
-async function enfileirarResumos({ limite = 10, pontuacaoMinima = cfg.pontuacaoMinima } = {}) {
-  if (!ia.disponivel()) return { enfileiradas: 0, desligada: true };
-
-  const [candidatas] = await pool.query(
-    // GROUP BY, não DISTINCT: com DISTINCT o MySQL recusa ordenar por coluna
-    // fora do SELECT, e a ordem é o que garante que o token vá primeiro para a
-    // licitação favorita e de maior pontuação.
-    `SELECT l.id
-       FROM ${escopo.agregadoDasOrganizacoes()} l
-       JOIN licitacao_arquivos a ON a.licitacao_id = l.id AND a.status = 'ok' AND a.texto_extraido IS NOT NULL
-      WHERE l.ia_resumo IS NULL
-        AND l.descartada = 0
-        AND (l.pontuacao >= ? OR l.favorito = 1)
-        AND (l.fim_propostas IS NULL OR l.fim_propostas >= NOW())
-      GROUP BY l.id, l.favorito, l.pontuacao
-      ORDER BY l.favorito DESC, l.pontuacao DESC
-      LIMIT ?`,
-    [pontuacaoMinima, limite]
-  );
-
-  for (const l of candidatas) {
-    await fila.enfileirar('ia_resumo', { licitacaoId: l.id }, { prioridade: 30, chaveUnica: `ia:${l.id}` });
-  }
-  return { enfileiradas: candidatas.length };
-}
-
-/**
- * Sugestão mensal de palavras-chave (seção 23.5): lê os objetos do que você
+ * Sugestão de palavras-chave (seção 23.5), só por clique (POST /api/ia/palavras-sugeridas): lê os objetos do que você
  * favoritou ou disputou e propõe termos que ainda não estão cadastrados.
  */
 async function sugerirPalavras({ limite = 40, forcar = false, organizacaoId = null } = {}) {
@@ -136,9 +101,4 @@ async function sugerirPalavras({ limite = 40, forcar = false, organizacaoId = nu
   return { ...r, gravadas };
 }
 
-function registrarNaFila() {
-  fila.registrar('ia_resumo', (payload) => resumirLicitacao(payload || {}));
-  fila.registrar('sugerir_palavras', (payload) => sugerirPalavras(payload || {}));
-}
-
-module.exports = { resumirLicitacao, enfileirarResumos, sugerirPalavras, textoDaLicitacao, registrarNaFila };
+module.exports = { resumirLicitacao, sugerirPalavras, textoDaLicitacao };

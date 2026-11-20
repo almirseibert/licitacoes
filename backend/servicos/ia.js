@@ -467,7 +467,12 @@ async function lerEdital({ licitacaoId, texto, forcar = false }) {
   try {
     bruto = await chamar({ instrucao, conteudo: recorte.texto, marca });
   } catch (erro) {
-    await registrar({ licitacaoId, tipo: 'leitura_edital', hash, erro: erro.message });
+    // Falha de rede, timeout e erro HTTP do provedor (429, 5xx) são do momento:
+    // gravar o erro no cache travaria o edital na mesma mensagem para sempre.
+    // Só fica registrado o que o modelo chegou a responder (cobrado) e deu errado.
+    if (!['http', 'timeout', 'rede'].includes(erro.codigo)) {
+      await registrar({ licitacaoId, tipo: 'leitura_edital', hash, erro: erro.message });
+    }
     return { ok: false, motivo: erro.message };
   }
 

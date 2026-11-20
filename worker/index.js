@@ -27,7 +27,6 @@ const monitorar = require('../backend/jobs/monitorar');
 const chat = require('../backend/jobs/chat');
 const estrategicas = require('../backend/jobs/estrategicas');
 const recorrencias = require('../backend/jobs/recorrencias');
-const iaResumos = require('../backend/jobs/ia-resumos');
 const questionamentos = require('../backend/jobs/questionamentos');
 const dossies = require('../backend/jobs/dossies');
 const contratos = require('../backend/jobs/contratos');
@@ -68,7 +67,6 @@ const ultimaVez = {
   deteccaoSemanal: null,
   agregacaoMensal: null,
   sancoesMensais: null,
-  sugestaoPalavras: null,
 };
 
 function hojeLocal() {
@@ -119,7 +117,6 @@ function registrarTodos() {
   chat.registrarNaFila();
   estrategicas.registrarNaFila();
   recorrencias.registrarNaFila();
-  iaResumos.registrarNaFila();
   questionamentos.registrarNaFila();
   dossies.registrarNaFila();
   contratos.registrarNaFila();
@@ -244,11 +241,6 @@ async function rodarDeHoraEmHora() {
     if (leituras.enfileiradas) {
       console.log(`Leitura de edital enfileirada para ${leituras.enfileiradas} licitações.`);
     }
-
-    // Leitura assistida (seção 23.3): desligada por decisão (20/11/2026) — só
-    // roda por clique de quem usa o painel (POST /api/licitacoes/:id/ia),
-    // nunca mais automaticamente. `enfileirarResumos` continua existindo em
-    // jobs/ia-resumos.js para quem quiser voltar a ligar.
 
     // Contratos, atas e acompanhamentos do PNCP (Seção 12), uma vez por dia.
     if (naHoraDiaria('mercado', HORA_DO_MERCADO)) {
@@ -394,21 +386,10 @@ async function rodarDeHoraEmHora() {
       }
     }
 
-    // Sugestão mensal de palavras-chave (seção 23.5), mensal no dia 1. Ficou
-    // sem agendamento na revisão anterior: a função e a fila já existiam
-    // (jobs/ia-resumos.js), mas nada no worker a disparava — só rodava se
-    // alguém chamasse a rota à mão.
-    if (agora.getDate() === 1 && ultimaVez.sugestaoPalavras !== mesAtual()) {
-      ultimaVez.sugestaoPalavras = mesAtual();
-      const sugeridas = await iaResumos.sugerirPalavras({});
-      if (sugeridas.desligada) {
-        console.log(`Sugestão de palavras: desligada (${sugeridas.motivo}).`);
-      } else if (sugeridas.ok === false) {
-        console.log(`Sugestão de palavras: ${sugeridas.motivo || 'não gerou.'}`);
-      } else {
-        console.log(`Sugestão de palavras: ${sugeridas.gravadas} nova(s) para revisar.`);
-      }
-    }
+    // Nenhuma chamada à IA roda aqui (decisão de 20/11/2026): leitura assistida,
+    // resumo do edital, perguntas, consultor jurídico e sugestão de palavras só
+    // acontecem por clique de quem usa o painel. `testes/ia-sem-automatico.test.js`
+    // garante que este arquivo não volte a chamá-las.
   } catch (erro) {
     console.error('Falha na rodada de hora em hora:', erro.message);
   }
