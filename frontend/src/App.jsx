@@ -76,15 +76,26 @@ export default function App() {
   const [categoriaAtiva, setCategoriaAtiva] = useState(null);
   // Parâmetro da tela de destino (ex.: a aba do cofre), para o link do dashboard.
   const [parametros, setParametros] = useState({});
+  // No celular a sidebar vira gaveta por cima do conteúdo: ela só abre quando a pessoa escolhe uma categoria
+  // e fecha ao escolher um item. No desktop continua fixa (quem manda é `categoriaAtiva`).
+  const [gavetaAberta, setGavetaAberta] = useState(false);
   const irPara = (destino, params = {}) => {
     setParametros(params);
     setTela(destino);
+    setGavetaAberta(false);
   };
   // A sidebar contextual segue a tela atual, de onde quer que ela mude (clique
   // no menu, num KPI do dashboard, ou na decisão de tela inicial abaixo).
   // Clicar numa categoria na barra superior abre a sidebar contextual sem
   // mudar de tela — só ao clicar num item dela é que `irPara` navega de fato.
-  const selecionarCategoria = (chave) => setCategoriaAtiva((atual) => (atual === chave ? null : chave));
+  const selecionarCategoria = (chave) => {
+    if (window.matchMedia('(min-width: 768px)').matches) {
+      setCategoriaAtiva((atual) => (atual === chave ? null : chave));
+      return;
+    }
+    setCategoriaAtiva(chave);
+    setGavetaAberta(true);
+  };
   // O sino e o funil abrem a gaveta de uma licitação pelo Radar.
   const [licitacaoAberta, setLicitacaoAberta] = useState(null);
   const abrirLicitacao = (id) => { irPara('radar'); setLicitacaoAberta(id); };
@@ -215,7 +226,8 @@ export default function App() {
           podeAdministrar={Boolean(plano && plano.pode_administrar)}
           superadmin={Boolean(plano && plano.superadmin)}
           temRecurso={temRecurso}
-          aoFechar={() => setCategoriaAtiva(null)}
+          gavetaAberta={gavetaAberta}
+          aoFechar={() => setGavetaAberta(false)}
         />
 
       <main className="flex-1 min-w-0 overflow-hidden flex flex-col">

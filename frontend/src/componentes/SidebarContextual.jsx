@@ -8,7 +8,7 @@ import { CATEGORIAS, TELAS, telaPermitida } from '../config/navegacao';
  * No mobile vira uma gaveta por cima do conteúdo; no desktop fica fixa ao
  * lado do `<main>`, como a sidebar antiga.
  */
-export default function SidebarContextual({ categoria, telaAtiva, aoIrPara, podeAdministrar, superadmin, temRecurso, aoFechar }) {
+export default function SidebarContextual({ categoria, telaAtiva, aoIrPara, podeAdministrar, superadmin, temRecurso, gavetaAberta = false, aoFechar }) {
   if (!categoria) return null;
 
   const infoCategoria = CATEGORIAS.find((c) => c.chave === categoria);
@@ -24,8 +24,8 @@ export default function SidebarContextual({ categoria, telaAtiva, aoIrPara, pode
 
   return (
     <>
-      <div className="fixed inset-0 top-14 z-10 bg-obsidiana/60 md:hidden" onClick={aoFechar} />
-      <nav className="w-56 shrink-0 border-r border-borda bg-superficie flex flex-col overflow-y-auto fixed inset-y-14 left-0 z-20 md:static md:inset-auto md:bg-superficie/40">
+      {gavetaAberta && <div className="fixed inset-0 top-14 z-10 bg-obsidiana/60 md:hidden" onClick={aoFechar} />}
+      <nav className={`w-56 shrink-0 border-r border-borda bg-superficie flex flex-col overflow-y-auto fixed inset-y-14 left-0 z-20 md:static md:inset-auto md:bg-superficie/40 ${gavetaAberta ? '' : 'max-md:hidden'}`}>
         <div className="px-3 py-3 border-b border-borda flex items-center justify-between md:hidden">
           <p className="text-xs font-titulo">{infoCategoria ? infoCategoria.rotulo : ''}</p>
           <button onClick={aoFechar} aria-label="Fechar menu" className="text-texto-suave hover:text-texto">
