@@ -8,6 +8,7 @@ const regras = require('../regras/status');
 const email = require('./email');
 const fila = require('./fila');
 const { dia } = require('../regras/gestao');
+const { versaoDoCodigo } = require('./versao');
 
 const NOME_WORKER = 'worker';
 const SINAL_DO_VOLUME = '.sinal-worker';
@@ -33,8 +34,9 @@ async function baterWorker() {
   }
   try {
     await pool.query(
-      'INSERT INTO worker_batimentos (nome, em) VALUES (?, NOW()) ON DUPLICATE KEY UPDATE em = NOW()',
-      [NOME_WORKER]
+      `INSERT INTO worker_batimentos (nome, em, versao_codigo, dir_dados) VALUES (?, NOW(), ?, ?)
+       ON DUPLICATE KEY UPDATE em = NOW(), versao_codigo = VALUES(versao_codigo), dir_dados = VALUES(dir_dados)`,
+      [NOME_WORKER, versaoDoCodigo(), dirDados]
     );
   } catch (erro) {
     console.error('Batimento do worker não gravou:', erro.message);
@@ -47,7 +49,7 @@ async function ler(organizacaoId, agora = new Date()) {
   try {
     // Uma consulta que falha já diz que o banco não está respondendo: não há `SELECT 1` à parte.
     lido = await Promise.all([
-      pool.query('SELECT em FROM worker_batimentos WHERE nome = ?', [NOME_WORKER]),
+      pool.query('SELECT em, versao_codigo, dir_dados FROM worker_batimentos WHERE nome = ?', [NOME_WORKER]),
       fila.resumo(),
       pool.query(
         "SELECT TIMESTAMPDIFF(MINUTE, MIN(agendada_para), NOW()) AS minutos FROM tarefas WHERE status = 'fila' AND agendada_para <= NOW()"
@@ -69,7 +71,12 @@ async function ler(organizacaoId, agora = new Date()) {
   const itens = [
     { chave: 'banco', rotulo: 'Banco de dados', nivel: 'ok', mensagem: `Respondendo em ${Date.now() - antes} ms.` },
     { chave: 'worker', rotulo: 'Worker (coleta, boletim e avisos)', ...regras.worker(batimento ? batimento.em : null, agora) },
-    { chave: 'volume', rotulo: 'Volume de arquivos (/dados)', ...regras.volume(lerSinalDoVolume(), batimento ? batimento.em : null, agora) },
+    { chave: 'volume', rotulo: 'Volume de arquivos (/dados)', ...regras.volume(lerSinalDoVolume(), batimento ? batimento.em : null, agora, {
+        versaoApi: versaoDoCodigo(),
+        versaoWorker: batimento ? batimento.versao_codigo : null,
+        dirApi: dirDados,
+        dirWorker: batimento ? batimento.dir_dados : null,
+      }) },
     { chave: 'fila', rotulo: 'Fila de tarefas', ...regras.fila(contagem, velha ? velha.minutos : 0) },
     { chave: 'coleta', rotulo: 'Coleta das fontes', ...regras.coleta(fontes, agora) },
     {

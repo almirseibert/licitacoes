@@ -212,3 +212,21 @@ test('volume: API e worker no mesmo /dados, em volumes diferentes e sem worker p
   assert.equal(st.volume(null, h(60), agora).nivel, 'desligado');
   assert.equal(st.volume(null, null, agora).nivel, 'desligado');
 });
+
+test('volume vermelho diz o motivo: worker antigo, código diferente, DIR_DADOS diferente, volume separado', () => {
+  const agora = new Date('2026-11-20T12:00:00Z');
+  const h = (min) => new Date(agora.getTime() - min * 60000);
+  const igual = { versaoApi: 'abc', versaoWorker: 'abc', dirApi: '/dados', dirWorker: '/dados' };
+
+  const antigo = st.volume(null, h(1), agora, { ...igual, versaoWorker: null });
+  assert.equal(antigo.nivel, 'parado');
+  assert.match(antigo.mensagem, /versão antiga/);
+  assert.doesNotMatch(antigo.mensagem, /Mounts/);
+
+  assert.match(st.volume(null, h(1), agora, { ...igual, versaoWorker: 'xyz' }).mensagem, /versões diferentes/);
+  assert.match(st.volume(null, h(1), agora, { ...igual, dirWorker: '/app/dados' }).mensagem, /DIR_DADOS/);
+  assert.match(st.volume(null, h(1), agora, igual).mensagem, /Mounts/);
+
+  // Sinal visível continua verde, mesmo com versões diferentes: o veredito é do sinal.
+  assert.equal(st.volume(h(1), h(1), agora, { ...igual, versaoWorker: 'xyz' }).nivel, 'ok');
+});

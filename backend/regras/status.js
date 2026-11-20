@@ -64,8 +64,10 @@ function coleta(fontes, agora = new Date()) {
  *
  * @param {Date|null} sinalDoVolume quando o `.sinal-worker` foi gravado (null = a API não o vê)
  * @param {Date|null} batimentoDoWorker último batimento do worker no banco
+ * @param {object} [lado] o que cada serviço informa de si: versão do código e diretório de dados.
+ *   Serve só para dizer o MOTIVO do vermelho — o veredito continua vindo do sinal no volume.
  */
-function volume(sinalDoVolume, batimentoDoWorker, agora = new Date()) {
+function volume(sinalDoVolume, batimentoDoWorker, agora = new Date(), lado = {}) {
   const vivo = minutosDesde(batimentoDoWorker, agora);
   if (vivo === null || vivo > MINUTOS_BATIMENTO_ATRASADO) {
     return { nivel: 'desligado', mensagem: 'Sem worker no ar não há o que comparar. Com ele ligado, o painel confere se os dois usam o mesmo /dados.' };
@@ -74,10 +76,36 @@ function volume(sinalDoVolume, batimentoDoWorker, agora = new Date()) {
   if (visto !== null && visto <= MINUTOS_BATIMENTO_ATRASADO) {
     return { nivel: 'ok', mensagem: 'API e worker enxergam o mesmo /dados.' };
   }
+  // Vermelho. A causa mais comum NÃO é volume separado: o EasyPanel implanta cada serviço à parte, e
+  // um worker de deploy antigo mantém o batimento mas nunca gravou o sinal. Diz a causa certa.
+  if ('versaoWorker' in lado && !lado.versaoWorker) {
+    return {
+      nivel: 'parado',
+      mensagem:
+        'O worker está de pé, mas roda uma versão antiga do código (não informa a versão nem grava o sinal do volume). ' +
+        'Reimplante o serviço do worker no EasyPanel — não é problema de volume.',
+    };
+  }
+  if (lado.versaoApi && lado.versaoWorker !== lado.versaoApi) {
+    return {
+      nivel: 'parado',
+      mensagem:
+        `API e worker rodam versões diferentes do código (API ${lado.versaoApi}, worker ${lado.versaoWorker}). ` +
+        'Reimplante o que ficou para trás para os dois usarem o mesmo commit.',
+    };
+  }
+  if (lado.dirWorker && lado.dirApi && lado.dirWorker !== lado.dirApi) {
+    return {
+      nivel: 'parado',
+      mensagem:
+        `O worker grava em ${lado.dirWorker} e a API lê em ${lado.dirApi}. Ajuste DIR_DADOS para o mesmo caminho nos dois ` +
+        '(o volume montado fica em /dados).',
+    };
+  }
   return {
     nivel: 'parado',
     mensagem:
-      'O worker está de pé, mas a API não enxerga o sinal que ele grava em /dados: os dois estão em volumes diferentes. ' +
+      'O worker está de pé e roda o mesmo código, mas a API não enxerga o sinal que ele grava em /dados: os dois estão em volumes diferentes. ' +
       'O painel baixa o arquivo de novo ao abrir, mas o certo é montar o MESMO volume em /dados nos dois serviços (EasyPanel, aba Mounts).',
   };
 }
