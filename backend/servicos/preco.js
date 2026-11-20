@@ -85,6 +85,17 @@ async function resumoDaLicitacao(organizacaoId, licitacaoId) {
       pct_sem_homologacao: numero(referencia.pct_sem_homologacao),
       mediana_propostas: referencia.mediana_propostas,
     },
+    // A frase que abre a aba: o que a referência diz para esta licitação, em português.
+    frase: regras.fraseDaReferencia({
+      referencia: referencia && {
+        desconto_mediano: numero(referencia.desconto_mediano),
+        desconto_q1: numero(referencia.desconto_q1),
+        desconto_q3: numero(referencia.desconto_q3),
+        pct_acima_estimado: numero(referencia.pct_acima_estimado),
+      },
+      segmento: referencia ? referencia.grupo : licitacao.grupo,
+      familia: regras.familiaModalidade(licitacao.modalidade),
+    }),
     ...faixa,
     margem_mediana: regras.margem({ custo, preco: faixa.fecha_por }),
     margem_proposta: regras.margem({ custo, preco: licitacao.valor_proposto }),
@@ -317,11 +328,89 @@ async function listarConcorrentes({ organizacaoId, grupo, limite = 50 } = {}) {
   return linhas.map((l) => ({ ...l, total: Number(l.total || 0) }));
 }
 
+/**
+ * O que a tela "Preço de referência" mostra para um segmento (grupo × família): a frase, de onde
+ * vem o número, a referência para o simulador e as opções dos seletores.
+ */
+async function resumoDoSegmento({ grupo, familia } = {}) {
+  const segmento = grupo || 'Geral';
+  const modalidade = familia || 'Pregão';
+  const referencia = await referenciaPara({ grupo: segmento, modalidade });
+  const [grupos] = await pool.query('SELECT DISTINCT grupo FROM precos_referencia ORDER BY FIELD(grupo, \'Geral\') DESC, grupo');
+  const [familias] = await pool.query("SELECT DISTINCT familia FROM precos_referencia ORDER BY FIELD(familia, 'Pregão', 'Dispensa'), familia");
+  const [[totais]] = await pool.query(
+    `SELECT COUNT(*) AS encerradas, MIN(encerrada_em) AS de, MAX(encerrada_em) AS ate FROM historico_precos WHERE sem_homologacao = 0`
+  );
+  const ref = referencia && {
+    ...referencia,
+    desconto_mediano: numero(referencia.desconto_mediano),
+    desconto_q1: numero(referencia.desconto_q1),
+    desconto_q3: numero(referencia.desconto_q3),
+    pct_acima_estimado: numero(referencia.pct_acima_estimado),
+    pct_sem_homologacao: numero(referencia.pct_sem_homologacao),
+  };
+  return {
+    grupo: segmento,
+    familia: regras.familiaModalidade(modalidade),
+    referencia: ref,
+    frase: regras.fraseDaReferencia({ referencia: ref, segmento, familia: regras.familiaModalidade(modalidade) }),
+    base: regras.baseDaReferencia(ref),
+    base_rotulo: ref ? ref.base : null,
+    grupos: grupos.map((g) => g.grupo),
+    familias: familias.map((f) => f.familia),
+    amostra: { encerradas: Number(totais.encerradas || 0), de: totais.de, ate: totais.ate },
+    contexto: regras.CONTEXTO_DO_ESTUDO,
+  };
+}
+
+/** Contratações reais encerradas parecidas: o que dá substância ao número da frase. */
+async function contratacoesParecidas({ grupo, familia, q, pagina = 1, porPagina = 15 } = {}) {
+  const onde = ['sem_homologacao = 0', 'desconto IS NOT NULL'];
+  const valores = [];
+  if (grupo && grupo !== 'Geral') {
+    onde.push('grupo = ?');
+    valores.push(grupo);
+  }
+  if (familia) {
+    onde.push('familia = ?');
+    valores.push(regras.familiaModalidade(familia));
+  }
+  const busca = String(q || '').trim();
+  if (busca) {
+    onde.push('objeto LIKE ?');
+    valores.push(`%${busca.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
+  }
+  const limite = Math.min(Math.max(Number(porPagina) || 15, 1), 50);
+  const deslocamento = (Math.max(Number(pagina) || 1, 1) - 1) * limite;
+  const clausula = onde.join(' AND ');
+
+  const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM historico_precos WHERE ${clausula}`, valores);
+  const [linhas] = await pool.query(
+    `SELECT id, objeto, orgao_nome, uf, modalidade, valor_estimado, valor_homologado, desconto, encerrada_em, grupo
+       FROM historico_precos WHERE ${clausula}
+      ORDER BY encerrada_em DESC, id DESC LIMIT ? OFFSET ?`,
+    [...valores, limite, deslocamento]
+  );
+  return {
+    total: Number(total),
+    pagina: Math.max(Number(pagina) || 1, 1),
+    por_pagina: limite,
+    dados: linhas.map((l) => ({
+      ...l,
+      valor_estimado: numero(l.valor_estimado),
+      valor_homologado: numero(l.valor_homologado),
+      desconto: numero(l.desconto),
+    })),
+  };
+}
+
 module.exports = {
   referenciaPara,
   resumoDaLicitacao,
   recalcular,
   listarReferencias,
+  resumoDoSegmento,
+  contratacoesParecidas,
   concorrentesDa,
   perfilDoConcorrente,
   listarConcorrentes,

@@ -546,6 +546,19 @@ export const api = {
 
   precosReferencia: () => requisitar('/precos-referencia'),
 
+  precosResumo: (grupo, familia) =>
+    requisitar(`/precos-referencia/resumo?${new URLSearchParams({ grupo: grupo || '', familia: familia || '' })}`),
+
+  simularPreco: ({ grupo, familia, estimado, custo }) =>
+    requisitar(
+      `/precos-referencia/simular?${new URLSearchParams({ grupo: grupo || '', familia: familia || '', estimado, custo: custo || '' })}`
+    ),
+
+  precosParecidas: ({ grupo, familia, q, pagina }) =>
+    requisitar(
+      `/precos-referencia/parecidas?${new URLSearchParams({ grupo: grupo || '', familia: familia || '', q: q || '', pagina: pagina || 1 })}`
+    ),
+
   recalcularPrecos: () => requisitar('/precos-referencia/recalcular', { method: 'POST' }),
 
   coletarEncerradas: (corpo = {}) =>

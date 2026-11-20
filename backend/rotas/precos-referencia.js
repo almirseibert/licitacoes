@@ -3,6 +3,7 @@
 const express = require('express');
 const { responderErro } = require('../middlewares/responder-erro');
 const servico = require('../servicos/preco');
+const regras = require('../regras/preco');
 const encerradas = require('../jobs/encerradas');
 
 const rotas = express.Router();
@@ -13,6 +14,49 @@ rotas.get('/', async (_req, res) => {
     res.json(await servico.listarReferencias());
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível carregar o preço de referência.', erro);
+  }
+});
+
+// GET /api/precos-referencia/resumo?grupo=&familia= — a frase, a base e as opções da tela.
+rotas.get('/resumo', async (req, res) => {
+  try {
+    res.json(await servico.resumoDoSegmento({ grupo: req.query.grupo, familia: req.query.familia }));
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível carregar o preço de referência.', erro);
+  }
+});
+
+// GET /api/precos-referencia/simular?grupo=&familia=&estimado=&custo= — o veredito "vale a pena?".
+rotas.get('/simular', async (req, res) => {
+  try {
+    const estimado = Number(req.query.estimado);
+    if (!Number.isFinite(estimado) || estimado <= 0) {
+      return res.status(400).json({ erro: 'Informe o valor estimado da licitação.' });
+    }
+    const referencia = await servico.referenciaPara({ grupo: req.query.grupo || 'Geral', modalidade: req.query.familia || 'Pregão' });
+    const custo = req.query.custo === undefined || req.query.custo === '' ? null : Number(req.query.custo);
+    res.json({
+      sem_referencia: !referencia,
+      ...regras.simular({ valorEstimado: estimado, custo, referencia }),
+    });
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível simular.', erro);
+  }
+});
+
+// GET /api/precos-referencia/parecidas?grupo=&familia=&q=&pagina= — contratações reais encerradas.
+rotas.get('/parecidas', async (req, res) => {
+  try {
+    res.json(
+      await servico.contratacoesParecidas({
+        grupo: req.query.grupo,
+        familia: req.query.familia,
+        q: req.query.q,
+        pagina: req.query.pagina,
+      })
+    );
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível listar as contratações parecidas.', erro);
   }
 });
 

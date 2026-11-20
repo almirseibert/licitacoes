@@ -190,6 +190,92 @@ function margem({ custo, preco }) {
   return { valor, pct, sinal, frase };
 }
 
+const pctTexto = (fracao) => `${Math.round(Number(fracao) * 100)}%`;
+const reais = (n) => Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+/**
+ * A frase que abre a tela: o que a referência diz, em português, com a base à vista.
+ * Sem desconto mediano não há o que dizer — a tela mostra a lacuna, nunca um número inventado.
+ *
+ * @param {{ referencia: object|null, segmento: string, familia: string }} p
+ */
+function fraseDaReferencia({ referencia, segmento, familia }) {
+  // 'Outra' é a família quando a modalidade não é conhecida: "Em Outra" não diz nada.
+  const nomeDaFamilia = !familia || familia === 'Outra' ? 'contratações' : familia;
+  const onde = `${nomeDaFamilia}${segmento && segmento !== 'Geral' ? ` de ${segmento}` : ''}`;
+  if (!referencia || referencia.desconto_mediano === null || referencia.desconto_mediano === undefined) {
+    return `Ainda não há contratações encerradas suficientes em ${onde} para dizer por quanto elas fecham.`;
+  }
+  const mediana = Number(referencia.desconto_mediano);
+  const q1 = referencia.desconto_q1;
+  const q3 = referencia.desconto_q3;
+
+  const partes = [];
+  partes.push(
+    mediana <= 0.005
+      ? `Em ${onde}, a metade das contratações fecha no próprio valor estimado, sem desconto.`
+      : `Em ${onde}, quem vence fecha em média ${pctTexto(mediana)} abaixo do valor estimado.`
+  );
+  if (q3 !== null && q3 !== undefined && q1 !== null && q1 !== undefined) {
+    partes.push(`Metade fecha entre ${pctTexto(q1)} e ${pctTexto(q3)} abaixo.`);
+  } else if (q3 !== null && q3 !== undefined) {
+    partes.push(`Um quarto passa de ${pctTexto(q3)} de desconto.`);
+  }
+  if (referencia.pct_acima_estimado !== null && referencia.pct_acima_estimado !== undefined) {
+    const acima = Number(referencia.pct_acima_estimado);
+    partes.push(
+      acima >= 0.05
+        ? `${pctTexto(acima)} fecham ACIMA do estimado.`
+        : `Só ${(acima * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% fecham acima do estimado: o valor estimado é o teto prático.`
+    );
+  }
+  return partes.join(' ');
+}
+
+/** De onde vem o número, para ficar embaixo da frase. */
+function baseDaReferencia(referencia) {
+  if (!referencia) return null;
+  if (referencia.origem === 'calculado') {
+    return `Medido aqui: ${referencia.amostra} contratações encerradas com valor homologado.`;
+  }
+  return 'Levantamento de 10/10/2026 sobre 1.371 contratações de 2026. O painel passa a usar a própria medida quando tiver amostra suficiente.';
+}
+
+/**
+ * O simulador da tela: dado o estimado e o custo, o que esperar. Sem estimado ou sem
+ * referência devolve só o que dá para dizer; o veredito exige o custo.
+ *
+ * `preco_para_20` é o menor preço que ainda deixa 20% de margem (custo / 0,8) e
+ * `cabe` diz se ele está dentro da faixa provável — é a resposta à pergunta "vale a pena?".
+ */
+function simular({ valorEstimado, custo, referencia }) {
+  const f = faixa({ valorEstimado, referencia });
+  const resultado = { ...f, margem_mediana: null, margem_pior: null, preco_para_20: null, veredito: null, frase: null };
+  const c = Number(custo);
+  if (!Number.isFinite(c) || c <= 0 || f.fecha_por === null) return resultado;
+
+  resultado.margem_mediana = margem({ custo: c, preco: f.fecha_por });
+  // Pior caso: o desconto do 3º quartil (o preço mais baixo que costuma fechar).
+  resultado.margem_pior = f.faixa_min === null ? null : margem({ custo: c, preco: f.faixa_min });
+  resultado.preco_para_20 = Number((c / 0.8).toFixed(2));
+
+  const m = resultado.margem_mediana;
+  if (m.pct < 0) {
+    resultado.veredito = 'nao_compensa';
+    resultado.frase = `No preço mediano (${reais(f.fecha_por)}) você teria prejuízo. Só fecha a conta se o preço ficar acima de ${reais(c)}.`;
+  } else if (m.pct < 0.2) {
+    resultado.veredito = 'apertado';
+    resultado.frase = `No preço mediano (${reais(f.fecha_por)}) sobra ${pctTexto(m.pct)}. Dá para disputar, mas qualquer imprevisto come o lucro.`;
+  } else {
+    resultado.veredito = 'vale';
+    resultado.frase = `No preço mediano (${reais(f.fecha_por)}) sobra ${pctTexto(m.pct)}: vale disputar.`;
+  }
+  if (resultado.margem_pior && resultado.margem_pior.pct < 0 && m.pct >= 0) {
+    resultado.frase += ` Se a disputa descer ao preço mais baixo da faixa (${reais(f.faixa_min)}), a conta fecha no prejuízo.`;
+  }
+  return resultado;
+}
+
 module.exports = {
   ESTUDO,
   CONTEXTO_DO_ESTUDO,
@@ -201,4 +287,7 @@ module.exports = {
   estatistica,
   faixa,
   margem,
+  fraseDaReferencia,
+  baseDaReferencia,
+  simular,
 };

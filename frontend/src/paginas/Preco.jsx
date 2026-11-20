@@ -16,6 +16,7 @@ export default function Preco({ id }) {
   const [erro, setErro] = useState(null);
   const [custo, setCusto] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const [parecidas, setParecidas] = useState([]);
 
   useEffect(() => {
     api
@@ -24,6 +25,11 @@ export default function Preco({ id }) {
         setDados(r);
         setCusto(r.licitacao.custo_estimado ?? '');
         setErro(null);
+        // Contratações reais encerradas do mesmo segmento: dão substância à frase.
+        api
+          .precosParecidas({ grupo: r.referencia ? r.referencia.grupo : r.licitacao.grupo, familia: r.licitacao.familia, pagina: 1 })
+          .then((p) => setParecidas((p.dados || []).slice(0, 5)))
+          .catch(() => setParecidas([]));
       })
       .catch((e) => setErro(e.message));
   }, [id]);
@@ -55,6 +61,8 @@ export default function Preco({ id }) {
         </p>
       )}
       {erro && <p className="text-xs text-erro">{erro}</p>}
+
+      <p className="font-titulo text-base leading-snug" role="status">{dados.frase}</p>
 
       <dl className="font-mono text-sm">
         <Linha rotulo="Valor estimado" valor={moedaExata(dados.licitacao.valor_estimado)} />
@@ -131,16 +139,31 @@ export default function Preco({ id }) {
               ? `Do levantamento de ${data(referencia.apurado_em)} sobre 1.371 contratações — o painel ainda não tem amostra própria deste grupo.`
               : `Medido pelo painel em ${referencia.amostra} contratações encerradas, apuradas em ${data(referencia.apurado_em)}.`}
           </p>
-          <p className="font-mono">
-            mediana {pct(referencia.desconto_mediano)} · 1º quartil {pct(referencia.desconto_q1)} · 3º quartil{' '}
-            {pct(referencia.desconto_q3)}
-            {referencia.pct_sem_homologacao !== null && (
-              <> · desertas/fracassadas {pct(referencia.pct_sem_homologacao)}</>
-            )}
-          </p>
           <ul className="space-y-0.5 pt-1">
             {dados.contexto.map((frase) => (
               <li key={frase}>· {frase}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {parecidas.length > 0 && (
+        <div>
+          <h3 className="text-xs uppercase tracking-wide text-texto-suave mb-1">Contratações reais parecidas</h3>
+          <ul className="divide-y divide-borda/40 text-xs">
+            {parecidas.map((c) => (
+              <li key={c.id} className="py-1.5 flex gap-3">
+                <span className="flex-1 min-w-0">
+                  <span className="line-clamp-1">{c.objeto}</span>
+                  <span className="text-texto-suave">{c.orgao_nome}{c.uf ? ` · ${c.uf}` : ''} · {data(c.encerrada_em)}</span>
+                </span>
+                <span className="font-mono text-right whitespace-nowrap">
+                  {moedaExata(c.valor_homologado)}
+                  <span className="block text-texto-suave">
+                    {Math.round(Number(c.desconto) * 100) === 0 ? 'no estimado' : Number(c.desconto) > 0 ? `${Math.round(Number(c.desconto) * 100)}% abaixo` : `${Math.abs(Math.round(Number(c.desconto) * 100))}% acima`}
+                  </span>
+                </span>
+              </li>
             ))}
           </ul>
         </div>
