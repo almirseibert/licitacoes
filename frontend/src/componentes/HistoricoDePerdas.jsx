@@ -4,14 +4,14 @@ import { api } from '../servicos/api';
 import { moeda, moedaExata, resumir, LACUNA } from '../servicos/formato';
 
 /**
- * "Meu histórico": por que a organização perdeu licitações (motivo, quem venceu, diferença de preço) e o que
- * mais a impediu de disputar. Vivia na aba "Meu histórico" de Mercado e concorrentes; em 20/11/2026 foi para
- * Desempenho, que é onde essa pergunta mora ("como eu me saí?"), e Mercado ficou só com o mercado.
+ * "Por que perdi": motivo, recomendação, quem venceu, diferença de preço e o que mais impediu de disputar.
+ * Vivia na aba "Meu histórico" de Mercado e concorrentes; em 20/11/2026 foi para Meu desempenho e se fundiu à antiga
+ * tabela "Por que perdi" (mesma regra de motivo). O período é o da página — `de`/`ate` —, para os números concordarem
+ * com os cartões de cima; sem eles, últimos 12 meses.
  */
 const pct = (v, casas = 1) => (v === null || v === undefined ? '—' : `${(Number(v) * 100).toFixed(casas)}%`);
 
-export default function HistoricoDePerdas({ aoFornecedor, aoAbrir }) {
-  const [meses, setMeses] = useState(12);
+export default function HistoricoDePerdas({ de = null, ate = null, aoFornecedor, aoAbrir }) {
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState(null);
 
@@ -19,39 +19,18 @@ export default function HistoricoDePerdas({ aoFornecedor, aoAbrir }) {
     let vivo = true;
     setDados(null);
     api
-      .historicoPerdas(meses)
+      .historicoPerdas({ de, ate })
       .then((r) => vivo && (setDados(r), setErro(null)))
       .catch((e) => vivo && setErro(e.message));
     return () => {
       vivo = false;
     };
-  }, [meses]);
+  }, [de, ate]);
 
   const t = dados && dados.total;
 
   return (
     <div className="space-y-4 max-w-5xl">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-1">
-          {[6, 12, 24].map((m) => (
-            <button
-              key={m}
-              onClick={() => setMeses(m)}
-              className={`px-2 py-0.5 text-xs border rounded ${meses === m ? 'border-texto text-texto' : 'border-borda text-texto-suave hover:text-texto'}`}
-            >
-              {m} meses
-            </button>
-          ))}
-        </div>
-        {t && (
-        <span className="text-xs text-texto-suave">
-          disputei <span className="font-mono text-texto">{t.disputadas}</span> · ganhei{' '}
-          <span className="font-mono text-ok">{t.ganhas}</span> · perdi <span className="font-mono text-erro">{t.perdidas}</span> · taxa{' '}
-          <span className="font-mono text-texto">{pct(t.taxa_vitoria)}</span>
-        </span>
-        )}
-      </div>
-
       {erro && <p className="text-sm text-erro">{erro}</p>}
       {!dados && !erro && <Loader2 size={16} className="animate-spin text-texto-suave" />}
       {dados && (

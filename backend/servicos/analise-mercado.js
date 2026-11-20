@@ -348,15 +348,26 @@ async function perfilNoMercado(cnpjPedido) {
  * motivo que dá para afirmar e a recomendação; e, ao lado, os bloqueios que o
  * diagnóstico de descarte (seção 20) já ranqueia.
  */
-async function historicoDePerdas(organizacaoId, { meses = 12 } = {}) {
+async function historicoDePerdas(organizacaoId, { meses = 12, de = null, ate = null } = {}) {
+  // Período: o da página (de/ate, como em "Meu desempenho"; só `ate` = sem início) ou os últimos N meses.
+  const diaDe = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null);
+  const inicio = diaDe(de);
+  const fim = diaDe(ate);
+  const quando = 'DATE(COALESCE(l.etapa_em, l.fim_propostas))';
+  let periodoSql = `${quando} >= DATE_SUB(CURDATE(), INTERVAL ? MONTH)`;
+  let parametros = [meses];
+  if (fim) {
+    periodoSql = inicio ? `${quando} BETWEEN ? AND ?` : `${quando} <= ?`;
+    parametros = inicio ? [inicio, fim] : [fim];
+  }
   const [linhas] = await pool.query(
     `SELECT l.id, l.objeto, l.orgao_nome, l.uf, l.modalidade, l.valor_estimado, l.valor_proposto,
             l.valor_final, l.vencedor, l.cnpj_vencedor, l.beneficio_me, l.etapa, l.etapa_em
        FROM ${daOrganizacao(organizacaoId)} l
       WHERE l.etapa IN ('Ganhamos','Perdemos')
-        AND COALESCE(l.etapa_em, l.fim_propostas) >= DATE_SUB(NOW(), INTERVAL ? MONTH)
+        AND ${periodoSql}
       ORDER BY l.etapa_em DESC`,
-    [meses]
+    parametros
   );
   const perdas = linhas
     .filter((l) => l.etapa === 'Perdemos')
@@ -383,6 +394,7 @@ async function historicoDePerdas(organizacaoId, { meses = 12 } = {}) {
   const descartes = await diagnostico.diagnosticar({ organizacaoId, dias: 90 });
   return {
     meses,
+    periodo: fim ? { de: inicio, ate: fim } : null,
     total: { disputadas: linhas.length, ganhas, perdidas: perdas.length, taxa_vitoria: linhas.length ? ganhas / linhas.length : null },
     motivos,
     principal,

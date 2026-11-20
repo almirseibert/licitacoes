@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Printer, Info, Lightbulb } from 'lucide-react';
+import { Loader2, Printer, Info } from 'lucide-react';
 import { api } from '../servicos/api';
 import HistoricoDePerdas from '../componentes/HistoricoDePerdas';
 import GavetaFornecedor from '../componentes/GavetaFornecedor';
@@ -166,42 +166,10 @@ export default function Desempenho({ aoAbrir }) {
                 />
               </div>
 
+              {/* Fundiu a antiga tabela "Por que perdi" com o histórico de perdas (20/11/2026): mesma regra de motivo,
+                  e o período é o desta página, então os números concordam com os cartões acima. */}
               <Bloco titulo="Por que perdi">
-                {dados.motivos.length === 0 ? (
-                  <p className="text-sm text-texto-suave">Nenhuma licitação perdida no período.</p>
-                ) : (
-                  <>
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="text-texto-suave text-left">
-                          <th className="py-1 font-normal">Motivo</th>
-                          <th className="py-1 font-normal text-right">Perdas</th>
-                          <th className="py-1 font-normal text-right">%</th>
-                          <th className="py-1 font-normal text-right">Distância média</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {dados.motivos.map((x) => (
-                          <tr key={x.motivo} className="border-t border-borda">
-                            <td className="py-1 pr-2">{x.rotulo}</td>
-                            <td className="py-1 text-right font-mono">{x.quantidade}</td>
-                            <td className="py-1 text-right font-mono">{x.percentual.toLocaleString('pt-BR')}%</td>
-                            <td className="py-1 text-right font-mono">{pct(x.diferenca_media)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {dados.principal && (
-                      <p className="flex items-start gap-2 text-xs mt-3 p-2 rounded border border-voltagem/40 bg-voltagem/5">
-                        <Lightbulb size={13} className="shrink-0 mt-0.5 text-voltagem" />
-                        {dados.principal.recomendacao}
-                      </p>
-                    )}
-                    <p className="text-[11px] text-texto-suave mt-2">
-                      Desclassificação e inabilitação: <strong className="font-normal text-texto">não disponível</strong> — o PNCP não publica o motivo.
-                    </p>
-                  </>
-                )}
+                <HistoricoDePerdas de={dados.periodo.de} ate={dados.periodo.ate} aoFornecedor={setFornecedor} aoAbrir={aoAbrir} />
               </Bloco>
 
               <Bloco
@@ -300,14 +268,6 @@ export default function Desempenho({ aoAbrir }) {
         </>
       )}
 
-      {/* Veio da aba "Meu histórico" de Mercado e concorrentes (20/11/2026): perdas por motivo, quem venceu. */}
-      <section className="mt-8 pt-4 border-t border-borda">
-        <h2 className="font-titulo text-base mb-1">Histórico de perdas</h2>
-        <p className="text-xs text-texto-suave mb-3 max-w-3xl">
-          Por que você perdeu, para quem e por quanto — e o que mais impediu você de disputar. Conta o que você moveu para “Perdemos” no funil.
-        </p>
-        <HistoricoDePerdas aoFornecedor={setFornecedor} aoAbrir={aoAbrir} />
-      </section>
       <GavetaFornecedor fornecedor={fornecedor} aoFechar={() => setFornecedor(null)} />
     </div>
   );

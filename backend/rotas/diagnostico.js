@@ -30,11 +30,11 @@ rotas.get('/', async (req, res) => {
   }
 });
 
-// GET /api/diagnostico/perdas — meu histórico: motivos de perda e recomendação (Seção 13).
+// GET /api/diagnostico/perdas?de=&ate= (ou ?meses=) — motivos de perda e recomendação (Seção 13). O período é o de "Meu desempenho".
 rotas.get('/perdas', async (req, res) => {
   const meses = [3, 6, 12, 24].includes(Number(req.query.meses)) ? Number(req.query.meses) : 12;
   try {
-    res.json(await analise.historicoDePerdas(req.organizacaoId, { meses }));
+    res.json(await analise.historicoDePerdas(req.organizacaoId, { meses, de: req.query.de, ate: req.query.ate }));
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível montar o histórico de perdas.', erro);
   }

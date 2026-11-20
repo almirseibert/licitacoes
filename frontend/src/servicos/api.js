@@ -720,7 +720,8 @@ export const api = {
   // Painel de Mercado (20/11/2026): { area, segmento, uf, dias, vence } → frase, vencimentos, atas, concorrentes.
   painelMercado: (filtros = {}) => requisitar(`/mercado/painel?${semVazios(filtros)}`),
 
-  historicoPerdas: (meses = 12) => requisitar(`/diagnostico/perdas?meses=${meses}`),
+  // { de, ate } = o período da página de desempenho (de nulo = sem início); sem eles, últimos 12 meses.
+  historicoPerdas: ({ de, ate, meses } = {}) => requisitar(`/diagnostico/perdas?${semVazios({ de, ate, meses })}`),
   tiposAcompanhamento: () => requisitar('/acompanhamentos/tipos'),
 
   // ------------- contratos e marcos (seção 28)
