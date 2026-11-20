@@ -5,6 +5,7 @@
 const pool = require('../config/db');
 const escopo = require('../servicos/escopo');
 const ia = require('../servicos/ia');
+const { garantirTexto } = require('../servicos/preparar-edital');
 const { arquivosComTexto } = require('../servicos/perguntas-edital');
 
 /** O texto já extraído dos arquivos da licitação (Fase 4), na ordem do edital. */
@@ -32,7 +33,13 @@ async function resumirLicitacao({ licitacaoId, forcar = false }) {
   // (`org_licitacoes.ia_situacao`) e o resumo do edital é um só. Ler de novo
   // não apaga a decisão de ninguém — só troca a sugestão que todos veem.
 
-  const texto = await textoDaLicitacao(licitacaoId);
+  let texto = await textoDaLicitacao(licitacaoId);
+  if (texto.trim().length < 400) {
+    // Sem texto lido: baixa o que falta e lê os PDFs agora (sem IA) — só chega aqui por clique.
+    const preparado = await garantirTexto(licitacaoId);
+    if (!preparado.ok) return { ok: false, motivo: preparado.motivo };
+    texto = await textoDaLicitacao(licitacaoId);
+  }
   const r = await ia.lerEdital({ licitacaoId, texto, forcar });
   if (!r.ok) return r;
 

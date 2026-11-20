@@ -265,6 +265,87 @@ async function baixarUm({ registro, pastaAbsoluta, pasta, adaptador }) {
   return { nome, tamanho: bytes, extraido };
 }
 
+// Um download por arquivo por vez: dois cliques (ou "ver" e "baixar" juntos) no mesmo
+// arquivo ausente não disparam duas idas ao portal.
+const emAndamento = new Map();
+
+/**
+ * Garante que UM arquivo está no disco DESTE processo. Se o banco diz "ok" mas o arquivo
+ * não está aqui — o caso de API e worker em volumes diferentes, ou volume que foi
+ * recriado — baixa de novo da origem e regrava no mesmo caminho.
+ *
+ * @returns {Promise<{ok:boolean, motivo?:string, registro?:object}>}
+ */
+function curarArquivo({ licitacaoId, arquivoId }) {
+  const chave = `${licitacaoId}:${arquivoId}`;
+  if (emAndamento.has(chave)) return emAndamento.get(chave);
+  const trabalho = curarArquivoSemTrava({ licitacaoId, arquivoId }).finally(() => emAndamento.delete(chave));
+  emAndamento.set(chave, trabalho);
+  return trabalho;
+}
+
+async function curarArquivoSemTrava({ licitacaoId, arquivoId }) {
+  const [[registro]] = await pool.query(
+    'SELECT * FROM licitacao_arquivos WHERE id = ? AND licitacao_id = ?',
+    [arquivoId, licitacaoId]
+  );
+  if (!registro) return { ok: false, motivo: 'Arquivo não encontrado.' };
+  if (jaBaixado(registro)) return { ok: true, registro };
+  if (!registro.url_origem) {
+    return { ok: false, motivo: 'O endereço de origem deste arquivo não foi guardado; use "Baixar o que falta".' };
+  }
+
+  const [[licitacao]] = await pool.query(
+    `SELECT l.id, l.pasta, l.chave_externa, l.objeto, l.uf, l.municipio, l.orgao_nome, l.modalidade, l.numero_compra,
+            l.abertura_propostas, l.fim_propostas, l.criado_em, f.adaptador
+       FROM licitacoes l JOIN fontes f ON f.id = l.fonte_id WHERE l.id = ?`,
+    [licitacaoId]
+  );
+  if (!licitacao) return { ok: false, motivo: 'Licitação não encontrada.' };
+
+  const adaptador = adaptadores.obter(licitacao.adaptador);
+  if (!adaptador || !adaptador.baixarArquivo) {
+    return { ok: false, motivo: 'Esta fonte não permite baixar o arquivo de novo.' };
+  }
+
+  const pasta = licitacao.pasta || path.posix.join('editais', arquivos.nomeDaPasta(licitacao));
+  const pastaAbsoluta = arquivos.garantirPasta(pasta);
+  if (!licitacao.pasta) {
+    await pool.query('UPDATE licitacoes SET pasta = ? WHERE id = ?', [recortar(pasta, 255), licitacaoId]);
+  }
+
+  try {
+    await baixarUm({ registro, pastaAbsoluta, pasta, adaptador });
+  } catch (erro) {
+    await pool.query('UPDATE licitacao_arquivos SET status = ?, erro = ? WHERE id = ?', [
+      'erro',
+      recortar(erro.message, 255),
+      registro.id,
+    ]);
+    console.error(`Falha ao baixar de novo o arquivo ${arquivoId} da licitação ${licitacaoId}: ${erro.message}`);
+    return { ok: false, motivo: `O portal não entregou o arquivo agora: ${erro.message}` };
+  }
+  const [[novo]] = await pool.query('SELECT * FROM licitacao_arquivos WHERE id = ?', [arquivoId]);
+  return { ok: true, registro: novo };
+}
+
+/** Cura todos os arquivos "ok" ausentes do disco, um por vez (regra 5.4: devagar). */
+async function curarTodos(licitacaoId) {
+  const [registros] = await pool.query(
+    "SELECT id FROM licitacao_arquivos WHERE licitacao_id = ? AND status = 'ok' ORDER BY sequencial",
+    [licitacaoId]
+  );
+  const resumo = { curados: 0, falhas: [] };
+  for (const r of registros) {
+    const [[atual]] = await pool.query('SELECT * FROM licitacao_arquivos WHERE id = ?', [r.id]);
+    if (jaBaixado(atual)) continue;
+    const c = await curarArquivo({ licitacaoId, arquivoId: r.id });
+    if (c.ok) resumo.curados += 1;
+    else resumo.falhas.push(c.motivo);
+  }
+  return resumo;
+}
+
 /** `_info.json` na pasta: de onde veio cada arquivo e com que hash (seção 7.1). */
 async function escreverInfo(pastaAbsoluta, licitacao, licitacaoId) {
   const [registros] = await pool.query(
@@ -326,4 +407,4 @@ function registrarNaFila() {
   fila.registrar('baixar_editais', (payload) => baixarEditais(payload || {}));
 }
 
-module.exports = { baixarEdital, baixarEditais, registrarNaFila, limiteMb, LIMITE_BYTES };
+module.exports = { baixarEdital, baixarEditais, curarArquivo, curarTodos, jaBaixado, registrarNaFila, limiteMb, LIMITE_BYTES };

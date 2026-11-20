@@ -577,30 +577,41 @@ rotas.post('/:id/detalhar', async (req, res) => {
 
 // ------------------------------------------------- documentação (seção 7.3)
 
-// POST /api/licitacoes/:id/baixar — enfileira o download dos documentos.
+// POST /api/licitacoes/:id/baixar — baixa os documentos.
+// Roda AQUI, no processo da API, e não na fila do worker: o arquivo precisa cair no disco
+// de quem o entrega (ver/baixar/zip). Com API e worker em volumes diferentes, o download
+// do worker ficava invisível para a tela. O job `baixar_edital` do worker continua
+// servindo à coleta automática; a rota de arquivo cura o que faltar no disco da API.
+const baixandoAgora = new Set();
 rotas.post('/:id/baixar', async (req, res) => {
   try {
-    const [linhas] = await pool.query('SELECT id FROM licitacoes WHERE id = ?', [req.params.id]);
+    const id = Number(req.params.id);
+    const [linhas] = await pool.query('SELECT id FROM licitacoes WHERE id = ?', [id]);
     if (!linhas.length) return res.status(404).json({ erro: 'Licitação não encontrada.' });
 
     const confirmado = Boolean(req.body && req.body.confirmado);
-    await fila.enfileirar(
-      'baixar_edital',
-      { licitacaoId: Number(req.params.id), confirmado },
-      { prioridade: 1, chaveUnica: `baixar:${req.params.id}` }
-    );
+    if (baixandoAgora.has(id)) {
+      return res.status(202).json({ ok: true, mensagem: 'Este download já está em andamento.' });
+    }
+    baixandoAgora.add(id);
     await pool.query(
       "UPDATE licitacoes SET arquivos_status = 'na_fila' WHERE id = ? AND arquivos_status IN ('nao_baixado','grande_demais')",
-      [req.params.id]
+      [id]
     );
+    setImmediate(() => {
+      jobBaixar
+        .baixarEdital({ licitacaoId: id, confirmado })
+        .catch((erro) => console.error(`Falha ao baixar a documentação da licitação ${id}: ${erro.message}`))
+        .finally(() => baixandoAgora.delete(id));
+    });
     res.status(202).json({
       ok: true,
       mensagem: confirmado
-        ? `Download na fila, sem o limite de ${await jobBaixar.limiteMb()} MB.`
-        : 'Download dos documentos na fila.',
+        ? `Baixando, sem o limite de ${await jobBaixar.limiteMb()} MB.`
+        : 'Baixando os documentos. A lista se atualiza sozinha.',
     });
   } catch (erro) {
-    responderErro(res, 500, 'Não foi possível enfileirar o download.', erro);
+    responderErro(res, 500, 'Não foi possível iniciar o download.', erro);
   }
 });
 
@@ -633,10 +644,11 @@ rotas.get('/:id/arquivos', async (req, res) => {
 // GET /api/licitacoes/:id/arquivos/:arqId — entrega o arquivo do volume.
 rotas.get('/:id/arquivos/:arqId', async (req, res) => {
   try {
-    const [[arquivo]] = await pool.query(
+    const [[encontrado]] = await pool.query(
       'SELECT * FROM licitacao_arquivos WHERE id = ? AND licitacao_id = ?',
       [req.params.arqId, req.params.id]
     );
+    let arquivo = encontrado;
     if (!arquivo) return res.status(404).json({ erro: 'Arquivo não encontrado.' });
     if (arquivo.status !== 'ok' || !arquivo.caminho) {
       return res.status(409).json({ erro: 'Esse arquivo ainda não foi baixado.' });
@@ -646,13 +658,12 @@ rotas.get('/:id/arquivos/:arqId', async (req, res) => {
       return res.status(400).json({ erro: 'Caminho de arquivo inválido.' });
     }
 
-    const absoluto = servicoArquivos.caminhoAbsoluto(arquivo.caminho);
+    let absoluto = servicoArquivos.caminhoAbsoluto(arquivo.caminho);
     if (!fs.existsSync(absoluto)) {
-      // O banco diz "ok" e o arquivo não está lá: ou foi mesmo apagado por fora
-      // do painel, ou este container enxerga um volume diferente do que baixou
-      // (API e worker em /dados que não é o mesmo — ver "Deploy no EasyPanel" no
-      // README). O log tem o que falta para distinguir os dois: se a PASTA
-      // também não existe, é o segundo caso.
+      // O banco diz "ok" e o arquivo não está neste disco: ou foi apagado por fora do
+      // painel, ou este serviço enxerga um volume diferente do de quem baixou (API e
+      // worker em /dados que não é o mesmo — ver "Deploy no EasyPanel" no README). Em
+      // vez de devolver erro, a API baixa de novo da origem e entrega.
       let pastaExiste = null;
       try {
         pastaExiste = fs.existsSync(path.dirname(absoluto));
@@ -661,10 +672,21 @@ rotas.get('/:id/arquivos/:arqId', async (req, res) => {
       }
       console.error(
         `Arquivo ${arquivo.id} da licitação ${req.params.id} marcado 'ok' no banco, mas ausente no disco deste serviço. ` +
-          `Caminho: ${absoluto} · pasta existe: ${pastaExiste}. Se a pasta também não existe, confira se DIR_DADOS aponta ` +
-          `para o MESMO volume nos serviços api e worker.`
+          `Caminho: ${absoluto} · pasta existe: ${pastaExiste}. Baixando de novo da origem. Se a pasta também não existia, ` +
+          `confira se DIR_DADOS aponta para o MESMO volume nos serviços api e worker.`
       );
-      return res.status(410).json({ erro: 'O arquivo não está mais no volume. Baixe a documentação de novo.' });
+      const cura = await jobBaixar.curarArquivo({ licitacaoId: Number(req.params.id), arquivoId: arquivo.id });
+      if (!cura.ok) {
+        return res.status(410).json({
+          erro: 'O arquivo não está mais no volume e não foi possível baixá-lo de novo agora. Tente em instantes ou use "Baixar o que falta".',
+          detalhe: cura.motivo,
+        });
+      }
+      arquivo = cura.registro;
+      absoluto = servicoArquivos.caminhoAbsoluto(arquivo.caminho);
+      if (!fs.existsSync(absoluto)) {
+        return res.status(410).json({ erro: 'O arquivo não está mais no volume. Baixe a documentação de novo.' });
+      }
     }
 
     // PDF abre na tela; o resto vai como download.
@@ -687,6 +709,15 @@ rotas.get('/:id/zip', async (req, res) => {
     if (!licitacao) return res.status(404).json({ erro: 'Licitação não encontrada.' });
     if (!licitacao.pasta || !servicoArquivos.dentroDoVolume(licitacao.pasta)) {
       return res.status(409).json({ erro: 'Esta licitação ainda não tem documentação baixada.' });
+    }
+
+    // O que o banco diz estar baixado mas não está neste disco volta da origem antes de empacotar.
+    const cura = await jobBaixar.curarTodos(Number(req.params.id));
+    if (cura.falhas.length) {
+      return res.status(409).json({
+        erro: 'Alguns arquivos não estão mais no volume e não foi possível baixá-los de novo agora. Tente em instantes.',
+        detalhe: cura.falhas.slice(0, 3).join(' | '),
+      });
     }
 
     const absoluta = servicoArquivos.caminhoAbsoluto(licitacao.pasta);

@@ -1,15 +1,36 @@
 // Status das ferramentas (Seção 17): lê os sinais do banco e deixa a regra
 // (regras/status.js) dizer se está no ar. Também grava o batimento do worker.
+const fs = require('fs');
+const path = require('path');
 const pool = require('../config/db');
+const { dirDados } = require('../config/ambiente');
 const regras = require('../regras/status');
 const email = require('./email');
 const fila = require('./fila');
 const { dia } = require('../regras/gestao');
 
 const NOME_WORKER = 'worker';
+const SINAL_DO_VOLUME = '.sinal-worker';
+
+/** Quando o worker gravou o sinal no volume que ESTE processo enxerga; null se não vê. */
+function lerSinalDoVolume() {
+  try {
+    const quando = new Date(fs.readFileSync(path.join(dirDados, SINAL_DO_VOLUME), 'utf8').trim());
+    return Number.isNaN(quando.getTime()) ? null : quando;
+  } catch {
+    return null;
+  }
+}
 
 /** Chamado pelo worker a cada minuto. Falha não derruba o worker. */
 async function baterWorker() {
+  // O sinal no volume: a API o procura para saber se enxerga o mesmo /dados (regras/status.js `volume`).
+  try {
+    fs.mkdirSync(dirDados, { recursive: true });
+    fs.writeFileSync(path.join(dirDados, SINAL_DO_VOLUME), new Date().toISOString());
+  } catch (erro) {
+    console.error(`Sinal do volume não gravou em ${dirDados}:`, erro.message);
+  }
   try {
     await pool.query(
       'INSERT INTO worker_batimentos (nome, em) VALUES (?, NOW()) ON DUPLICATE KEY UPDATE em = NOW()',
@@ -48,6 +69,7 @@ async function ler(organizacaoId, agora = new Date()) {
   const itens = [
     { chave: 'banco', rotulo: 'Banco de dados', nivel: 'ok', mensagem: `Respondendo em ${Date.now() - antes} ms.` },
     { chave: 'worker', rotulo: 'Worker (coleta, boletim e avisos)', ...regras.worker(batimento ? batimento.em : null, agora) },
+    { chave: 'volume', rotulo: 'Volume de arquivos (/dados)', ...regras.volume(lerSinalDoVolume(), batimento ? batimento.em : null, agora) },
     { chave: 'fila', rotulo: 'Fila de tarefas', ...regras.fila(contagem, velha ? velha.minutos : 0) },
     { chave: 'coleta', rotulo: 'Coleta das fontes', ...regras.coleta(fontes, agora) },
     {

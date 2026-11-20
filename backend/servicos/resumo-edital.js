@@ -10,6 +10,7 @@ const docx = require('./docx');
 const regras = require('../regras/resumo-edital');
 const { paginasDoArquivo } = require('../regras/busca-edital');
 const { arquivosComTexto } = require('./perguntas-edital');
+const { garantirTexto } = require('./preparar-edital');
 const { ia: cfg } = require('../config/ambiente');
 const { lerJson } = require('./limites');
 const { formatarData } = require('../regras/boletim');
@@ -100,6 +101,11 @@ async function existe(licitacaoId) {
  * @returns {{ok, dados?, cache?, chamouModelo, motivo?, codigo?}}
  */
 async function gerar({ licitacaoId, forcar = false }) {
+  // Sem texto lido, baixa o que falta e lê os PDFs agora (sem IA), antes de chamar o modelo.
+  const preparado = await garantirTexto(licitacaoId);
+  if (!preparado.ok) {
+    return { ok: false, codigo: 'sem_texto', chamouModelo: false, motivo: preparado.motivo };
+  }
   const arquivos = await arquivosComTexto(licitacaoId);
   const paginas = arquivos.flatMap(paginasDoArquivo);
   if (paginas.reduce((s, p) => s + p.texto.trim().length, 0) < MINIMO_DE_TEXTO) {

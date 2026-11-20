@@ -56,6 +56,32 @@ function coleta(fontes, agora = new Date()) {
   return { nivel: 'parado', mensagem: `A coleta não roda há ${quando}.${sufixo}`, bloqueadas };
 }
 
+/**
+ * API e worker enxergam o MESMO /dados? O worker grava `.sinal-worker` no volume dele a
+ * cada minuto; a API procura esse arquivo no dela. Se o worker está vivo (batimento no
+ * banco) e a API não vê o sinal, os dois estão em volumes diferentes: o que o worker
+ * baixa não aparece para quem abre o arquivo na tela.
+ *
+ * @param {Date|null} sinalDoVolume quando o `.sinal-worker` foi gravado (null = a API não o vê)
+ * @param {Date|null} batimentoDoWorker último batimento do worker no banco
+ */
+function volume(sinalDoVolume, batimentoDoWorker, agora = new Date()) {
+  const vivo = minutosDesde(batimentoDoWorker, agora);
+  if (vivo === null || vivo > MINUTOS_BATIMENTO_ATRASADO) {
+    return { nivel: 'desligado', mensagem: 'Sem worker no ar não há o que comparar. Com ele ligado, o painel confere se os dois usam o mesmo /dados.' };
+  }
+  const visto = minutosDesde(sinalDoVolume, agora);
+  if (visto !== null && visto <= MINUTOS_BATIMENTO_ATRASADO) {
+    return { nivel: 'ok', mensagem: 'API e worker enxergam o mesmo /dados.' };
+  }
+  return {
+    nivel: 'parado',
+    mensagem:
+      'O worker está de pé, mas a API não enxerga o sinal que ele grava em /dados: os dois estão em volumes diferentes. ' +
+      'O painel baixa o arquivo de novo ao abrir, mas o certo é montar o MESMO volume em /dados nos dois serviços (EasyPanel, aba Mounts).',
+  };
+}
+
 function recurso(ligado, nome, comoLigar) {
   return ligado
     ? { nivel: 'ok', mensagem: `${nome} está ligado.` }
@@ -69,4 +95,4 @@ function geral(itens) {
   return 'ok';
 }
 
-module.exports = { worker, fila, coleta, recurso, geral };
+module.exports = { worker, fila, coleta, volume, recurso, geral };

@@ -197,3 +197,18 @@ test('LGPD: só se apaga arquivo dentro de org/<id>/ da própria organização',
   assert.equal(f('editais/2026/arquivo.pdf', 9), null); // catálogo compartilhado
   assert.equal(f('../fora/arquivo.pdf', 9), null);
 });
+
+test('volume: API e worker no mesmo /dados, em volumes diferentes e sem worker para comparar', () => {
+  const agora = new Date('2026-11-20T12:00:00Z');
+  const h = (min) => new Date(agora.getTime() - min * 60000);
+  assert.equal(st.volume(h(1), h(1), agora).nivel, 'ok');
+  // Worker vivo, API não vê o sinal (arquivo ausente) → volumes diferentes.
+  const separado = st.volume(null, h(1), agora);
+  assert.equal(separado.nivel, 'parado');
+  assert.match(separado.mensagem, /Mounts/);
+  // Sinal velho no volume da API também não vale (volume antigo, sem o worker gravando).
+  assert.equal(st.volume(h(120), h(1), agora).nivel, 'parado');
+  // Worker parado: não há como comparar, e isso não derruba o status geral.
+  assert.equal(st.volume(null, h(60), agora).nivel, 'desligado');
+  assert.equal(st.volume(null, null, agora).nivel, 'desligado');
+});
