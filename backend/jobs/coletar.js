@@ -278,6 +278,73 @@ async function salvarAvaliacao(organizacaoId, licitacaoId, avaliacao, { descarta
 }
 
 /**
+ * Pontua uma licitação para cada organização e grava. Com `exigirPalavra` (varredura, que
+ * não busca por termo) só entra o que casou com palavra-chave de alguma organização — o Radar
+ * só mostra isso (decisão de 16/11/2026), e guardar as 39 mil abertas do país seria lixo.
+ */
+async function processarLicitacao({ licitacao, contextos, resumo, simular = false, exigirPalavra = false }) {
+  const avaliacoes = contextos.map((contexto) => ({
+    organizacaoId: contexto.organizacaoId,
+    avaliacao: avaliar(licitacao, contexto),
+  }));
+  // Encerrada é fato da licitação; palavra excluída é de cada organização —
+  // só fica fora do catálogo o que TODAS excluíram (seção 6).
+  const encerrada = avaliacoes.some((a) => a.avaliacao.encerrada);
+  const semPalavra = exigirPalavra && !avaliacoes.some((a) => a.avaliacao.palavra);
+  if (!avaliacoes.length || encerrada || semPalavra || avaliacoes.every((a) => a.avaliacao.excluida)) {
+    resumo.ignoradas += 1;
+    return;
+  }
+  const avaliacao = melhorAvaliacao(avaliacoes);
+
+  if (simular) {
+    if (resumo.amostra.length < 20) {
+      resumo.amostra.push({
+        objeto: (licitacao.objeto || '').slice(0, 180),
+        orgao_nome: licitacao.orgao_nome,
+        uf: licitacao.uf,
+        municipio: licitacao.municipio,
+        modalidade: licitacao.modalidade,
+        valor_estimado: licitacao.valor_estimado,
+        fim_propostas: licitacao.fim_propostas,
+        pontuacao: avaliacao.pontuacao,
+        palavra: avaliacao.palavra,
+        objeto_social: avaliacao.social.estado,
+        link_portal: licitacao.link_portal,
+      });
+    }
+    return;
+  }
+
+  try {
+    const { id, novo } = await salvarLicitacao(licitacao, avaliacao);
+    if (novo) resumo.novas += 1;
+    else resumo.atualizadas += 1;
+    for (const a of avaliacoes) await salvarAvaliacao(a.organizacaoId, id, a.avaliacao);
+
+    if (novo && avaliacao.pontuacao >= PONTUACAO_PARA_DETALHAR) {
+      await fila.enfileirar('detalhar_licitacao', { licitacaoId: id }, { prioridade: 20, chaveUnica: `detalhar:${id}` });
+    }
+  } catch (erro) {
+    resumo.erros.push(`gravar ${licitacao.chave_externa}: ${erro.sqlMessage || erro.message}`);
+  }
+}
+
+/**
+ * Fonte que não tem como ser buscada por este painel. Não é erro: a coleta pula e diz por quê.
+ * A Lei 14.133 obriga a publicação no PNCP, então o que esses portais anunciam chega por lá.
+ */
+function semBuscaPropria(adaptador, config) {
+  if (adaptador.somenteEnriquecimento) {
+    return 'Coberta pelo PNCP: este portal só completa o que o PNCP já trouxe, não é fonte de busca.';
+  }
+  if (adaptador.chave === 'generico_html' && !String(config.url_busca || '').trim()) {
+    return 'Coberta pelo PNCP: este portal não tem lista pública que o painel leia sem login ou CAPTCHA (e a regra 5.4 proíbe forçar). As licitações dele que a lei obriga a publicar chegam pelo PNCP.';
+  }
+  return null;
+}
+
+/**
  * Coleta uma fonte inteira. Com `simular: true` não grava nada — é o
  * "Testar agora" da tela de Fontes (seção 4.1).
  */
@@ -297,6 +364,13 @@ async function coletarFonte({
 
   const adaptador = adaptadores.obter(fonte.adaptador);
   const config = typeof fonte.config === 'string' ? JSON.parse(fonte.config || '{}') : fonte.config || {};
+
+  const semBusca = semBuscaPropria(adaptador, config);
+  if (semBusca) {
+    if (!simular) await pool.query('UPDATE fontes SET ultima_coleta = NOW(), ultimo_status = ? WHERE id = ?', [semBusca.slice(0, 255), fonte.id]);
+    return { encontradas: 0, novas: 0, atualizadas: 0, ignoradas: 0, erros: [], amostra: [], fonte: fonte.nome, termos: 0, duracao_ms: 0, status: semBusca, coberta: true };
+  }
+
   // O teste pela tela (simular) pontua com o contexto de quem pediu; a coleta
   // de verdade pontua para cada organização ativa e busca a união dos termos.
   const contextos = organizacaoId ? [await carregarContexto(organizacaoId)] : await carregarContextos();
@@ -341,55 +415,7 @@ async function coletarFonte({
         const identidade = `${licitacao.fonte_id}|${licitacao.chave_externa}`;
         if (vistas.has(identidade)) continue; // mesma licitação em dois termos
         vistas.add(identidade);
-
-        const avaliacoes = contextos.map((contexto) => ({
-          organizacaoId: contexto.organizacaoId,
-          avaliacao: avaliar(licitacao, contexto),
-        }));
-        // Encerrada é fato da licitação; palavra excluída é de cada organização —
-        // só fica fora do catálogo o que TODAS excluíram (seção 6).
-        const encerrada = avaliacoes.some((a) => a.avaliacao.encerrada);
-        if (!avaliacoes.length || encerrada || avaliacoes.every((a) => a.avaliacao.excluida)) {
-          resumo.ignoradas += 1;
-          continue;
-        }
-        const avaliacao = melhorAvaliacao(avaliacoes);
-
-        if (simular) {
-          if (resumo.amostra.length < 20) {
-            resumo.amostra.push({
-              objeto: (licitacao.objeto || '').slice(0, 180),
-              orgao_nome: licitacao.orgao_nome,
-              uf: licitacao.uf,
-              municipio: licitacao.municipio,
-              modalidade: licitacao.modalidade,
-              valor_estimado: licitacao.valor_estimado,
-              fim_propostas: licitacao.fim_propostas,
-              pontuacao: avaliacao.pontuacao,
-              palavra: avaliacao.palavra,
-              objeto_social: avaliacao.social.estado,
-              link_portal: licitacao.link_portal,
-            });
-          }
-          continue;
-        }
-
-        try {
-          const { id, novo } = await salvarLicitacao(licitacao, avaliacao);
-          if (novo) resumo.novas += 1;
-          else resumo.atualizadas += 1;
-          for (const a of avaliacoes) await salvarAvaliacao(a.organizacaoId, id, a.avaliacao);
-
-          if (novo && avaliacao.pontuacao >= PONTUACAO_PARA_DETALHAR) {
-            await fila.enfileirar(
-              'detalhar_licitacao',
-              { licitacaoId: id },
-              { prioridade: 20, chaveUnica: `detalhar:${id}` }
-            );
-          }
-        } catch (erro) {
-          resumo.erros.push(`gravar ${licitacao.chave_externa}: ${erro.sqlMessage || erro.message}`);
-        }
+        await processarLicitacao({ licitacao, contextos, resumo, simular });
       }
 
       if (lote.length < Number(config.tam_pagina || 100)) break; // última página
@@ -423,10 +449,155 @@ async function coletarFonte({
   return { ...resumo, fonte: fonte.nome, termos: termos.length, duracao_ms: duracao, status };
 }
 
+// ------------------------------------------------------------------ varredura
+const UFS_DO_BRASIL = Object.values(require('../regras/filtros-radar').REGIOES).flat().sort();
+const MAX_PAGINAS_VARREDURA = 100; // 100 × 100 = os 10.000 que o PNCP entrega por consulta
+
+/** A fonte pede varredura total? (só o PNCP tem; 'nao' desliga na tela de Fontes.) */
+function querVarredura(adaptador, config) {
+  return typeof adaptador.varrer === 'function' && String(config.varredura || 'sim') !== 'nao';
+}
+
+/** As UFs da varredura: as da config (`ufs`) ou o Brasil todo. */
+function ufsDaVarredura(config) {
+  const pedidas = String(config.ufs || '')
+    .split(',')
+    .map((u) => u.trim().toUpperCase())
+    .filter((u) => UFS_DO_BRASIL.includes(u));
+  return pedidas.length ? pedidas : UFS_DO_BRASIL;
+}
+
+const PAGINAS_POR_RODADA = 12; // ~12 páginas por job: a fila do worker é uma só e não pode ficar presa
+const ESPERAS_PAGINA_MS = [15000, 45000]; // além das 3 tentativas do cliente HTTP, 3 rodadas por página
+const FALHAS_SEGUIDAS_PARA_DESISTIR = 3;
+const dormirMs = (ms) => new Promise((r) => setTimeout(r, ms));
+
+const chaveDaVarredura = (fonteId, uf, ordenacao = '-data', pagina = 1) => `varrer:${fonteId}:${uf}:${ordenacao}:${pagina}`;
+
+/**
+ * Varre os editais abertos de UMA UF, sem palavra de busca, e guarda os que casam com palavra-chave
+ * de alguma organização. Anda em rodadas de poucas páginas: cada rodada é um job e, se sobrar
+ * página, enfileira a próxima — assim uma UF grande não prende a fila do worker (download e
+ * detalhamento esperam atrás dela) e uma queda no meio retoma de onde parou. Passou do teto de
+ * 10.000 do PNCP? Depois lê também do mais antigo (`ordenacao: 'data'`).
+ *
+ * O PNCP derruba parte das chamadas da busca (conexão fechada sem resposta, medido em 20/11/2026 e
+ * já registrado em jobs/mercado.js). Página que falha 3 rodadas é PULADA e anotada — não aborta a
+ * UF; 3 páginas seguidas sem resposta encerram a rodada como 'parcial' e a próxima varredura
+ * completa o resto (a gravação é idempotente).
+ */
+async function varrerUf({ fonteId, uf, pagina = 1, ordenacao = '-data', encadear = true }) {
+  const inicio = Date.now();
+  const [[fonte]] = await pool.query('SELECT * FROM fontes WHERE id = ?', [fonteId]);
+  if (!fonte) throw new Error(`Fonte ${fonteId} não encontrada.`);
+  const adaptador = adaptadores.obter(fonte.adaptador);
+  if (typeof adaptador.varrer !== 'function') throw new Error(`O adaptador ${fonte.adaptador} não faz varredura.`);
+  const config = typeof fonte.config === 'string' ? JSON.parse(fonte.config || '{}') : fonte.config || {};
+
+  const contextos = await carregarContextos();
+  const resumo = { encontradas: 0, novas: 0, atualizadas: 0, ignoradas: 0, erros: [], amostra: [] };
+  let totalDaConsulta = 0;
+  let falhasSeguidas = 0;
+  let terminou = false;
+  let desistiu = false;
+  let ultima = pagina - 1;
+
+  const fim = Math.min(pagina + PAGINAS_POR_RODADA - 1, MAX_PAGINAS_VARREDURA);
+  for (let atual = pagina; atual <= fim; atual += 1) {
+    ultima = atual;
+    let r = null;
+    let ultimoErro = null;
+    for (let tentativa = 0; tentativa <= ESPERAS_PAGINA_MS.length && !r; tentativa += 1) {
+      if (tentativa) await dormirMs(ESPERAS_PAGINA_MS[tentativa - 1]);
+      try {
+        r = await adaptador.varrer({ config, fonteId: fonte.id, uf, pagina: atual, ordenacao });
+      } catch (erro) {
+        ultimoErro = erro;
+      }
+    }
+    if (!r) {
+      resumo.erros.push(`${uf} ${ordenacao} p.${atual}: ${ultimoErro && ultimoErro.message}`);
+      falhasSeguidas += 1;
+      if (falhasSeguidas >= FALHAS_SEGUIDAS_PARA_DESISTIR) {
+        desistiu = true;
+        break;
+      }
+      continue;
+    }
+    falhasSeguidas = 0;
+    totalDaConsulta = r.total;
+    const lote = r.licitacoes || [];
+    for (const licitacao of lote) {
+      resumo.encontradas += 1;
+      await processarLicitacao({ licitacao, contextos, resumo, exigirPalavra: true });
+    }
+    if (!lote.length || lote.length < r.tamanho || atual * r.tamanho >= Math.min(r.total, adaptador.TETO_DA_BUSCA)) {
+      terminou = true;
+      break;
+    }
+  }
+
+  // Próxima rodada: continua nesta ordenação, ou vira para o lado do mais antigo se a UF passou do teto.
+  let proxima = null;
+  if (!terminou && !desistiu && ultima < MAX_PAGINAS_VARREDURA) proxima = { ordenacao, pagina: ultima + 1 };
+  else if (terminou && ordenacao === '-data' && totalDaConsulta > adaptador.TETO_DA_BUSCA) proxima = { ordenacao: 'data', pagina: 1 };
+  if (proxima && encadear) {
+    await fila.enfileirar(
+      'varrer_uf',
+      { fonteId: fonte.id, uf, ...proxima },
+      { prioridade: 25, chaveUnica: chaveDaVarredura(fonte.id, uf, proxima.ordenacao, proxima.pagina) }
+    );
+  }
+  if (desistiu) resumo.erros.push(`${uf}: o PNCP não respondeu em ${FALHAS_SEGUIDAS_PARA_DESISTIR} páginas seguidas; a próxima varredura retoma.`);
+  if (totalDaConsulta > 2 * adaptador.TETO_DA_BUSCA) {
+    resumo.erros.push(`${uf} tem ${totalDaConsulta} editais abertos: mais que o dobro do teto da busca; o miolo não é alcançado.`);
+  }
+
+  await pool.query(
+    `INSERT INTO execucoes_coleta (fonte_id, termo, encontradas, novas, atualizadas, ignoradas, duracao_ms, status, mensagem)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      fonte.id,
+      `varredura ${uf}`,
+      resumo.encontradas,
+      resumo.novas,
+      resumo.atualizadas,
+      resumo.ignoradas,
+      Date.now() - inicio,
+      resumo.erros.length ? 'parcial' : 'ok',
+      resumo.erros.slice(0, 3).join(' | ').slice(0, 500) || null,
+    ]
+  );
+  await atualizarStatusDaVarredura(fonte.id);
+  return {
+    ...resumo,
+    uf,
+    ordenacao,
+    paginas_ate: ultima,
+    total_na_uf: totalDaConsulta,
+    continua: Boolean(proxima),
+    proxima_ordenacao: proxima && proxima.ordenacao,
+    proxima_pagina: proxima && proxima.pagina,
+    duracao_ms: Date.now() - inicio,
+  };
+}
+
+/** Resume na tela de Fontes a varredura das últimas 12 h: quantas UFs, quantos editais lidos. */
+async function atualizarStatusDaVarredura(fonteId) {
+  const [[r]] = await pool.query(
+    `SELECT COUNT(DISTINCT termo) AS ufs, COALESCE(SUM(encontradas), 0) AS lidas, COALESCE(SUM(novas), 0) AS novas
+       FROM execucoes_coleta
+      WHERE fonte_id = ? AND termo LIKE 'varredura %' AND criado_em >= DATE_SUB(NOW(), INTERVAL 12 HOUR)`,
+    [fonteId]
+  );
+  const status = `ok: varredura de ${r.ufs} UF(s), ${r.lidas} edital(is) abertos lidos, ${r.novas} novos`;
+  await pool.query('UPDATE fontes SET ultima_coleta = NOW(), ultimo_status = ? WHERE id = ?', [status.slice(0, 255), fonteId]);
+}
+
 /** Varre todas as fontes ativas que já venceram o `intervalo_horas`. */
 async function coletarFontes({ forcar = false } = {}) {
   const [fontes] = await pool.query(
-    `SELECT id, nome, adaptador, intervalo_horas, ultima_coleta
+    `SELECT id, nome, adaptador, config, intervalo_horas, ultima_coleta
        FROM fontes
       WHERE ativa = 1
       ORDER BY prioridade ASC, id ASC`
@@ -446,11 +617,31 @@ async function coletarFontes({ forcar = false } = {}) {
       Date.now() - new Date(fonte.ultima_coleta).getTime() >= (fonte.intervalo_horas || 6) * 3600000;
     if (!vencida) continue;
 
+    const adaptador = adaptadores.obter(fonte.adaptador);
+    const config = typeof fonte.config === 'string' ? JSON.parse(fonte.config || '{}') : fonte.config || {};
+    // Fonte sem como ser buscada não vira erro todo dia: a coleta dela só registra o motivo, uma vez.
+    if (semBuscaPropria(adaptador, config)) {
+      await coletarFonte({ fonteId: fonte.id });
+      continue;
+    }
+
+    // A busca por palavra é a rodada rápida (resultados das últimas publicações em minutos)...
     await fila.enfileirar(
       'coletar_fonte',
       { fonteId: fonte.id },
       { prioridade: 10, chaveUnica: `coletar:${fonte.id}` }
     );
+    // ...e a varredura por UF é a que alcança todos os órgãos. Prioridade menor (número maior)
+    // que a busca e o download: nunca atrasa o que o usuário está esperando.
+    if (querVarredura(adaptador, config)) {
+      for (const uf of ufsDaVarredura(config)) {
+        await fila.enfileirar(
+          'varrer_uf',
+          { fonteId: fonte.id, uf },
+          { prioridade: 25, chaveUnica: chaveDaVarredura(fonte.id, uf) }
+        );
+      }
+    }
     enfileiradas.push(fonte.nome);
   }
   return { enfileiradas, semAdaptador };
@@ -605,11 +796,15 @@ function registrarNaFila() {
   fila.registrar('coletar_fontes', (payload) => coletarFontes(payload || {}));
   fila.registrar('repontuar', (payload) => repontuar(payload || {}));
   fila.registrar('coletar_fonte', (payload) => coletarFonte(payload));
+  fila.registrar('varrer_uf', (payload) => varrerUf(payload));
   fila.registrar('detalhar_licitacao', (payload) => detalharLicitacao(payload));
 }
 
 module.exports = {
   coletarFonte,
+  varrerUf,
+  processarLicitacao,
+  ufsDaVarredura,
   coletarFontes,
   detalharLicitacao,
   repontuar,

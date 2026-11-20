@@ -10,6 +10,9 @@ const CONSULTA = 'https://pncp.gov.br/api/consulta/v1';
 // — por isso tentamos os dois caminhos antes de desistir, e a falha é só um aviso.
 const APIS = ['https://pncp.gov.br/pncp-api/v1', 'https://pncp.gov.br/api/pncp/v1'];
 const APP = 'https://pncp.gov.br/app/editais';
+const TAMANHO_VARREDURA = 100;
+// O PNCP só devolve os 10.000 primeiros resultados de uma consulta.
+const TETO_DA_BUSCA = 10000;
 
 // Tenta o mesmo caminho em cada base do pncp-api; devolve o primeiro que responder.
 async function buscarNaApi(caminho) {
@@ -96,6 +99,7 @@ function normalizar(registro, { fonteId } = {}) {
 
 module.exports = {
   chave: 'pncp',
+  TETO_DA_BUSCA,
   nome: 'PNCP — Portal Nacional de Contratações Públicas',
 
   // Descreve o formulário da tela de Fontes (Fase 2).
@@ -105,6 +109,7 @@ module.exports = {
     { campo: 'tam_pagina', rotulo: 'Resultados por página', tipo: 'numero', padrao: 100 },
     { campo: 'paginas_max', rotulo: 'Máximo de páginas por termo', tipo: 'numero', padrao: 3 },
     { campo: 'ufs', rotulo: 'UFs (vazio = todas)', tipo: 'texto', padrao: '' },
+    { campo: 'varredura', rotulo: 'Varredura total (todos os editais abertos, sem palavra)', tipo: 'select', opcoes: ['sim', 'nao'], padrao: 'sim' },
   ],
 
   /**
@@ -128,6 +133,32 @@ module.exports = {
 
     return {
       total,
+      licitacoes: itens.map((registro) => normalizar(registro, { fonteId })),
+    };
+  },
+
+  /**
+   * Varredura SEM palavra: todos os editais com proposta aberta de uma UF (Lei 14.133 obriga
+   * a publicação no PNCP, então isto cobre todos os órgãos). Medido em 20/11/2026: 39.616 editais
+   * abertos no Brasil, RS com 3.892; a busca responde ~1,6 s por página de 100 e só alcança os
+   * 10.000 primeiros de cada consulta — por isso a fatia é a UF, e `ordenacao: 'data'` (do mais
+   * antigo) cobre o que passar disso. A consulta oficial /v1/contratacoes/proposta foi descartada:
+   * aceita no máximo 50 por página e deu erro 500 após 50 s.
+   */
+  async varrer({ config = {}, fonteId, uf, pagina = 1, ordenacao = '-data' }) {
+    const parametros = new URLSearchParams({
+      tipos_documento: config.tipos_documento || 'edital',
+      ordenacao,
+      pagina: String(pagina),
+      tam_pagina: String(TAMANHO_VARREDURA),
+      status: 'recebendo_proposta',
+      ufs: uf,
+    });
+    const dados = await buscarJson(`${BUSCA}?${parametros.toString()}`);
+    const itens = Array.isArray(dados && dados.items) ? dados.items : [];
+    return {
+      total: Number((dados && (dados.total || dados.totalElements)) || itens.length),
+      tamanho: TAMANHO_VARREDURA,
       licitacoes: itens.map((registro) => normalizar(registro, { fonteId })),
     };
   },
