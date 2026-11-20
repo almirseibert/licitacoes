@@ -70,7 +70,7 @@ npm install && npm run migrar && npm run semear
 `npm run diagnostico` (fecha as vencidas sem análise e imprime o ranking de bloqueios),
 `npm run monitorar` (uma rodada do monitor; `-- --licitacao=<id>` checa uma agora), `npm run chat` (uma rodada do chat do pregão),
 `npm run estrategicas` (desertas, fracassadas e reaberturas — não vai à internet),
-`npm run recorrencias` (calendário da seção 24), `npm run ia` (leitura assistida; sem
+`npm run recorrencias` (calendário da seção 24), `npm run segmentar` (classifica contratos no catálogo de segmentos; `-- --refazer` depois de mudar o catálogo), `npm run ia` (leitura assistida; sem
 `GEMINI_API_KEY` ela fica desligada e o painel funciona inteiro sem ela),
 `npm run prazos` (dias úteis e o limite de esclarecimento), `npm run dossies`
 (fichas de concorrente e órgão), `npm run contratos` (marcos do contrato e a faixa da LC 123;

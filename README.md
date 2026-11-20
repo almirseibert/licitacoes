@@ -1792,6 +1792,47 @@ rodadas e foi pulada: 100 editais ficam para a próxima varredura), **67 casaram
 foram gravados, de 54 órgãos diferentes**; os outros 3.723 não casaram e não entram no Radar. Antes,
 só a busca por palavra alimentava o RS, com no máximo 300 resultados por termo.
 
+## Seis ajustes — 20/11/2026 (noite)
+
+Pedidos do usuário depois de usar o painel em produção. Cada bloco é um commit no branch da sessão; nada foi para a `main`.
+
+**1. Fontes: a configuração não gravava.** O caminho `config` está certo em todas as camadas (conferido em MySQL 8: o PATCH grava,
+o GET devolve objeto, o seed não sobrescreve). O defeito estava na tela: `Configuracao` fechava mesmo quando o PATCH falhava (o erro ia
+para o banner do topo, e ao reabrir aparecia `{}`), e sem `key` abrir outra fonte mantinha o texto da anterior. Agora o painel só fecha
+ao gravar e mostra o erro do servidor dentro dele; o GET normaliza `config` (MariaDB devolve texto) e o PATCH devolve o que ficou gravado.
+Se a gravação seguir "voltando vazia" em produção, olhe o banner: só a organização operadora, com papel admin ou dono, edita fontes (403 para as outras).
+**Portais reconferidos em 20/11/2026 — nenhum é configurável dentro da seção 5.4:** BLL tem consulta pública
+(`/Process/ProcessSearchPublic`, 100 linhas em HTML), mas a lista não traz o objeto e busca, paginação e detalhe passam por reCAPTCHA;
+Licitanet responde 403 até no `robots.txt`; BNC é site institucional sem link para a plataforma; Negócios Públicos é uma revista.
+Tudo isso chega pelo PNCP (campo "plataforma de disputa").
+
+**2. "Volume de arquivos (/dados)" vermelho com arquivos abrindo.** Arquivo abrir não prova volume compartilhado: a API baixa de novo o que não está
+no disco dela (`curarArquivo`). O vermelho significa "worker bate no banco, mas a API não lê o `.sinal-worker` recente". A causa mais provável em produção
+é **worker com deploy anterior ao sinal** (o EasyPanel implanta cada serviço separado): ele mantém o batimento, mas nunca grava o arquivo. O batimento agora
+leva `versao_codigo` (hash dos `.js`) e `dir_dados` (migração 044), e a mensagem do status diz a causa: worker antigo, código diferente, `DIR_DADOS` diferente ou volume separado.
+Para conferir: nos dois serviços, `printenv DIR_DADOS`, `ls -la /dados/.sinal-worker` e o commit implantado.
+
+**3. Órgãos só para a equipe do painel; Meus contratos em Administração › Conta.** `orgaos` passou a `soSuperadmin` e as rotas `/api/dossies/orgaos`,
+`/orgaos/:cnpj` (estava aberta) e `/agregar` exigem `apenasSuperadmin` (middleware novo, o mesmo critério do menu).
+
+**4. Filtros recolhidos** em Contratos do mercado, Atas e Acompanhamentos: botão "Filtros (n)" no cabeçalho, painel fechado por padrão em qualquer largura,
+recolhe ao filtrar, chips dos filtros ativos (× tira um).
+
+**5. Preço de referência por catálogo de segmentos.** Antes eram 3 grupos de palavras-chave (+ Geral). Agora `config/dados/catalogo-segmentos.js` tem
+**15 áreas e 63 segmentos**; `regras/segmentos.js` classifica o objeto por dicionário de termos (palavra inteira ou início de palavra, plural dobrado, exclusões; **sem IA**).
+`referenciaPara` desce segmento → grupo → área → Geral e diz qual usou; `recalcular` agrupa por segmento e por área; com UF, esfera, faixa de valor ou período
+a estatística é calculada na hora (aviso de amostra pequena abaixo de 12). Migração 045; `npm run segmentar` (`-- --refazer` reclassifica tudo depois de mudar o catálogo);
+classificação ao gravar encerradas e contratos do mercado. Objeto sem assunto reconhecido vira "Outros › Sem classificação" (aparece na contagem).
+*Medido em 2.600 contratações reais do PNCP (RS, SC, PR; ago–out/2026):* **74,8% com segmento reconhecido**; mediana de desconto em pregão:
+veículos 8,4%, saúde 33,5%, geral 26,5% — o "Geral" misturava o que é diferente. Limite conhecido: dicionário erra quando o termo aparece no destino do objeto
+("brinquedos para eventos de vacinação"); amostra de 40 classificações mostrou ~3 em 4 plausíveis. Para ampliar: termos em `catalogo-segmentos.js` e `npm run segmentar -- --refazer`.
+
+**6. Mercado e concorrentes refeito.** Os seis cartões + seis gráficos (todos o mesmo GROUP BY) viraram quatro respostas: frase-resumo, contratos que vencem
+(recompra provável), atas com adesão e quem vende (com a fatia de cada um), filtrados por Área › Segmento, UF e período. `GET /api/mercado/painel`; migração 046
+(atas ganham segmento). "Meu histórico" (perdas por motivo) foi para Meu desempenho. *Medido em 15.000 contratos reais (27 UFs, out–nov/2026):* painel em 131 ms;
+3.122 contratos vencendo em 90 dias. O PDF mensal e as rotas `/analise` e `/recorrentes` continuam no backend mas saíram da tela.
+**Não validado com dado real:** o bloco de atas (a busca do PNCP não respondeu do ambiente de teste; só 2 linhas de teste), e o campo de adesão só vem dessa busca.
+
 ## Quatro ajustes — 16/11/2026
 
 - **Radar só com palavra-chave.** `montarFiltros` (`backend/regras/filtros-radar.js`) sempre exige
