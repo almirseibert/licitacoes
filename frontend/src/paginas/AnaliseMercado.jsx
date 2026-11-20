@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Loader2, Info } from 'lucide-react';
+import { Loader2, Info, FileDown } from 'lucide-react';
 import { api } from '../servicos/api';
 import { moeda, moedaExata, data as comoData, resumir, LACUNA } from '../servicos/formato';
 import GavetaFornecedor from '../componentes/GavetaFornecedor';
@@ -67,6 +67,18 @@ export default function AnaliseMercado() {
   const [erro, setErro] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [fornecedor, setFornecedor] = useState(null);
+  const [gerandoPdf, setGerandoPdf] = useState(false);
+
+  const baixarPdf = async () => {
+    setGerandoPdf(true);
+    try {
+      await api.relatorioMercadoPdf(filtros);
+    } catch (e) {
+      setErro(e.message);
+    } finally {
+      setGerandoPdf(false);
+    }
+  };
 
   useEffect(() => {
     let vivo = true;
@@ -148,6 +160,9 @@ export default function AnaliseMercado() {
             </button>
           )}
           {carregando && <Loader2 size={14} className="animate-spin text-texto-suave mb-2" />}
+          <button type="button" className="botao flex items-center gap-1 ml-auto" onClick={baixarPdf} disabled={gerandoPdf || !painel} title="Baixa este painel, com os filtros escolhidos, em PDF">
+            {gerandoPdf ? <Loader2 size={12} className="animate-spin" /> : <FileDown size={12} />} baixar PDF
+          </button>
         </div>
       </div>
 

@@ -1829,9 +1829,22 @@ veículos 8,4%, saúde 33,5%, geral 26,5% — o "Geral" misturava o que é difer
 
 **6. Mercado e concorrentes refeito.** Os seis cartões + seis gráficos (todos o mesmo GROUP BY) viraram quatro respostas: frase-resumo, contratos que vencem
 (recompra provável), atas com adesão e quem vende (com a fatia de cada um), filtrados por Área › Segmento, UF e período. `GET /api/mercado/painel`; migração 046
-(atas ganham segmento). "Meu histórico" (perdas por motivo) foi para Meu desempenho. *Medido em 15.000 contratos reais (27 UFs, out–nov/2026):* painel em 131 ms;
-3.122 contratos vencendo em 90 dias. O PDF mensal e as rotas `/analise` e `/recorrentes` continuam no backend mas saíram da tela.
+(atas ganham segmento). "Meu histórico" (perdas por motivo) foi para Meu desempenho (ver abaixo). *Medido em 15.000 contratos reais (27 UFs, out–nov/2026):* painel em 131 ms;
+3.122 contratos vencendo em 90 dias. As rotas `/analise*` e `/recorrentes` continuam no backend, sem tela.
 **Não validado com dado real:** o bloco de atas (a busca do PNCP não respondeu do ambiente de teste; só 2 linhas de teste), e o campo de adesão só vem dessa busca.
+
+### Fechamento do mesmo dia — menu, PDF, perdas e publicação na `main`
+
+- **Menu no celular:** a gaveta só abre ao escolher a categoria e fecha ao escolher o item (`gavetaAberta` em `App.jsx`; antes um único estado ligava
+  a sidebar do desktop e a gaveta, que reabria a cada navegação). Desktop inalterado. Conferido com Playwright em 390 e 1366 px.
+- **PDF do painel de Mercado:** `GET /api/mercado/painel/pdf` (mesmos filtros da tela; botão "baixar PDF"). Os quatro blocos em texto e tabelas, com a lacuna
+  `____________` onde o PNCP não publica (fornecedor e valor da ata). Substitui o PDF mensal do painel antigo (`/analise/pdf` removido). Gerado com os 15.000 contratos
+  reais em quatro recortes (inclusive um vazio): 1–2 páginas. **Bug achado com dado real:** um caractere de controle (U+0096) num texto do PNCP derrubava o PDF inteiro
+  ("WinAnsi cannot encode"); `seguro()` (`servicos/pacote.js`) agora descarta U+0080–U+009F, o que protege todos os PDFs do painel.
+- **Meu desempenho:** "Por que perdi" e o histórico de perdas viraram uma seção (a tabela simples saiu): recomendação por motivo, quem mais me venceu, lista de
+  perdidas e bloqueios, no **mesmo período da página** (`/api/diagnostico/perdas?de=&ate=`), então concorda com os cartões de cima.
+- **Publicação:** commit e push na `main` autorizados pelo usuário em 20/11/2026. O deploy roda `migrar && semear && api`: entram as migrações 044, 045 e 046.
+  Reimplante **API e worker do mesmo commit** (é o que o status do volume cobra) e rode `npm run segmentar` uma vez em produção (o "recalcular" de preços também classifica).
 
 ## Quatro ajustes — 16/11/2026
 

@@ -34,7 +34,9 @@ function seguro(texto) {
     .replace(/[“”]/g, '"')
     .replace(/[–—]/g, '-')
     .replace(/…/g, '...')
-    .replace(/[^\x20-\xFF]/g, '');
+    // Sem os controles C1 (U+0080–U+009F): vêm de texto colado do Word/PNCP e o WinAnsi do pdf-lib recusa
+    // ("WinAnsi cannot encode 0x0096") — derrubava o PDF inteiro por um caractere.
+    .replace(/[^\x20-\x7E\xA0-\xFF]/g, '');
 }
 
 function cortar(texto, fonte, tamanho, largura) {

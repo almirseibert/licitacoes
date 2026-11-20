@@ -4,10 +4,9 @@
 // 12) e as decisões da organização. O catálogo não tem organizacao_id; o que é
 // da organização (segmento = palavras-chave, filtro salvo, o próprio histórico)
 // sempre entra filtrado por ela.
-const { PDFDocument, StandardFonts, rgb } = require('pdf-lib');
 const pool = require('../config/db');
 const { daOrganizacao } = require('./escopo');
-const { quebrar, seguro, LACUNA } = require('./declaracao');
+const { LACUNA } = require('./declaracao');
 const diagnostico = require('./diagnostico');
 const mercado = require('../regras/mercado');
 const regras = require('../regras/analise-mercado');
@@ -407,108 +406,4 @@ async function historicoDePerdas(organizacaoId, { meses = 12, de = null, ate = n
   };
 }
 
-// ----------------------------------------------------------------- PDF
-
-const A4 = [595.28, 841.89];
-const MARGEM = 48;
-const TINTA = rgb(0.1, 0.12, 0.16);
-const SUAVE = rgb(0.4, 0.45, 0.52);
-const BARRA = rgb(0.055, 0.455, 0.565); // #0E7490, a voltagem do tema claro
-
-const reais = (v) =>
-  v === null || v === undefined
-    ? LACUNA
-    : `R$ ${Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-const diaBr = (d) => (d ? String(d).split('-').reverse().join('/') : LACUNA);
-
-/**
- * Relatório mensal por segmento em PDF: os números da análise, com barras de
- * uma cor só (uma série por bloco, rótulo e valor em texto ao lado — a cor
- * nunca carrega sozinha o que a barra diz).
- */
-async function relatorioEmPdf(organizacaoId, q = {}) {
-  const r = await analisar(organizacaoId, q);
-  const doc = await PDFDocument.create();
-  const normal = await doc.embedFont(StandardFonts.Helvetica);
-  const negrito = await doc.embedFont(StandardFonts.HelveticaBold);
-  const titulo = `Relatório de mercado — ${r.segmento.nome || 'mercado inteiro'}`;
-  doc.setTitle(seguro(titulo));
-
-  let pagina = doc.addPage(A4);
-  const { width, height } = pagina.getSize();
-  const util = width - MARGEM * 2;
-  let y = height - MARGEM;
-
-  const espaco = (altura) => {
-    if (y - altura < MARGEM + 20) {
-      pagina = doc.addPage(A4);
-      y = height - MARGEM;
-    }
-  };
-  const escrever = (texto, { tamanho = 10, fonte = normal, cor = TINTA, x = MARGEM, largura = util } = {}) => {
-    for (const linha of quebrar(texto, fonte, tamanho, largura)) {
-      espaco(tamanho + 4);
-      if (linha) pagina.drawText(linha, { x, y, size: tamanho, font: fonte, color: cor });
-      y -= tamanho + 4;
-    }
-  };
-
-  escrever(titulo, { tamanho: 15, fonte: negrito });
-  escrever(`Período: ${diaBr(r.periodo.de)} a ${diaBr(r.periodo.ate)}`, { cor: SUAVE });
-  if (r.segmento.termos.length) escrever(`Termos: ${r.segmento.termos.join(', ')}`, { tamanho: 8.5, cor: SUAVE });
-  y -= 8;
-
-  const t = r.totais;
-  for (const [rotulo, valor] of [
-    ['Contratos', String(t.contratos)],
-    ['Valor contratado', reais(t.valor)],
-    ['Ticket médio', t.ticket_medio === null ? LACUNA : reais(t.ticket_medio)],
-    ['Órgãos compradores', String(t.orgaos)],
-    ['Fornecedores', String(t.fornecedores)],
-    ['Atas de registro de preços', String(t.atas)],
-  ]) {
-    espaco(16);
-    pagina.drawText(seguro(rotulo), { x: MARGEM, y, size: 10, font: normal, color: SUAVE });
-    pagina.drawText(seguro(valor), { x: MARGEM + 180, y, size: 10, font: negrito, color: TINTA });
-    y -= 15;
-  }
-
-  const bloco = (tituloBloco, linhas, rotuloDe = (l) => l.rotulo) => {
-    y -= 10;
-    espaco(40);
-    escrever(tituloBloco, { tamanho: 11.5, fonte: negrito });
-    if (!linhas.length) {
-      escrever('Nada no período.', { cor: SUAVE });
-      return;
-    }
-    const maximo = Math.max(...linhas.map((l) => l.valor || 0), 1);
-    for (const l of linhas) {
-      espaco(26);
-      const rotulo = seguro(String(rotuloDe(l) || LACUNA)).slice(0, 70);
-      pagina.drawText(rotulo, { x: MARGEM, y, size: 8.5, font: normal, color: TINTA });
-      const valor = seguro(`${l.quantidade} · ${reais(l.valor)}`);
-      pagina.drawText(valor, { x: width - MARGEM - normal.widthOfTextAtSize(valor, 8.5), y, size: 8.5, font: normal, color: SUAVE });
-      y -= 9;
-      pagina.drawRectangle({ x: MARGEM, y, width: Math.max(1, (util * (l.valor || 0)) / maximo), height: 4, color: BARRA });
-      y -= 12;
-    }
-  };
-
-  bloco('Compras por mês', r.por_mes, (l) => l.mes.split('-').reverse().join('/'));
-  bloco('Por modalidade', r.por_modalidade);
-  bloco('Por região (município)', r.por_municipio, (l) => `${l.rotulo}/${l.uf}`);
-  bloco('Órgãos que mais compraram', r.por_orgao);
-  bloco('Fornecedores que mais venderam', r.por_fornecedor);
-  if (r.por_termo.length) bloco('Por produto (termo do segmento)', r.por_termo);
-
-  y -= 12;
-  escrever(r.ressalva, { tamanho: 7.5, cor: SUAVE });
-  for (const p of doc.getPages()) {
-    p.drawText('Gerado pelo Painel de Licitações a partir de dados públicos do PNCP.', {
-      x: MARGEM, y: 28, size: 7, font: normal, color: SUAVE,
-    });
-  }
-  return { buffer: Buffer.from(await doc.save()), analise: r };
-}
-
-module.exports = { analisar, recorrentes, perfilNoMercado, historicoDePerdas, relatorioEmPdf, opcoes };
+module.exports = { analisar, recorrentes, perfilNoMercado, historicoDePerdas, opcoes };

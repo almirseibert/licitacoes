@@ -205,19 +205,6 @@ mercado.get('/analise', async (req, res) => {
   }
 });
 
-// GET /api/mercado/analise/pdf?mes=AAAA-MM&segmento=... — o relatório mensal por segmento.
-mercado.get('/analise/pdf', async (req, res) => {
-  try {
-    const { buffer, analise: r } = await analise.relatorioEmPdf(req.organizacaoId, req.query);
-    const nome = `relatorio-mercado-${(r.segmento.nome || 'mercado').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w-]+/g, '-').toLowerCase()}-${r.periodo.de.slice(0, 7)}.pdf`;
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${nome}"`);
-    res.send(buffer);
-  } catch (erro) {
-    responderErro(res, 500, 'Não foi possível gerar o relatório em PDF.', erro);
-  }
-});
-
 // GET /api/mercado/painel?area=&segmento=&uf=&dias=&vence= — o painel de decisão: resumo em frase,
 // contratos que vencem, atas com adesão e quem vende (decisão de 20/11/2026).
 mercado.get('/painel', async (req, res) => {
@@ -225,6 +212,18 @@ mercado.get('/painel', async (req, res) => {
     res.json(await painelDeMercado.painel(req.organizacaoId, req.query));
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível montar o painel de mercado.', erro);
+  }
+});
+
+// GET /api/mercado/painel/pdf — o mesmo painel (mesmos filtros) em PDF.
+mercado.get('/painel/pdf', async (req, res) => {
+  try {
+    const { buffer, nome } = await painelDeMercado.relatorioEmPdf(req.organizacaoId, req.query);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${nome}"`);
+    res.send(buffer);
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível gerar o relatório em PDF.', erro);
   }
 });
 

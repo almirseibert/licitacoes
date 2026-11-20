@@ -708,11 +708,9 @@ export const api = {
   // Seção 13: análise de mercado, concorrentes recorrentes, perfil por CNPJ e perdas.
   opcoesAnalise: () => requisitar('/mercado/analise/opcoes'),
   analiseMercado: (parametros = {}) => requisitar(`/mercado/analise?${new URLSearchParams(parametros)}`),
-  relatorioMercadoPdf: (parametros = {}) =>
-    salvarComo(
-      `/mercado/analise/pdf?${new URLSearchParams(parametros)}`,
-      `relatorio-mercado-${parametros.mes || new Date().toISOString().slice(0, 7)}.pdf`
-    ),
+  // O PDF do painel de Mercado (mesmos filtros da tela).
+  relatorioMercadoPdf: (filtros = {}) =>
+    salvarComo(`/mercado/painel/pdf?${semVazios(filtros)}`, `relatorio-mercado-${new Date().toISOString().slice(0, 10)}.pdf`),
   recorrentes: (parametros = {}) => requisitar(`/mercado/recorrentes?${new URLSearchParams(parametros)}`),
   perfilFornecedor: (cnpj) => requisitar(`/mercado/fornecedores/${String(cnpj).replace(/\D/g, '')}`),
   // Seção 15: "Meu desempenho" por período.
