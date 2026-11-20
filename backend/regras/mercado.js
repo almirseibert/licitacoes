@@ -126,12 +126,16 @@ function normalizarContrato(r) {
 /** Item da busca do PNCP (tipos_documento=ata) → linha de `mercado_atas`. */
 function normalizarAta(r) {
   const numeroControle = texto(r.numero_controle_pncp, 70);
+  const comuns = camposComuns(r);
+  const { area, segmento } = classificar(comuns.objeto);
   return {
     numero_controle: numeroControle,
     numero_controle_compra: compraDaAta(numeroControle, r),
     numero_ata: texto(String(r.title || '').replace(/^Ata\s+nº\s*/i, ''), 80),
     permite_adesao: r.permite_adesao === null || r.permite_adesao === undefined ? null : r.permite_adesao ? 1 : 0,
-    ...camposComuns(r),
+    ...comuns,
+    area,
+    segmento,
   };
 }
 

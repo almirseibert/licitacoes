@@ -8,6 +8,7 @@ const pool = require('../config/db');
 const { responderErro } = require('../middlewares/responder-erro');
 const regras = require('../regras/mercado');
 const analise = require('../servicos/analise-mercado');
+const painelDeMercado = require('../servicos/mercado-painel');
 
 const POR_PAGINA_MAX = 100;
 
@@ -214,6 +215,16 @@ mercado.get('/analise/pdf', async (req, res) => {
     res.send(buffer);
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível gerar o relatório em PDF.', erro);
+  }
+});
+
+// GET /api/mercado/painel?area=&segmento=&uf=&dias=&vence= — o painel de decisão: resumo em frase,
+// contratos que vencem, atas com adesão e quem vende (decisão de 20/11/2026).
+mercado.get('/painel', async (req, res) => {
+  try {
+    res.json(await painelDeMercado.painel(req.organizacaoId, req.query));
+  } catch (erro) {
+    responderErro(res, 500, 'Não foi possível montar o painel de mercado.', erro);
   }
 });
 

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Loader2, Printer, Info, Lightbulb } from 'lucide-react';
 import { api } from '../servicos/api';
+import HistoricoDePerdas from '../componentes/HistoricoDePerdas';
+import GavetaFornecedor from '../componentes/GavetaFornecedor';
 import { moeda, data as comoData, resumir, percentual as pct, LACUNA } from '../servicos/formato';
 import Barras from '../componentes/Barras';
 
@@ -56,6 +58,7 @@ export default function Desempenho({ aoAbrir }) {
   const [ate, setAte] = useState('');
   const [dados, setDados] = useState(null);
   const [erro, setErro] = useState(null);
+  const [fornecedor, setFornecedor] = useState(null);
 
   // O período definido só consulta com as duas datas; as janelas, na hora.
   const pronto = janela !== 'definido' || (DATA_PLAUSIVEL.test(de) && DATA_PLAUSIVEL.test(ate));
@@ -296,6 +299,16 @@ export default function Desempenho({ aoAbrir }) {
           </p>
         </>
       )}
+
+      {/* Veio da aba "Meu histórico" de Mercado e concorrentes (20/11/2026): perdas por motivo, quem venceu. */}
+      <section className="mt-8 pt-4 border-t border-borda">
+        <h2 className="font-titulo text-base mb-1">Histórico de perdas</h2>
+        <p className="text-xs text-texto-suave mb-3 max-w-3xl">
+          Por que você perdeu, para quem e por quanto — e o que mais impediu você de disputar. Conta o que você moveu para “Perdemos” no funil.
+        </p>
+        <HistoricoDePerdas aoFornecedor={setFornecedor} aoAbrir={aoAbrir} />
+      </section>
+      <GavetaFornecedor fornecedor={fornecedor} aoFechar={() => setFornecedor(null)} />
     </div>
   );
 }

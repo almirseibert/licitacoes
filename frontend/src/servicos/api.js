@@ -717,6 +717,9 @@ export const api = {
   perfilFornecedor: (cnpj) => requisitar(`/mercado/fornecedores/${String(cnpj).replace(/\D/g, '')}`),
   // Seção 15: "Meu desempenho" por período.
   desempenho: (parametros = {}) => requisitar(`/desempenho?${new URLSearchParams(parametros)}`),
+  // Painel de Mercado (20/11/2026): { area, segmento, uf, dias, vence } → frase, vencimentos, atas, concorrentes.
+  painelMercado: (filtros = {}) => requisitar(`/mercado/painel?${semVazios(filtros)}`),
+
   historicoPerdas: (meses = 12) => requisitar(`/diagnostico/perdas?meses=${meses}`),
   tiposAcompanhamento: () => requisitar('/acompanhamentos/tipos'),
 

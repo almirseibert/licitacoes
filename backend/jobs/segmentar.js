@@ -4,7 +4,7 @@
 const pool = require('../config/db');
 const { classificar } = require('../regras/segmentos');
 
-const TABELAS = ['historico_precos', 'mercado_contratos'];
+const TABELAS = ['historico_precos', 'mercado_contratos', 'mercado_atas'];
 
 async function segmentarTabela(tabela, { lote = 2000, limite = Infinity } = {}) {
   let feitos = 0;
