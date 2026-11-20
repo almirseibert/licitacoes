@@ -40,8 +40,10 @@ export default function Fontes() {
       setAviso((r && r.mensagem) || mensagem || null);
       setErro(null);
       await carregar();
+      return { ok: true };
     } catch (e) {
       setErro(e.message);
+      return { ok: false, erro: e.message };
     }
   };
 
@@ -109,8 +111,8 @@ export default function Fontes() {
           aoMudar={setNova}
           aoCancelar={() => setNova(null)}
           aoSalvar={async () => {
-            await executar(() => api.criarFonte(nova));
-            setNova(null);
+            const r = await executar(() => api.criarFonte(nova));
+            if (r.ok) setNova(null);
           }}
         />
       )}
@@ -222,14 +224,16 @@ export default function Fontes() {
 
       {configurando && (
         <Configuracao
+          key={configurando}
           fonte={fontes.find((f) => f.id === configurando)}
           adaptador={adaptadores.find(
             (a) => a.chave === (fontes.find((f) => f.id === configurando) || {}).adaptador
           )}
           aoFechar={() => setConfigurando(null)}
           aoSalvar={async (config) => {
-            await executar(() => api.salvarFonte(configurando, { config }), 'Configuração salva.');
-            setConfigurando(null);
+            const r = await executar(() => api.salvarFonte(configurando, { config }), 'Configuração salva.');
+            if (r.ok) setConfigurando(null);
+            return r;
           }}
         />
       )}
@@ -271,14 +275,17 @@ function Configuracao({ fonte, adaptador, aoFechar, aoSalvar }) {
 
   if (!fonte) return null;
 
-  const salvar = () => {
+  const salvar = async () => {
+    let objeto;
     try {
-      const objeto = JSON.parse(texto || '{}');
-      setErro(null);
-      aoSalvar(objeto);
+      objeto = JSON.parse(texto || '{}');
     } catch (e) {
       setErro(`O JSON está inválido: ${e.message}`);
+      return;
     }
+    setErro(null);
+    const r = await aoSalvar(objeto);
+    if (r && !r.ok) setErro(`Não gravou: ${r.erro}`);
   };
 
   return (

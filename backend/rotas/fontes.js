@@ -10,6 +10,21 @@ const { coletarFonte } = require('../jobs/coletar');
 
 const rotas = express.Router();
 
+// O driver devolve coluna JSON como objeto no MySQL 8 e como texto no MariaDB.
+// A tela e a coleta esperam objeto — normaliza aqui, num lugar só.
+function configComoObjeto(valor) {
+  if (valor && typeof valor === 'object') return valor;
+  if (typeof valor === 'string' && valor.trim()) {
+    try {
+      const lido = JSON.parse(valor);
+      return lido && typeof lido === 'object' ? lido : {};
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
 // Seção 1b: fonte é catálogo — o que uma cadastra, todas coletam. Criar,
 // mudar, apagar e disparar coleta é da organização operadora (admin ou dono);
 // as outras veem a lista e testam ("Testar agora" não grava nada).
@@ -29,7 +44,11 @@ rotas.get('/', async (_req, res) => {
         ORDER BY f.prioridade ASC, f.nome ASC`
     );
     res.json({
-      dados: linhas.map((f) => ({ ...f, adaptador_disponivel: adaptadores.existe(f.adaptador) })),
+      dados: linhas.map((f) => ({
+        ...f,
+        config: configComoObjeto(f.config),
+        adaptador_disponivel: adaptadores.existe(f.adaptador),
+      })),
       adaptadores: adaptadores.listar(),
     });
   } catch (erro) {
@@ -106,7 +125,9 @@ rotas.patch('/:id', apenasOperadora, async (req, res) => {
       [...colunas.map((c) => campos[c]), req.params.id]
     );
     if (!r.affectedRows) return res.status(404).json({ erro: 'Fonte não encontrada.' });
-    res.json({ ok: true });
+    // Devolve o que ficou gravado de verdade, para a tela confirmar em vez de supor.
+    const [[gravada]] = await pool.query('SELECT config FROM fontes WHERE id = ?', [req.params.id]);
+    res.json({ ok: true, config: configComoObjeto(gravada && gravada.config) });
   } catch (erro) {
     if (erro.code === 'ER_DUP_ENTRY') return res.status(409).json({ erro: 'Já existe uma fonte com esse nome.' });
     res.status(400).json({ erro: erro.message });
@@ -192,3 +213,5 @@ rotas.get('/execucoes', exigirPapel('admin'), async (_req, res) => {
 });
 
 module.exports = rotas;
+module.exports.configComoObjeto = configComoObjeto;
+module.exports.limpar = limpar;

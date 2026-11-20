@@ -74,8 +74,10 @@ const FONTES = [
     intervalo_horas: 12,
     prioridade: 12,
     observacao:
-      'Municípios do PR e SC. Verificado em 15/11/2026: todo caminho em bllcompras.com redireciona para /Home/Login — não achamos ' +
-      'nenhuma página de consulta pública sem login. Sem configuração que resolva; fica sem url_busca até alguém achar a página certa.',
+      'Municípios do PR e SC. Reconferido em 20/11/2026: há uma consulta pública (/Process/ProcessSearchPublic) cuja primeira página ' +
+      'traz as 100 mais recentes em HTML, mas (1) a lista não tem objeto — só promotor, número, modalidade, cidade, situação e datas, ' +
+      'então não há o que pontuar —, (2) busca e paginação passam por reCAPTCHA e (3) o detalhe do processo também. A seção 5.4 ' +
+      'proíbe resolver CAPTCHA; fica sem configuração. O que a BLL anuncia chega pelo PNCP (campo "plataforma de disputa").',
   },
   {
     nome: 'Licitanet',
@@ -86,8 +88,8 @@ const FONTES = [
     intervalo_horas: 12,
     prioridade: 13,
     observacao:
-      'Municípios menores. Verificado em 15/11/2026: o portal bloqueia com 403 tudo, inclusive o robots.txt — nem manualmente dá ' +
-      'para abrir fora do navegador comum. Sem configuração possível hoje.',
+      'Municípios menores. Reconferido em 20/11/2026: o portal responde 403 a tudo, inclusive o robots.txt, para cliente que não é ' +
+      'navegador comum. Bloqueio de portal não se força (seção 5.4): sem configuração; o que ele anuncia chega pelo PNCP.',
   },
   {
     nome: 'BNC — Bolsa Nacional de Compras',
@@ -98,8 +100,8 @@ const FONTES = [
     intervalo_horas: 12,
     prioridade: 14,
     observacao:
-      'Municípios do interior. Verificado em 15/11/2026: bnc.org.br é só o site institucional (WordPress) — a plataforma de disputa ' +
-      'em si fica noutro endereço que não identificamos. Sem configuração até achar o domínio certo da plataforma.',
+      'Municípios do interior. Reconferido em 20/11/2026: bnc.org.br é só o site institucional (WordPress, sem lista de editais ' +
+      'nem link para a plataforma). Sem configuração até alguém informar o endereço da plataforma de disputa.',
   },
   {
     nome: 'Negócios Públicos',
@@ -110,8 +112,8 @@ const FONTES = [
     intervalo_horas: 12,
     prioridade: 15,
     observacao:
-      'Verificado em 15/11/2026: não é uma plataforma de licitação — é a editora da revista "Negócios Públicos" (capacitação e ' +
-      'eventos do setor). Cadastrada aqui por engano de escopo; não há lista de editais para coletar deste domínio.',
+      'Reconferido em 20/11/2026: não é uma plataforma de licitação — é a editora da revista "Negócios Públicos" (capacitação e ' +
+      'eventos do setor). Cadastrada por engano de escopo; não há lista de editais neste domínio.',
   },
   {
     nome: 'Licitar Digital',
