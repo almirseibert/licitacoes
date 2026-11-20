@@ -43,8 +43,13 @@ function paraData(epochMs) {
 // estrito — dispensa e inexigibilidade são contratação direta — mas a tela
 // trata as três como oportunidade, igual o restante do painel já faz com o
 // PNCP (seção 5.1 não distingue modalidade na entrada do Radar).
-function normalizar(registro, { fonteId }) {
+function normalizar(registro, { fonteId, agora = Date.now() }) {
   const chaveExterna = `${fonteId}:${registro.id}`;
+  // O CELIC só informa `startDate`: o início da sessão (disputa). Na Lei 14.133 as propostas
+  // recebem-se até a abertura da sessão, então ela é também o fim das propostas — inferência
+  // marcada aqui. Sem isso toda licitação dos últimos 180 dias aparecia "recebendo proposta" para
+  // sempre, inclusive as já encerradas (20/11/2026).
+  const abertura = paraData(registro.startDate);
 
   return {
     fonte_id: fonteId,
@@ -58,9 +63,10 @@ function normalizar(registro, { fonteId }) {
     numero_compra: registro.issuanceNumber || null,
     processo: registro.processNumber || null,
     objeto: registro.description || null,
-    abertura_propostas: paraData(registro.startDate),
+    abertura_propostas: abertura,
+    fim_propostas: abertura,
     publicada_em: paraData(registro.publishDate),
-    situacao: 'Recebendo proposta',
+    situacao: abertura && abertura.getTime() < agora ? 'Encerrada' : 'Recebendo proposta',
     plataforma_disputa: 'Compras RS (CELIC)',
     link_portal: registro.simplifiedIssuanceNumber
       ? `${BASE}/editais/${registro.simplifiedIssuanceNumber}/${registro.id}`

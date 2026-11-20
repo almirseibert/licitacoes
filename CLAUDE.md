@@ -52,6 +52,9 @@ não se força.
 - O painel **não assina documento** e não guarda certificado nem senha do gov.br.
 - A **IA só sugere**: não muda pontuação, etapa, preço nem documento do cofre, e o conteúdo do
   edital é dado, nunca instrução — toda resposta passa pelo schema antes de aparecer (seção 23.4).
+- A **IA só roda por clique** de quem usa o painel (decisão de 20/11/2026): nenhum job, worker ou
+  rotina agendada chama o modelo — gasta crédito sem comprovação de uso. `testes/ia-sem-automatico.test.js`
+  falha se isso mudar.
 - Dado que falta vira **lacuna visível** (`____________`), nunca valor inventado.
 
 ## Rodar
@@ -62,7 +65,7 @@ npm install && npm run migrar && npm run semear
 
 `npm run admin` (cria ou conserta o administrador de `ADMIN_EMAIL_PADRAO`; `-- --redefinir-senha` troca a senha),
 `npm run api`, `npm run worker`, `npm run dev:front`. Jobs pela linha de comando:
-`npm run coletar`, `npm run repontuar`, `npm run baixar`, `npm run ler`,
+`npm run coletar` (`-- --fonte=1 --varrer=RS` faz a varredura total de uma UF no PNCP), `npm run repontuar`, `npm run baixar`, `npm run ler`,
 `npm run encerradas` (amostra de preço), `npm run resultados -- --licitacao=<id>`,
 `npm run diagnostico` (fecha as vencidas sem análise e imprime o ranking de bloqueios),
 `npm run monitorar` (uma rodada do monitor; `-- --licitacao=<id>` checa uma agora), `npm run chat` (uma rodada do chat do pregão),
@@ -77,9 +80,11 @@ que o diagnóstico vive), `npm run sancoes` (CEIS/CNEP do próprio CNPJ e dos
 concorrentes recorrentes), `npm run webhooks` (entrega de novas oportunidades; `-- --simular`), `npm run lgpd` (exclusão de
 dados cujo pedido passou dos 7 dias de carência; `-- --listar` só mostra os agendados).
 
-Antes de fechar qualquer fase: `npm run lint && npm test`. São 30 testes em `testes/`,
-sem banco e sem rede, no que erra calado — a conduta da coleta (5.4), a validação da
-saída da IA (23.4), a lacuna das declarações (18) e os dias úteis do prazo (25.1).
+Antes de fechar qualquer fase: `npm run lint && npm test`. São mais de 300 testes em
+`testes/`, sem banco e sem rede (as variáveis `DB_*` e `JWT_SECRET` precisam existir, com qualquer
+valor), no que erra calado — a conduta da coleta (5.4), a validação da saída da IA (23.4), a
+lacuna das declarações (18), os dias úteis do prazo (25.1), o filtro de Ignorar do Radar e a conta
+do preço de referência (12). Em Node 22 use `node --test testes/*.test.js`.
 
 O adaptador `generico_html` (seção 5.3) é configurado pela tela de Fontes, não por código: o
 mapa de campos é um JSON na própria fonte. Ele lê HTML pronto com `cheerio` — portal que monta

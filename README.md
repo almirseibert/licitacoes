@@ -1706,6 +1706,89 @@ tiver acesso ao Shell do EasyPanel.
 
 ---
 
+## Revisão de 20/11/2026 — IA só por clique, Ignorar, arquivos, fontes e preço
+
+Pedido a partir de prints da tela real. Cada item foi **medido contra MySQL 8.0** (o mesmo da
+produção; o MariaDB 10.11 usado antes não aceita `CAST(? AS JSON)` do seed) e, onde há rede,
+contra o PNCP de verdade.
+
+1. **A IA só age por clique.** O commit anterior tirou o resumo de hora em hora do worker, mas
+   sobravam três vazamentos: a *sugestão mensal de palavras* (dia 1, todas as organizações), os jobs
+   `ia_resumo`/`sugerir_palavras` que já estavam na fila e o código `enfileirarResumos`. Os três
+   saíram ([worker/index.js](worker/index.js), [jobs/ia-resumos.js](backend/jobs/ia-resumos.js),
+   [migração 043](backend/migrations/043_ia_sem_fila.sql) que apaga o que estava na fila). O
+   [testes/ia-sem-automatico.test.js](testes/ia-sem-automatico.test.js) lê o código e **falha** se o
+   worker ou a fila voltarem a chamar a IA. Chamadas que existem, todas por botão: leitura
+   assistida, resumo do edital, Pergunte ao Edital e consultor jurídico.
+   - Por que o resumo "não funcionava": quem baixa e lê o PDF é o worker, e o texto só chegava ao
+     banco se o worker enxergasse o arquivo. Agora, no clique, a API baixa o que falta, lê o PDF
+     (pdf-parse, sem IA e sem custo) e só então chama o modelo
+     ([servicos/preparar-edital.js](backend/servicos/preparar-edital.js)). Medido: PDF ausente
+     do disco e sem texto no banco → 1.262 caracteres lidos com **uma** ida ao portal; a 2ª chamada
+     usa o texto guardado.
+   - Erro de rede, timeout e HTTP 429/5xx do provedor deixaram de ser gravados no cache de leitura:
+     antes, uma falha momentânea travava aquele edital na mesma mensagem para sempre.
+   - Não foi criada tela de uso da IA (decisão do usuário: só desligar o automático).
+
+2. **Ignorar vale na hora e é reversível.** O "Recarregar" refazia o mesmo `SELECT`, que nunca lia
+   `palavras_excluidas` — a exclusão só valia ao *repontuar*. Agora a lista do Radar filtra pelo que
+   está cadastrado agora ([regras/filtros-radar.js](backend/regras/filtros-radar.js)): a palavra
+   some com a licitação e apagar ou desligar a palavra a traz de volta. Descarte manual nunca é
+   tocado. A tela de Palavras mostra "esconde N" por termo.
+   - Medido: `LOCATE` **não** ignora acento no MySQL 8 (`gestao` não acha `gestão`); a regra é `LIKE`
+     (com `%` e `_` do termo como texto). Criar "GESTAO PUBLICA" escondeu "gestão pública" na hora.
+
+3. **Arquivos que não abriam** ("não está mais no volume"). O código que grava e o que lê usam o
+   mesmo caminho; a causa é de implantação (API e worker em `/dados` diferentes, ou volume não
+   persistente). Em vez de só apontar a causa, o código passou a se curar
+   ([jobs/baixar.js](backend/jobs/baixar.js) `curarArquivo`): ver, baixar e o zip baixam de novo da
+   origem o que o banco diz "ok" mas não está no disco da API. "Baixar o que falta" agora roda na
+   própria API. Medido com origem simulada: GET com o disco vazio → 200 com o PDF (1 ida ao portal),
+   2º GET serve do disco (0 idas), zip cura e empacota; sem origem guardada → 410 com mensagem clara.
+   - **Status ganhou "Volume de arquivos (/dados)"**: o worker grava `.sinal-worker` e a API confere
+     se o enxerga. **Ação em produção:** em *Status das ferramentas*, se o item estiver vermelho,
+     montar o MESMO volume em `/dados` nos dois serviços (EasyPanel → Mounts).
+
+4. **Fontes de coleta.**
+   - **Bug do seed no MySQL 8 (reproduzido):** `config = '{}'` é sempre falso numa coluna JSON, então o
+     seed *nunca* atualizou as fontes de produção — Compras RS e Portal de Compras Públicas
+     continuavam com o adaptador antigo e o erro "Configure a `url_busca`". Corrigido
+     (`JSON_LENGTH(config) = 0`); o deploy seguinte já conserta sozinho, e a config de quem
+     configurou à mão é preservada (verificado).
+   - **Cobertura de todos os órgãos: varredura total do PNCP.** Antes só vinha o que casava com uma
+     palavra, no máximo 300 por termo. A Lei 14.133 obriga a publicação no PNCP, e a busca dele sem
+     palavra, uma UF por vez, alcança todos os editais com proposta aberta: **39.616 no Brasil (20/11/2026),
+     3.892 só no RS**, a ~1,6 s por página de 100. Roda em rodadas de 12 páginas (um job de prioridade
+     baixa cada), UF por UF, e só grava o que casa com palavra-chave de alguma organização.
+     UF acima de 10.000 (teto da busca) lê também do mais antigo. `npm run coletar -- --fonte=1 --varrer=RS`.
+   - O PNCP fecha parte das conexões da busca (já registrado em `jobs/mercado.js`): página que falha
+     3 rodadas é pulada e anotada, e 3 seguidas encerram a rodada como "parcial"; a próxima varredura
+     completa (a gravação é idempotente). A consulta oficial `/v1/contratacoes/proposta` foi
+     descartada: aceita no máximo 50 por página e devolveu erro 500 depois de 50 s.
+   - Fonte sem como ser buscada (BLL, Licitanet, BNC, Licitar Digital, BEC/SP, Licitações-e,
+     Negócios Públicos, Compras.gov.br e o Portal de Compras Públicas) **deixa de dar erro**: o status
+     diz "Coberta pelo PNCP" e a coleta não tenta. **Adaptadores próprios para esses portais não são
+     viáveis dentro da seção 5.4**: login, 403, Cloudflare e CAPTCHA já tinham sido verificados em
+     15/11; o Portal de Compras Públicas foi reconferido em 20/11 (2 requisições, User-Agent do
+     projeto): é uma SPA cuja lista vem de uma API privada sem documentação, e ler o que o app chama
+     por baixo é engenharia reversa que a seção 5.3 decidiu não fazer.
+   - Compras RS: `fim_propostas` agora é a abertura da sessão (inferência registrada no código) e as
+     já encerradas deixam de aparecer como "recebendo proposta".
+
+5. **Preço de referência refeito.** A tela era duas tabelas de quartis sem pergunta. Agora tem duas
+   abas ([paginas/Precos.jsx](frontend/src/paginas/Precos.jsx)): **Quanto ofertar** — uma frase
+   ("em pregões de X, quem vence fecha em média 35% abaixo do estimado; metade entre 17% e 42%"), de
+   onde vem o número, um simulador (estimado + custo → faixa de preço, veredito *vale / apertado / não
+   compensa* e o preço mínimo para sobrar 20%) e contratações reais parecidas — e **Concorrentes**. A
+   aba Preço da ficha usa a mesma frase. Regras puras em [regras/preco.js](backend/regras/preco.js),
+   testadas em [testes/preco.test.js](testes/preco.test.js). Screenshot conferido em Playwright.
+   Os dados de encerradas do teste local são sintéticos; o banco real vem de "coletar encerradas".
+
+**Aceite (seção 16), medido:** `npm run lint` limpo; `npm test` 317 testes passam (em Node 22 o
+`node --test testes/` sem glob falha, use `testes/*.test.js`, e os testes de banco precisam de
+`DB_HOST` & cia definidos — com valores quaisquer, são sem rede). Varredura real do RS contra o
+PNCP: ver o número final abaixo.
+
 ## Quatro ajustes — 16/11/2026
 
 - **Radar só com palavra-chave.** `montarFiltros` (`backend/regras/filtros-radar.js`) sempre exige

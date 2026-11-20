@@ -52,18 +52,18 @@ const FONTES = [
     nome: 'Portal de Compras Públicas',
     adaptador: 'generico_html',
     url_base: 'https://www.portaldecompraspublicas.com.br',
-    config: {
-      url_busca: 'https://www.portaldecompraspublicas.com.br/processos?busca={termo}&pagina={pagina}',
-      seletor_lista: '.process-card',
-    },
+    // Sem url_busca de propósito: /processos é uma SPA Angular que entrega só a casca. A lista vem de uma API
+    // JavaScript privada (compras.api.portaldecompraspublicas.com.br), que não é documentada — ler o que o app
+    // do portal chama por baixo seria engenharia reversa, e a seção 5.3 decidiu não fazer isso. Em 20/11/2026
+    // a casca e o bundle principal foram reconferidos (2 requisições): nada mudou.
+    config: {},
     ativa: 0,
     intervalo_horas: 12,
     prioridade: 11,
     observacao:
-      'Muitos municípios do RS e SC. Verificado em 15/11/2026: é uma SPA Angular com SSR — /processos entrega só a casca, ' +
-      'sem nenhum processo; a lista é buscada depois por uma API JavaScript própria (compras.api.portaldecompraspublicas.com.br), ' +
-      'igual ao Compras.gov.br da seção 5.2. A seção 5.3 já decidiu não usar navegador headless por isso (seria preciso simular o ' +
-      'app inteiro). Fica bloqueada até essa decisão mudar — "Testar agora" vai dizer isso, não "configure a URL".',
+      'Muitos municípios do RS e SC. Coberta pelo PNCP: a Lei 14.133 obriga a publicação lá, então o que este portal anuncia chega ' +
+      'pela varredura do PNCP (campo "plataforma de disputa" mostra que veio daqui). Reconferido em 20/11/2026: /processos é uma SPA que ' +
+      'entrega só a casca e a lista vem de uma API privada sem documentação; a seção 5.3 decidiu não simular o app nem usar navegador headless.',
   },
   {
     nome: 'BLL Compras',

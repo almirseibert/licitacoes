@@ -52,7 +52,8 @@ test('paraData: epoch em milissegundos vira Date; ausente vira null', () => {
 });
 
 test('normalizar: mapeia o registro real do CELIC para o formato da coleta', () => {
-  const resultado = adaptador.normalizar(REGISTRO_REAL, { fonteId: 7 });
+  // `agora` antes da sessão (startDate): a licitação ainda recebe proposta.
+  const resultado = adaptador.normalizar(REGISTRO_REAL, { fonteId: 7, agora: 1794000000000 });
 
   assert.equal(resultado.fonte_id, 7);
   assert.equal(resultado.chave_externa, '7:359318');
@@ -65,6 +66,7 @@ test('normalizar: mapeia o registro real do CELIC para o formato da coleta', () 
   assert.equal(resultado.processo, '26120390318577');
   assert.match(resultado.objeto, /Conserto de danos/);
   assert.equal(resultado.abertura_propostas.getTime(), 1794830460000);
+  assert.equal(resultado.fim_propostas.getTime(), 1794830460000); // fim das propostas = abertura da sessão
   assert.equal(resultado.publicada_em.getTime(), 1794279600000);
   assert.equal(resultado.situacao, 'Recebendo proposta');
   assert.equal(resultado.plataforma_disputa, 'Compras RS (CELIC)');
@@ -88,4 +90,14 @@ test('listarMensagens: diz que não há consulta pública, sem inventar URL', as
     assert.equal(erro.semConsulta, true);
     return true;
   });
+});
+
+test('normalizar: sessão já passou = Encerrada, e o fim das propostas a acompanha', () => {
+  const resultado = adaptador.normalizar(REGISTRO_REAL, { fonteId: 7, agora: 1794830460001 });
+  assert.equal(resultado.situacao, 'Encerrada');
+  assert.ok(resultado.fim_propostas.getTime() < 1794830460001);
+  // Sem data da sessão não há como saber: segue como recebendo, sem inventar fim.
+  const semData = adaptador.normalizar({ ...REGISTRO_REAL, startDate: null }, { fonteId: 7 });
+  assert.equal(semData.situacao, 'Recebendo proposta');
+  assert.equal(semData.fim_propostas, null);
 });
