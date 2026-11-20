@@ -1,5 +1,5 @@
 import { Lock, X, LayoutDashboard } from 'lucide-react';
-import { CATEGORIAS, TELAS } from '../config/navegacao';
+import { CATEGORIAS, TELAS, telaPermitida } from '../config/navegacao';
 
 /**
  * Painel lateral com os itens da categoria ativa, agrupados por subgrupo
@@ -13,7 +13,7 @@ export default function SidebarContextual({ categoria, telaAtiva, aoIrPara, pode
 
   const infoCategoria = CATEGORIAS.find((c) => c.chave === categoria);
   const itens = TELAS.filter(
-    (t) => t.categoria === categoria && (!t.soSuperadmin || superadmin) && (!t.soAdmin || podeAdministrar),
+    (t) => t.categoria === categoria && telaPermitida(t.chave, { podeAdministrar, superadmin }),
   );
   const grupos = [];
   for (const item of itens) {

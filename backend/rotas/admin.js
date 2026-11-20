@@ -4,7 +4,7 @@
 // vem daqui, nunca de um e-mail fixo no frontend (CLAUDE.md).
 const express = require('express');
 const pool = require('../config/db');
-const { NIVEL_PAPEL } = require('../middlewares/autenticar');
+const { apenasSuperadmin } = require('../middlewares/autenticar');
 const { responderErro } = require('../middlewares/responder-erro');
 const escopo = require('../servicos/escopo');
 const limites = require('../servicos/limites');
@@ -15,11 +15,7 @@ const regrasNps = require('../regras/onboarding');
 
 const rotas = express.Router();
 
-function exigirSuperadmin(req, res, next) {
-  if (escopo.ehOperadora(req.organizacaoId) && NIVEL_PAPEL[req.papel] >= NIVEL_PAPEL.admin) return next();
-  return res.status(403).json({ erro: 'Área restrita à administração do serviço.' });
-}
-rotas.use(exigirSuperadmin);
+rotas.use(apenasSuperadmin);
 // Seção 18: parceiros, andamento dos pedidos e vendas dos serviços complementares.
 rotas.use(require('./admin-servicos'));
 

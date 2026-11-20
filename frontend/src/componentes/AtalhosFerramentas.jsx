@@ -4,7 +4,7 @@ import { TELAS } from '../config/navegacao';
 // Ferramentas" do benchmark — mas só as principais, não as 34 do menu.
 const GRUPOS = [
   { rotulo: 'Oportunidades', itens: ['radar', 'boletins', 'oportunidades', 'precos'] },
-  { rotulo: 'Gestão', itens: ['funil', 'tarefas', 'contratos', 'cofre'] },
+  { rotulo: 'Gestão', itens: ['funil', 'tarefas', 'mercado_contratos', 'cofre'] },
   { rotulo: 'Inteligência', itens: ['diagnostico', 'analise_mercado', 'juridico'] },
   { rotulo: 'Automação', itens: ['monitor_chat', 'acompanhamentos'] },
 ];

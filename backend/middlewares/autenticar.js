@@ -110,9 +110,18 @@ function apenasAdmin(req, res, next) {
   return exigirPapel('admin')(req, res, next);
 }
 
+// Equipe do painel: admin ou dono da organização operadora. A mesma regra do `superadmin` que
+// /api/assinatura entrega ao menu — a permissão vem do backend, nunca de e-mail no frontend.
+function apenasSuperadmin(req, res, next) {
+  const { ehOperadora } = require('../servicos/escopo');
+  if (ehOperadora(req.organizacaoId) && NIVEL_PAPEL[req.papel] >= NIVEL_PAPEL.admin) return next();
+  return res.status(403).json({ erro: 'Área restrita à administração do serviço.' });
+}
+
 module.exports = {
   autenticar,
   apenasAdmin,
+  apenasSuperadmin,
   exigirPapel,
   leitorSoLe,
   confirmarVinculo,

@@ -34,14 +34,14 @@ export const TELAS = [
   { chave: 'tarefas', rotulo: 'Tarefas', icone: ListTodo, recurso: 'gestao', categoria: 'gestao', grupo: 'Funil' },
 
   // Seção 12: "Meus contratos" (os que a organização ganhou) × "Contratos do mercado" (PNCP).
-  { chave: 'contratos', rotulo: 'Meus contratos', icone: FileCheck2, recurso: 'contratos', categoria: 'gestao', grupo: 'Contratos' },
+  // "Meus contratos" mora em Administração › Conta (decisão de 20/11/2026): é cadastro da própria empresa.
   { chave: 'mercado_contratos', rotulo: 'Contratos do mercado', icone: ScrollText, recurso: 'mercado', categoria: 'gestao', grupo: 'Contratos' },
   { chave: 'mercado_atas', rotulo: 'Atas', icone: BookMarked, recurso: 'mercado', categoria: 'gestao', grupo: 'Contratos' },
 
   { chave: 'acompanhamentos', rotulo: 'Acompanhamentos', icone: BellRing, recurso: 'acompanhamentos', categoria: 'gestao', grupo: 'Acompanhamento' },
   // Seção 6: chat do pregão, onde o portal publica sem login.
   { chave: 'monitor_chat', rotulo: 'Monitor de chat', icone: MessagesSquare, recurso: 'acompanhamentos', categoria: 'gestao', grupo: 'Acompanhamento' },
-  { chave: 'orgaos', rotulo: 'Órgãos', icone: Landmark, recurso: 'concorrentes', soAdmin: true, categoria: 'gestao', grupo: 'Acompanhamento' },
+  { chave: 'orgaos', rotulo: 'Órgãos', icone: Landmark, recurso: 'concorrentes', soSuperadmin: true, categoria: 'gestao', grupo: 'Acompanhamento' },
 
   { chave: 'cofre', rotulo: 'Documentos', icone: FolderLock, categoria: 'gestao', grupo: 'Documentos' },
   { chave: 'modelos', rotulo: 'Declarações', icone: FileSignature, categoria: 'gestao', grupo: 'Documentos' },
@@ -61,6 +61,7 @@ export const TELAS = [
   // Seção 14: token de API e webhook de novas oportunidades.
   { chave: 'integracoes', rotulo: 'Integrações', icone: Plug, recurso: 'api', soAdmin: true, categoria: 'administracao', grupo: 'Conta' },
   { chave: 'configuracoes', rotulo: 'Configurações', icone: SlidersHorizontal, categoria: 'administracao', grupo: 'Conta' },
+  { chave: 'contratos', rotulo: 'Meus contratos', icone: FileCheck2, recurso: 'contratos', categoria: 'administracao', grupo: 'Conta' },
 
   { chave: 'assinatura', rotulo: 'Assinatura', icone: CreditCard, categoria: 'administracao', grupo: 'Plano' },
   { chave: 'uso', rotulo: 'Uso do plano', icone: Gauge, categoria: 'administracao', grupo: 'Plano' },
