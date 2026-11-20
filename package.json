@@ -27,6 +27,7 @@
     "chat": "node backend/jobs/executar-chat.js",
     "estrategicas": "node backend/jobs/executar-estrategicas.js",
     "recorrencias": "node backend/jobs/executar-recorrencias.js",
+    "segmentar": "node backend/jobs/executar-segmentar.js",
     "ia": "node backend/jobs/executar-ia.js",
     "dossies": "node backend/jobs/executar-dossies.js",
     "prazos": "node backend/jobs/executar-prazos.js",

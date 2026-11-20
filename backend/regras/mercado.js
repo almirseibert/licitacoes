@@ -7,6 +7,7 @@
 // livre no SQL) está em `testes/mercado.test.js`.
 
 const { comoLike } = require('./filtros-radar');
+const { classificar } = require('./segmentos');
 // "Hoje" do painel é o de Brasília (UTC às 21h já é amanhã); dias inteiros entre datas.
 const { diaNoFuso: hojeEmBrasilia, dataValida, periodoEmUtc, diasEntre, brasiliaParaUtc } = require('./gestao');
 
@@ -108,12 +109,17 @@ function camposComuns(r) {
 
 /** Item da busca do PNCP (tipos_documento=contrato) → linha de `mercado_contratos`. */
 function normalizarContrato(r) {
+  const comuns = camposComuns(r);
+  // Área e segmento do catálogo (decisão de 20/11/2026), classificados pelo objeto ao gravar.
+  const { area, segmento } = classificar(comuns.objeto);
   return {
     numero_controle: texto(r.numero_controle_pncp, 60),
     numero_controle_compra: texto(r.numero_contratacao, 60),
     numero_contrato: texto(r.numero_contrato_empenho, 80) || texto(String(r.title || '').replace(/^\S+\s+nº\s*/i, ''), 80),
     tipo: texto(r.tipo_contrato_nome, 60),
-    ...camposComuns(r),
+    ...comuns,
+    area,
+    segmento,
   };
 }
 

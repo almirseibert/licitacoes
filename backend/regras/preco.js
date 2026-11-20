@@ -236,7 +236,9 @@ function fraseDaReferencia({ referencia, segmento, familia }) {
 function baseDaReferencia(referencia) {
   if (!referencia) return null;
   if (referencia.origem === 'calculado') {
-    return `Medido aqui: ${referencia.amostra} contratações encerradas com valor homologado.`;
+    const base = `Medido aqui: ${referencia.amostra} contratações encerradas com valor homologado.`;
+    // Amostra curta mede pouco: diz isso junto do número, em vez de deixar a frase parecer firme.
+    return referencia.amostra < AMOSTRA_MINIMA ? `${base} Amostra pequena (menos de ${AMOSTRA_MINIMA}): trate como indicação, não como regra.` : base;
   }
   return 'Levantamento de 10/10/2026 sobre 1.371 contratações de 2026. O painel passa a usar a própria medida quando tiver amostra suficiente.';
 }

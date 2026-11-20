@@ -27,6 +27,7 @@ const monitorar = require('../backend/jobs/monitorar');
 const chat = require('../backend/jobs/chat');
 const estrategicas = require('../backend/jobs/estrategicas');
 const recorrencias = require('../backend/jobs/recorrencias');
+const segmentar = require('../backend/jobs/segmentar');
 const questionamentos = require('../backend/jobs/questionamentos');
 const dossies = require('../backend/jobs/dossies');
 const contratos = require('../backend/jobs/contratos');
@@ -117,6 +118,7 @@ function registrarTodos() {
   chat.registrarNaFila();
   estrategicas.registrarNaFila();
   recorrencias.registrarNaFila();
+  segmentar.registrarNaFila();
   questionamentos.registrarNaFila();
   dossies.registrarNaFila();
   contratos.registrarNaFila();

@@ -17,10 +17,15 @@ rotas.get('/', async (_req, res) => {
   }
 });
 
-// GET /api/precos-referencia/resumo?grupo=&familia= — a frase, a base e as opções da tela.
+// Filtros que a tela entende (catálogo Área → Segmento, e o recorte da amostra).
+const FILTROS = ['grupo', 'area', 'segmento', 'familia', 'uf', 'esfera', 'valor_min', 'valor_max', 'de', 'ate'];
+const filtrosDe = (consulta) => Object.fromEntries(FILTROS.filter((f) => consulta[f] !== undefined && consulta[f] !== '').map((f) => [f, consulta[f]]));
+
+// GET /api/precos-referencia/resumo?area=&segmento=&familia=&uf=&esfera=&valor_min=&valor_max=&de=&ate= —
+// a frase, a base e as opções da tela. `grupo` (palavra-chave) continua aceito.
 rotas.get('/resumo', async (req, res) => {
   try {
-    res.json(await servico.resumoDoSegmento({ grupo: req.query.grupo, familia: req.query.familia }));
+    res.json(await servico.resumoDoSegmento(filtrosDe(req.query)));
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível carregar o preço de referência.', erro);
   }
@@ -33,7 +38,7 @@ rotas.get('/simular', async (req, res) => {
     if (!Number.isFinite(estimado) || estimado <= 0) {
       return res.status(400).json({ erro: 'Informe o valor estimado da licitação.' });
     }
-    const referencia = await servico.referenciaPara({ grupo: req.query.grupo || 'Geral', modalidade: req.query.familia || 'Pregão' });
+    const { referencia } = await servico.referenciaDoFiltro(filtrosDe(req.query));
     const custo = req.query.custo === undefined || req.query.custo === '' ? null : Number(req.query.custo);
     res.json({
       sem_referencia: !referencia,
@@ -48,12 +53,7 @@ rotas.get('/simular', async (req, res) => {
 rotas.get('/parecidas', async (req, res) => {
   try {
     res.json(
-      await servico.contratacoesParecidas({
-        grupo: req.query.grupo,
-        familia: req.query.familia,
-        q: req.query.q,
-        pagina: req.query.pagina,
-      })
+      await servico.contratacoesParecidas({ ...filtrosDe(req.query), q: req.query.q, pagina: req.query.pagina })
     );
   } catch (erro) {
     responderErro(res, 500, 'Não foi possível listar as contratações parecidas.', erro);

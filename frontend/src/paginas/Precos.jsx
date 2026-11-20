@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2, RefreshCcw, Download, Building2, Search } from 'lucide-react';
+import { Loader2, RefreshCcw, Download, Building2, Search, SlidersHorizontal } from 'lucide-react';
 import { api } from '../servicos/api';
 import { moedaExata, data } from '../servicos/formato';
 import Abas from '../componentes/Abas';
@@ -27,8 +27,7 @@ function descontoEscrito(d) {
 
 export default function Precos() {
   const [aba, setAba] = useState('ofertar');
-  const [grupo, setGrupo] = useState('Geral');
-  const [familia, setFamilia] = useState('Pregão');
+  const [filtros, setFiltros] = useState({ area: '', segmento: '', familia: 'Pregão', uf: '', esfera: '', valor_min: '', valor_max: '', de: '', ate: '' });
   const [resumo, setResumo] = useState(null);
   const [erro, setErro] = useState(null);
   const [aviso, setAviso] = useState(null);
@@ -36,15 +35,17 @@ export default function Precos() {
 
   const carregar = useCallback(async () => {
     try {
-      setResumo(await api.precosResumo(grupo, familia));
+      setResumo(await api.precosResumo(filtros));
       setErro(null);
     } catch (e) {
       setErro(e.message);
     }
-  }, [grupo, familia]);
+  }, [filtros]);
 
+  // Valor e datas são digitados: espera uma pausa antes de ir ao servidor.
   useEffect(() => {
-    carregar();
+    const t = setTimeout(carregar, 300);
+    return () => clearTimeout(t);
   }, [carregar]);
 
   const atualizar = async (qual) => {
@@ -99,7 +100,7 @@ export default function Precos() {
       <Abas abas={[['ofertar', 'Quanto ofertar'], ['concorrentes', 'Concorrentes']]} ativa={aba} aoMudar={setAba} />
 
       {aba === 'ofertar' ? (
-        <Ofertar resumo={resumo} grupo={grupo} familia={familia} setGrupo={setGrupo} setFamilia={setFamilia} />
+        <Ofertar resumo={resumo} filtros={filtros} setFiltros={setFiltros} />
       ) : (
         <Concorrentes grupos={resumo.grupos} />
       )}
@@ -107,44 +108,130 @@ export default function Precos() {
   );
 }
 
-function Ofertar({ resumo, grupo, familia, setGrupo, setFamilia }) {
+/** Quantos dos filtros "avançados" (os que não ficam à vista) estão ligados. */
+const AVANCADOS = ['uf', 'esfera', 'valor_min', 'valor_max', 'de', 'ate'];
+
+function Ofertar({ resumo, filtros, setFiltros }) {
+  const [maisFiltros, setMaisFiltros] = useState(false);
+  const mudar = (campo) => (e) => setFiltros((f) => ({ ...f, [campo]: e.target.value }));
+  const ligados = AVANCADOS.filter((c) => filtros[c] !== '').length;
+
+  const area = (resumo.catalogo || []).find((a) => a.area === filtros.area);
+  const trocarArea = (e) => setFiltros((f) => ({ ...f, area: e.target.value, segmento: '' }));
+  // Escolher um segmento sem área já escolhida preenche a área: a lista de segmentos vem agrupada por área.
+  const trocarSegmento = (e) => {
+    const nome = e.target.value;
+    const dona = (resumo.catalogo || []).find((a) => a.segmentos.some((x) => x.nome === nome));
+    setFiltros((f) => ({ ...f, segmento: nome, area: dona ? dona.area : f.area }));
+  };
+  const limpar = () => setFiltros((f) => ({ ...f, area: '', segmento: '', uf: '', esfera: '', valor_min: '', valor_max: '', de: '', ate: '' }));
+  const alguma = Boolean(filtros.area || filtros.segmento || ligados);
+  const rotulo = (a) => `${a.area ?? a.nome}${a.n ? ` (${a.n})` : ''}`;
+
   return (
     <div className="max-w-4xl space-y-8">
       <section>
-        <div className="flex gap-3 flex-wrap mb-3 text-sm">
-          <label className="flex items-center gap-2">
-            <span className="text-xs text-texto-suave">Segmento</span>
-            <select className="campo-caixa" value={grupo} onChange={(e) => setGrupo(e.target.value)}>
-              {resumo.grupos.map((g) => (
-                <option key={g}>{g}</option>
+        <div className="flex gap-3 flex-wrap mb-3 text-sm items-end">
+          <label className="flex flex-col gap-0.5 text-[11px] text-texto-suave">
+            Área
+            <select className="campo-caixa" value={filtros.area} onChange={trocarArea}>
+              <option value="">Todas as áreas</option>
+              {(resumo.catalogo || []).map((a) => (
+                <option key={a.area} value={a.area}>{rotulo(a)}</option>
               ))}
             </select>
           </label>
-          <label className="flex items-center gap-2">
-            <span className="text-xs text-texto-suave">Modalidade</span>
-            <select className="campo-caixa" value={familia} onChange={(e) => setFamilia(e.target.value)}>
+          <label className="flex flex-col gap-0.5 text-[11px] text-texto-suave">
+            Segmento
+            <select className="campo-caixa" value={filtros.segmento} onChange={trocarSegmento}>
+              <option value="">{area ? `Toda a área ${area.area}` : 'Todos os segmentos'}</option>
+              {area
+                ? area.segmentos.map((x) => <option key={x.nome} value={x.nome}>{rotulo(x)}</option>)
+                : (resumo.catalogo || []).map((a) => (
+                    <optgroup key={a.area} label={a.area}>
+                      {a.segmentos.map((x) => <option key={x.nome} value={x.nome}>{rotulo(x)}</option>)}
+                    </optgroup>
+                  ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-0.5 text-[11px] text-texto-suave">
+            Modalidade
+            <select className="campo-caixa" value={filtros.familia} onChange={mudar('familia')}>
               {resumo.familias.map((f) => (
                 <option key={f}>{f}</option>
               ))}
             </select>
           </label>
+          <button
+            type="button"
+            onClick={() => setMaisFiltros(!maisFiltros)}
+            aria-expanded={maisFiltros}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border text-xs hover:text-texto ${maisFiltros ? 'border-voltagem/60 text-texto' : 'border-borda text-texto-suave'}`}
+          >
+            <SlidersHorizontal size={13} /> Mais filtros{ligados ? ` (${ligados})` : ''}
+          </button>
+          {alguma && (
+            <button type="button" onClick={limpar} className="text-[11px] text-texto-suave hover:text-texto underline pb-2">
+              limpar
+            </button>
+          )}
         </div>
+
+        {maisFiltros && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-3 p-3 border border-borda rounded bg-superficie/40">
+            <label className="flex flex-col gap-0.5 text-[11px] text-texto-suave">
+              UF
+              <select className="campo-caixa w-full" value={filtros.uf} onChange={mudar('uf')}>
+                <option value="">Todas</option>
+                {(resumo.ufs || []).map((u) => <option key={u}>{u}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-0.5 text-[11px] text-texto-suave">
+              Esfera
+              <select className="campo-caixa w-full" value={filtros.esfera} onChange={mudar('esfera')}>
+                <option value="">Todas</option>
+                {(resumo.esferas || []).map((e) => <option key={e}>{e}</option>)}
+              </select>
+            </label>
+            <label className="flex flex-col gap-0.5 text-[11px] text-texto-suave">
+              Estimado de (R$)
+              <input className="campo-caixa w-full font-mono" inputMode="decimal" value={filtros.valor_min} onChange={mudar('valor_min')} />
+            </label>
+            <label className="flex flex-col gap-0.5 text-[11px] text-texto-suave">
+              Estimado até (R$)
+              <input className="campo-caixa w-full font-mono" inputMode="decimal" value={filtros.valor_max} onChange={mudar('valor_max')} />
+            </label>
+            <label className="flex flex-col gap-0.5 text-[11px] text-texto-suave">
+              Encerrada de
+              <input className="campo-caixa w-full" type="date" value={filtros.de} onChange={mudar('de')} />
+            </label>
+            <label className="flex flex-col gap-0.5 text-[11px] text-texto-suave">
+              até
+              <input className="campo-caixa w-full" type="date" value={filtros.ate} onChange={mudar('ate')} />
+            </label>
+          </div>
+        )}
+
         <p className="font-titulo text-lg leading-snug" role="status">{resumo.frase}</p>
         {resumo.base && <p className="mt-1 text-xs text-texto-suave">{resumo.base}</p>}
         {resumo.base_rotulo && resumo.base_rotulo.includes('sem amostra') && (
-          <p className="mt-1 text-xs text-atencao">Não há medida específica para esta combinação; vale a referência mais larga: {resumo.base_rotulo}.</p>
+          <p className="mt-1 text-xs text-atencao">Não há medida suficiente para esta combinação; vale a referência mais larga: {resumo.base_rotulo}.</p>
+        )}
+        {resumo.amostra.encerradas > 0 && (
+          <p className="mt-1 text-[11px] text-texto-suave">{resumo.amostra.encerradas.toLocaleString('pt-BR')} contratações encerradas com os filtros escolhidos.</p>
         )}
       </section>
 
-      <Simulador grupo={grupo} familia={familia} temReferencia={Boolean(resumo.referencia)} />
-      <Parecidas grupo={grupo} familia={familia} />
+      <Simulador filtros={filtros} temReferencia={Boolean(resumo.referencia)} />
+      <Parecidas filtros={filtros} />
 
       <details className="text-xs text-texto-suave">
         <summary className="cursor-pointer text-texto">Como calculamos</summary>
         <ul className="mt-2 space-y-1">
           <li>· Desconto = (valor estimado − valor homologado) ÷ valor estimado, por contratação encerrada com resultado.</li>
           <li>· “Fecha em média” é a mediana desses descontos; a faixa provável vai do desconto de 1 quarto das contratações ao de 3 quartos.</li>
-          <li>· O painel usa a própria medida quando tem {12} contratações ou mais no segmento; abaixo disso, o levantamento de 10/10/2026.</li>
+          <li>· O painel usa a própria medida quando tem {12} contratações ou mais no segmento; abaixo disso, desce do segmento para a área e depois para a medida geral, e diz qual usou.</li>
+          <li>· O segmento sai do texto do objeto, por um dicionário de termos (a IA não participa). {resumo.sem_classificacao ? `${resumo.sem_classificacao.toLocaleString('pt-BR')} contratações ainda não têm assunto reconhecido e ficam fora dos segmentos.` : ''}</li>
           {resumo.contexto.map((f) => (
             <li key={f}>· {f}</li>
           ))}
@@ -154,7 +241,7 @@ function Ofertar({ resumo, grupo, familia, setGrupo, setFamilia }) {
   );
 }
 
-function Simulador({ grupo, familia, temReferencia }) {
+function Simulador({ filtros, temReferencia }) {
   const [estimado, setEstimado] = useState('');
   const [custo, setCusto] = useState('');
   const [r, setR] = useState(null);
@@ -169,12 +256,12 @@ function Simulador({ grupo, familia, temReferencia }) {
     const c = Number(String(custo).replace(/\./g, '').replace(',', '.'));
     const t = setTimeout(() => {
       api
-        .simularPreco({ grupo, familia, estimado: valor, custo: c > 0 ? c : '' })
+        .simularPreco({ ...filtros, estimado: valor, custo: c > 0 ? c : '' })
         .then((x) => { setR(x); setErro(null); })
         .catch((e) => setErro(e.message));
     }, 400);
     return () => clearTimeout(t);
-  }, [estimado, custo, grupo, familia]);
+  }, [estimado, custo, filtros]);
 
   const v = r && r.veredito ? VEREDITO[r.veredito] : null;
   return (
@@ -225,7 +312,7 @@ function Simulador({ grupo, familia, temReferencia }) {
   );
 }
 
-function Parecidas({ grupo, familia }) {
+function Parecidas({ filtros }) {
   const [q, setQ] = useState('');
   const [busca, setBusca] = useState('');
   const [pagina, setPagina] = useState(1);
@@ -233,11 +320,11 @@ function Parecidas({ grupo, familia }) {
 
   useEffect(() => {
     let vivo = true;
-    api.precosParecidas({ grupo, familia, q: busca, pagina }).then((r) => vivo && setLista(r)).catch(() => vivo && setLista({ dados: [], total: 0, por_pagina: 15 }));
+    api.precosParecidas({ ...filtros, q: busca, pagina }).then((r) => vivo && setLista(r)).catch(() => vivo && setLista({ dados: [], total: 0, por_pagina: 15 }));
     return () => { vivo = false; };
-  }, [grupo, familia, busca, pagina]);
+  }, [filtros, busca, pagina]);
 
-  useEffect(() => { setPagina(1); }, [grupo, familia, busca]);
+  useEffect(() => { setPagina(1); }, [filtros, busca]);
 
   const paginas = lista ? Math.max(1, Math.ceil(lista.total / lista.por_pagina)) : 1;
   return (
@@ -253,7 +340,7 @@ function Parecidas({ grupo, familia }) {
         <Loader2 size={14} className="animate-spin text-texto-suave" />
       ) : lista.dados.length === 0 ? (
         <p className="text-sm text-texto-suave">
-          Nenhuma contratação encerrada com resultado neste segmento ainda. Use “coletar encerradas” no alto da página para o painel buscar no PNCP.
+          Nenhuma contratação encerrada com resultado nestes filtros ainda. Use “coletar encerradas” no alto da página para o painel buscar no PNCP.
         </p>
       ) : (
         <>
@@ -309,7 +396,7 @@ function Concorrentes({ grupos }) {
       <div className="flex items-center gap-3 mb-3 flex-wrap">
         <p className="text-sm text-texto-suave">Quem mais vence nas licitações que o painel acompanha, com o que levou.</p>
         <label className="ml-auto flex items-center gap-2 text-xs text-texto-suave">
-          Segmento
+          Grupo de palavras-chave
           <select className="campo-caixa" value={grupo} onChange={(e) => setGrupo(e.target.value)}>
             <option value="">Todos</option>
             {grupos.filter((g) => g !== 'Geral').map((g) => (

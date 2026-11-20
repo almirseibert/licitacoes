@@ -41,6 +41,15 @@ export function encerrarSessao() {
   esquecerTema();
 }
 
+/** Objeto → query string, sem os campos vazios. */
+function semVazios(objeto) {
+  const q = new URLSearchParams();
+  Object.entries(objeto).forEach(([chave, valor]) => {
+    if (valor !== '' && valor !== null && valor !== undefined) q.set(chave, valor);
+  });
+  return q.toString();
+}
+
 async function requisitar(caminho, opcoes = {}) {
   const token = obterToken();
   const resposta = await fetch(`${BASE}${caminho}`, {
@@ -546,18 +555,15 @@ export const api = {
 
   precosReferencia: () => requisitar('/precos-referencia'),
 
-  precosResumo: (grupo, familia) =>
-    requisitar(`/precos-referencia/resumo?${new URLSearchParams({ grupo: grupo || '', familia: familia || '' })}`),
+  // Filtros do preço de referência: { area, segmento, familia, uf, esfera, valor_min, valor_max, de, ate }.
+  // Vazio é ignorado — o servidor trata a ausência como "sem esse filtro".
+  precosResumo: (filtros = {}) => requisitar(`/precos-referencia/resumo?${semVazios(filtros)}`),
 
-  simularPreco: ({ grupo, familia, estimado, custo }) =>
-    requisitar(
-      `/precos-referencia/simular?${new URLSearchParams({ grupo: grupo || '', familia: familia || '', estimado, custo: custo || '' })}`
-    ),
+  simularPreco: ({ estimado, custo, ...filtros }) =>
+    requisitar(`/precos-referencia/simular?${semVazios({ ...filtros, estimado, custo })}`),
 
-  precosParecidas: ({ grupo, familia, q, pagina }) =>
-    requisitar(
-      `/precos-referencia/parecidas?${new URLSearchParams({ grupo: grupo || '', familia: familia || '', q: q || '', pagina: pagina || 1 })}`
-    ),
+  precosParecidas: ({ q, pagina, ...filtros }) =>
+    requisitar(`/precos-referencia/parecidas?${semVazios({ ...filtros, q, pagina: pagina || 1 })}`),
 
   recalcularPrecos: () => requisitar('/precos-referencia/recalcular', { method: 'POST' }),
 

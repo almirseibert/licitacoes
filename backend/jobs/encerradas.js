@@ -14,6 +14,7 @@ const pool = require('../config/db');
 const fila = require('../servicos/fila');
 const adaptadores = require('../adaptadores');
 const regras = require('../regras/preco');
+const { classificar } = require('../regras/segmentos');
 const servico = require('../servicos/preco');
 
 // Teto por execução: a conduta da seção 5.4 pede ritmo baixo, e uma varredura
@@ -38,6 +39,8 @@ function recortar(valor, tamanho) {
  * rodar o job duas vezes no mesmo dia não duplica nem infla a mediana.
  */
 async function guardarEncerrada(licitacao, { adaptador = 'pncp', grupo } = {}) {
+  // Área e segmento do catálogo (decisão de 20/11/2026): vêm do objeto, não da palavra que achou a licitação.
+  const classe = classificar(licitacao.objeto);
   const estimado = Number(licitacao.valor_estimado) || null;
   const homologado = Number(licitacao.valor_homologado) || null;
   const desconto = regras.descontoDe({
@@ -49,9 +52,11 @@ async function guardarEncerrada(licitacao, { adaptador = 'pncp', grupo } = {}) {
     `INSERT INTO historico_precos
        (adaptador, chave_externa, grupo, modalidade, familia, uf, esfera,
         orgao_cnpj, orgao_nome, objeto, valor_estimado, valor_homologado,
-        desconto, sem_homologacao, encerrada_em, publicada_em)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        desconto, sem_homologacao, encerrada_em, publicada_em, area, segmento)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON DUPLICATE KEY UPDATE
+       area = COALESCE(area, VALUES(area)),
+       segmento = COALESCE(segmento, VALUES(segmento)),
        valor_homologado = VALUES(valor_homologado),
        desconto = VALUES(desconto),
        sem_homologacao = VALUES(sem_homologacao),
@@ -76,6 +81,8 @@ async function guardarEncerrada(licitacao, { adaptador = 'pncp', grupo } = {}) {
       desconto === null ? 1 : 0,
       paraData(licitacao.fim_propostas),
       paraData(licitacao.publicada_em),
+      classe.area,
+      classe.segmento,
     ]
   );
 

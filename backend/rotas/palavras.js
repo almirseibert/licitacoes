@@ -11,7 +11,14 @@ const CONTEM = objetoContemTermo('e.termo', 'l.objeto');
 
 const rotas = express.Router();
 
-const GRUPOS_SUGERIDOS = ['Serviços digitais', 'Frota e rastreamento', 'Informática e itens'];
+// Os três do começo (o estudo de preço de 10/10/2026 é por eles) + os segmentos do catálogo
+// (decisão de 20/11/2026): quem cadastra uma palavra já escolhe um segmento reconhecido pelo preço de referência.
+const GRUPOS_SUGERIDOS = [
+  'Serviços digitais',
+  'Frota e rastreamento',
+  'Informática e itens',
+  ...require('../regras/segmentos').listarCatalogo().flatMap((a) => a.segmentos),
+];
 
 rotas.get('/', async (req, res) => {
   try {
